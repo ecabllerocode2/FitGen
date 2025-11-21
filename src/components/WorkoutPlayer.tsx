@@ -12,6 +12,27 @@ import {
   Loader2 
 } from 'lucide-react';
 
+// --- 1. HELPER PARA YOUTUBE (Fuera del componente) ---
+// Convierte cualquier link de YT en un embed limpio, mudo y en bucle.
+const getYoutubeEmbedUrl = (url: string) => {
+  if (!url) return null;
+  
+  // Regex potente que detecta ID en youtu.be, watch?v=, embed/, etc.
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  const videoId = (match && match[2].length === 11) ? match[2] : null;
+
+  if (!videoId) return null;
+
+  // Parámetros CLAVE para que funcione como un GIF de fondo:
+  // autoplay=1: Iniciar solo.
+  // mute=1: OBLIGATORIO para que Chrome/Safari permitan el autoplay.
+  // loop=1 + playlist={id}: Truco necesario para loopear un solo video.
+  // controls=0: Sin barra de reproducción.
+  // playsinline=1: Para que en iPhone no se abra en pantalla completa.
+  return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&fs=0`;
+};
+
 // --- TIPOS ACTUALIZADOS ---
 interface Exercise {
   id: string;
@@ -24,6 +45,7 @@ interface Exercise {
   rpe?: number;
   notes?: string;
   imageUrl?: string | null;
+  url?: string; // <--- URL del video de YouTube
   equipment?: string;
 }
 
@@ -83,11 +105,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const timerRef = useRef<number | null>(null);
 
-  // --- 0. VALIDACIÓN INICIAL DE SESIÓN (SOLO INICIALIZACIÓN DE ESTADOS) ---
-  // SE ELIMINA EL BLOQUEO INICIAL: Esto permite que el usuario entre a la sesión
-  // y comience a navegar por los pasos, incluso si ya está completada.
+  // --- VALIDACIÓN INICIAL ---
   useEffect(() => {
-    // Solo inicializa el feedback con datos previos si existen.
     if (session?.feedback) { 
         setSessionRPE(session.feedback.rpe);
         setSessionNotes(session.feedback.notes);
@@ -96,7 +115,6 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
 
   // 1. PREPARACIÓN DE LA LISTA DE PASOS
   useEffect(() => {
-    // Abortar si el objeto de sesión está incompleto o es nulo.
     if (!session || !session.warmup || !session.mainBlocks || !session.cooldown) {
         setWorkoutSteps([]);
         return;
@@ -167,8 +185,6 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
   // --- NAVEGACIÓN ---
   const handleNext = () => {
     const nextIndex = currentStepIndex + 1;
-    // La lógica de negocio: si llegamos al final, siempre marcamos como finalizado (isFinished = true).
-    // La lógica de la vista (debajo de esta función) decidirá si muestra el formulario o el mensaje de 'ya completado'.
     if (nextIndex >= workoutSteps.length) {
       setIsFinished(true); 
     } else {
@@ -190,7 +206,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
     }
   };
 
-  // --- GUARDADO DE SESIÓN (CONEXIÓN REAL) ---
+  // --- GUARDADO DE SESIÓN ---
   const handleSaveFeedback = async () => {
     setIsSaving(true);
     try {
@@ -232,16 +248,11 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
   
   if (!session) return <div className="min-h-screen bg-zinc-900 flex items-center justify-center text-white">Cargando datos de sesión...</div>;
     
-  // El control de pasos asegura que no haya crasheos antes de que workoutSteps se llene
   const currentStep = workoutSteps[currentStepIndex]; 
   
   // === VISTA FINAL: FEEDBACK O MENSAJE DE COMPLETED ===
   if (isFinished) {
-      
-      // LÓGICA DE VALIDACIÓN FRONTEND (Si ya fue completada)
       if (session.completed === true) {
-          // Si ya está completada (re-entrada o re-finalización),
-          // mostramos la información del feedback enviado.
           return (
               <div className="min-h-screen bg-zinc-900 flex flex-col p-6 animate-in fade-in duration-300 text-center">
                   <div className="flex-1 flex flex-col items-center justify-center">
@@ -271,7 +282,6 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
               </div>
           );
       }
-      // FORMULARIO DE FEEDBACK ORIGINAL (Solo si session.completed === false)
       return (
           <div className="min-h-screen bg-zinc-900 flex flex-col p-6 animate-in fade-in duration-300">
               
@@ -282,7 +292,6 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                   <h1 className="text-3xl font-bold text-white mb-2">¡Sesión Terminada!</h1>
                   <p className="text-zinc-400 mb-8 text-sm">Tu esfuerzo de hoy construye el éxito de mañana.</p>
                   
-                  {/* SELECCIÓN DE RPE */}
                   <div className="w-full bg-zinc-800/50 p-6 rounded-2xl border border-zinc-700 mb-6">
                       <label className="block text-sm font-bold text-zinc-300 mb-4 uppercase tracking-wide">
                           ¿Qué tan difícil fue? (RPE)
@@ -310,7 +319,6 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                       </div>
                   </div>
 
-                  {/* NOTAS */}
                   <div className="w-full bg-zinc-800/50 p-4 rounded-2xl border border-zinc-700">
                       <label className="flex items-center gap-2 text-sm font-bold text-zinc-300 mb-3 uppercase tracking-wide">
                           <MessageSquare className="w-4 h-4 text-zinc-400" />
@@ -345,7 +353,6 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
       );
   }
 
-  // --- Muestra el cargando si no hay pasos aún ---
   if (!currentStep) {
       return <div className="min-h-screen bg-zinc-900 flex items-center justify-center text-white">Preparando rutina...</div>;
   }
@@ -380,7 +387,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
     );
   }
 
-  // === VISTA DE EJERCICIO (INSTRUCTION MODE) ===
+  // === VISTA DE EJERCICIO ===
   const exercise = currentStep.data!;
   const isMainExercise = currentStep.type === 'exercise';
 
@@ -404,22 +411,41 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto pb-32">
-            {/* Imagen / Visual */}
-            <div className="relative w-full aspect-video bg-zinc-800 mb-6 overflow-hidden shadow-inner">
-                {exercise.imageUrl ? (
-                    <img src={exercise.imageUrl} alt={exercise.name} className="w-full h-full object-cover" />
+            {/* --- ZONA VISUAL (VIDEO > IMAGEN > FALLBACK) --- */}
+            {/* aspect-video mantiene el ratio 16:9 perfecto */}
+            <div className="relative w-full aspect-video bg-zinc-950 mb-6 overflow-hidden shadow-inner border-b border-zinc-800">
+                {exercise.url ? (
+                    // CASO 1: VIDEO YOUTUBE
+                    <iframe
+                        src={getYoutubeEmbedUrl(exercise.url) || ''}
+                        title={exercise.name}
+                        // pointer-events-none asegura que el usuario no pause el video al tocar la pantalla
+                        className="w-full h-full pointer-events-none" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        style={{ border: 0 }}
+                    />
+                ) : exercise.imageUrl ? (
+                    // CASO 2: IMAGEN
+                    <img 
+                        src={exercise.imageUrl} 
+                        alt={exercise.name} 
+                        className="w-full h-full object-cover" 
+                    />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center flex-col text-zinc-600">
+                    // CASO 3: SIN NADA
+                    <div className="w-full h-full flex items-center justify-center flex-col text-zinc-700 bg-zinc-900">
                         <Dumbbell className="w-16 h-16 mb-2 opacity-20" />
-                        <span className="text-xs uppercase tracking-widest opacity-40">Sin Imagen</span>
+                        <span className="text-xs uppercase tracking-widest opacity-40 font-medium">Sin Demostración</span>
                     </div>
                 )}
+                {/* Overlay sutil */}
+                <div className="absolute inset-0 ring-1 ring-inset ring-white/5 pointer-events-none"></div>
             </div>
 
             <div className="px-6">
                 <h1 className="text-2xl font-bold text-white mb-2 leading-tight">{exercise.name}</h1>
                 
-                {/* --- DESCRIPCIÓN DEL EJERCICIO --- */}
                 {exercise.description && (
                     <div className="mb-6 p-4 bg-zinc-800/50 rounded-xl border-l-4 border-lime-500">
                         <p className="text-zinc-300 text-sm leading-relaxed">
@@ -428,24 +454,20 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                     </div>
                 )}
 
-                {/* TARJETA DE INSTRUCCIÓN PRINCIPAL */}
                 {isMainExercise ? (
                     <div className="bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-2xl p-6 border border-zinc-700 shadow-lg mb-6">
                         <div className="grid grid-cols-2 gap-6 text-center divide-x divide-zinc-700">
-                            
                             <div>
                                 <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Meta</p>
                                 <p className="text-3xl font-black text-white">{exercise.targetReps || "Fallo"}</p>
                                 <p className="text-xs text-zinc-400 mt-1">Repeticiones</p>
                             </div>
-
                             <div className="pl-6">
                                 <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Usar</p>
                                 <p className="text-sm font-bold text-lime-400 leading-tight mt-1">
                                     {exercise.equipment || "Tu Equipo Disponible"}
                                 </p>
                             </div>
-
                         </div>
                         
                         {exercise.rpe && (
@@ -457,14 +479,12 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                         )}
                     </div>
                 ) : (
-                    // Vista para Calentamiento/Cooldown
                     <div className="bg-zinc-800 rounded-xl p-4 mb-6 border border-zinc-700 flex items-center justify-center gap-3">
                         <Clock className="w-5 h-5 text-lime-500" />
                         <span className="text-lg font-bold text-white">{exercise.durationOrReps}</span>
                     </div>
                 )}
 
-                {/* Instrucciones Adicionales / Notas */}
                 {exercise.instructions && <p className="text-zinc-400 text-sm mb-4 leading-relaxed">{exercise.instructions}</p>}
                 {exercise.notes && (
                     <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex gap-3 items-start">

@@ -287,7 +287,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                 <div className="flex justify-between items-start mb-5">
                     <div>
                         <h1 className="text-2xl font-bold text-white tracking-tight">Hola, <span className="text-lime-400">{userName.split(' ')[0]}</span></h1>
-                        <p className="text-xs text-zinc-400 mt-1 font-medium uppercase">OBJETIVO: {mesocycleGoal}</p>
+                        <p className="text-xs text-zinc-400 mt-1 font-medium uppercase"> {mesocycleGoal}</p>
                     </div>
                     <button onClick={handleLogout} className="p-2 bg-zinc-700/50 rounded-full text-zinc-400"><LogOut className="w-4 h-4" /></button>
                 </div>
