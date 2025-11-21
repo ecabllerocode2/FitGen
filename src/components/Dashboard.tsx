@@ -14,15 +14,18 @@ import {
     Zap
 } from 'lucide-react';
 
+// 👇 IMPORTACIÓN NUEVA
+import InstallPwaBanner from './InstallPwaBanner';
+
 // ====================================================================
-// 1. DEFINICIÓN DE TIPOS (Añadida CurrentSessionData)
+// 1. DEFINICIÓN DE TIPOS (Igual que antes)
 // ====================================================================
 
 interface SessionPlan {
     dayOfWeek: string;
     sessionFocus: string;
 }
-
+// ... (MANTENEMOS TUS INTERFACES EXACTAMENTE IGUAL) ...
 interface Microcycle {
     week: number;
     focus: string;
@@ -30,13 +33,11 @@ interface Microcycle {
     notes: string;
     sessions: SessionPlan[];
 }
-
 interface MesocycleData {
     durationWeeks: number;
     mesocycleGoal: string;
     microcycles: Microcycle[];
 }
-
 interface CurrentMesocycleData {
     mesocyclePlan: MesocycleData;
     startDate: string;
@@ -45,16 +46,13 @@ interface CurrentMesocycleData {
     currentWeek: number;
     status?: string;
 }
-
-// Estructura de la sesión guardada (para saber si ya existe)
 interface CurrentSessionData {
     meta?: {
-        date: string; // Fecha ISO
+        date: string; 
         generatedAt: string;
     };
     completed?: boolean;
 }
-
 interface UserProfile {
     profileData?: {
         name: string;
@@ -63,10 +61,9 @@ interface UserProfile {
     };
     plan?: 'free' | 'premium' | 'trial';
     currentMesocycle?: CurrentMesocycleData;
-    currentSession?: CurrentSessionData; // <--- NUEVO: Sesión del día
+    currentSession?: CurrentSessionData;
     name?: string;
 }
-
 interface DashboardProps {
     user: User;
     db: Firestore;
@@ -91,25 +88,18 @@ const MOTIVATIONAL_QUOTES = [
 const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
     const navigate = useNavigate();
-
-
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Estados para botones de carga
     const [generatingSession, setGeneratingSession] = useState(false);
     const [creatingPlan, setCreatingPlan] = useState(false);
-
-    // Estado para la frase motivadora (índice)
     const [quoteIndex, setQuoteIndex] = useState(0);
 
-    // ----------------------------------------------------------------
     // A. Suscripción a Firestore
-    // ----------------------------------------------------------------
     useEffect(() => {
         if (!user) return;
         const userRef = doc(db, 'users', user.uid);
-
         const unsubscribe = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
                 setUserProfile(docSnap.data() as UserProfile);
@@ -121,7 +111,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             console.error("Error escuchando Firestore:", error);
             setLoading(false);
         });
-
         return () => unsubscribe();
     }, [user, db]);
 
@@ -136,9 +125,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         return () => clearInterval(interval);
     }, [generatingSession]);
 
-    // ----------------------------------------------------------------
     // B. Lógica de Tiempo y Estado
-    // ----------------------------------------------------------------
     const dashboardState = useMemo(() => {
         if (!userProfile?.currentMesocycle) return null;
 
@@ -149,19 +136,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         if (mesocycle.startDate) {
             const startString = mesocycle.startDate.split('T')[0];
             const start = new Date(`${startString}T00:00:00`);
-
-            if (isNaN(start.getTime())) return null; // Validación
-
+            if (isNaN(start.getTime())) return null; 
             const weeksDiff = differenceInCalendarWeeks(today, start, { weekStartsOn: 1 });
             currentWeekCalc = weeksDiff + 1;
         }
 
         const duration = mesocycle.mesocyclePlan.durationWeeks;
         const isFinished = currentWeekCalc > duration;
-
         const todayNameLower = format(today, 'eeee', { locale: es });
         const todayName = todayNameLower.charAt(0).toUpperCase() + todayNameLower.slice(1);
-
         const weekIndex = Math.min(currentWeekCalc, duration) - 1;
         const currentMicrocycle = mesocycle.mesocyclePlan.microcycles[weekIndex] || null;
 
@@ -169,7 +152,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             s => s.dayOfWeek.toLowerCase() === todayNameLower
         );
 
-        // VERIFICAR SI LA SESIÓN YA ESTÁ LISTA EN FIRESTORE
         let isSessionReady = false;
         if (userProfile.currentSession?.meta?.date) {
             const sessionDate = parseISO(userProfile.currentSession.meta.date);
@@ -186,14 +168,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             currentMicrocycle,
             todaysSession,
             mesocycleGoal: mesocycle.mesocyclePlan.mesocycleGoal,
-            isSessionReady // <--- Nuevo estado
+            isSessionReady 
         };
     }, [userProfile]);
 
-    // ----------------------------------------------------------------
     // C. Acciones
-    // ----------------------------------------------------------------
-
     const userName = userProfile?.profileData?.name || userProfile?.name || 'Atleta';
 
     const handleLogout = async () => {
@@ -220,7 +199,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
     const handleGenerateSession = async (isRecovery: boolean = false) => {
         setGeneratingSession(true);
-        setQuoteIndex(0); // Reiniciar frases
+        setQuoteIndex(0); 
 
         try {
             const token = await user.getIdToken();
@@ -244,14 +223,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             });
 
             const data = await res.json();
-
             if (data.success) {
-                // La sesión se guardó en Firestore. El onSnapshot actualizará la UI automáticamente.
                 console.log("Sesión generada OK");
             } else {
                 alert("Error: " + data.error);
             }
-
         } catch (error) {
             console.error(error);
             alert("Error de conexión.");
@@ -261,13 +237,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     };
 
     const handleStartWorkout = () => {
-        // AQUÍ IRÁ TU NAVEGACIÓN REAL CUANDO TENGAS ROUTER
         navigate('/workout/today');
     };
 
-    // ----------------------------------------------------------------
     // D. RENDERIZADO
-    // ----------------------------------------------------------------
 
     if (loading) {
         return (
@@ -278,6 +251,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         );
     }
 
+    // DASHBOARD VACÍO (SIN PLAN)
     if (!dashboardState) {
         return (
             <div className="min-h-screen bg-zinc-900 p-6 flex flex-col items-center justify-center text-center relative">
@@ -296,6 +270,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         {creatingPlan ? <Activity className="animate-spin w-5 h-5" /> : "Generar Primer Mesociclo"}
                     </button>
                 </div>
+                
+                {/* 👇 AÑADIDO: Banner PWA aquí también por si el usuario es nuevo */}
+                <InstallPwaBanner /> 
             </div>
         );
     }
@@ -303,7 +280,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     const { currentWeek, duration, todayName, currentMicrocycle, todaysSession, mesocycleGoal, isSessionReady } = dashboardState;
 
     return (
-        <div className="min-h-screen bg-zinc-900 text-white pb-24">
+        <div className="min-h-screen bg-zinc-900 text-white pb-24 relative"> {/* relative para posicionar banner */}
 
             {/* HEADER */}
             <header className="bg-zinc-800 p-6 rounded-b-3xl shadow-xl mb-6 border-b border-zinc-700 relative">
@@ -326,7 +303,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             </header>
 
             <main className="px-5 space-y-8">
-
                 {/* CARD PRINCIPAL */}
                 <section>
                     <div className="flex items-center gap-2 mb-4">
@@ -361,7 +337,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                                     <p className="text-xs text-zinc-300 italic">"{currentMicrocycle?.notes}"</p>
                                 </div>
 
-                                {/* BOTÓN CAMBIANTE */}
                                 {isSessionReady ? (
                                     <button
                                         onClick={handleStartWorkout}
@@ -415,6 +390,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     </div>
                 </section>
             </main>
+
+            {/* 👇 AÑADIDO: Banner de instalación PWA al final */}
+            <InstallPwaBanner />
         </div>
     );
 };
