@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { type User, signOut, type Auth } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { Firestore, doc, onSnapshot } from 'firebase/firestore';
-import { format, differenceInCalendarWeeks, isSameDay, parseISO } from 'date-fns';
+import { format, differenceInCalendarWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
     Dumbbell,
