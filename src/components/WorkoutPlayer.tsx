@@ -13,23 +13,15 @@ import {
 } from 'lucide-react';
 
 // --- 1. HELPER PARA YOUTUBE (Fuera del componente) ---
-// Convierte cualquier link de YT en un embed limpio, mudo y en bucle.
 const getYoutubeEmbedUrl = (url: string) => {
   if (!url) return null;
   
-  // Regex potente que detecta ID en youtu.be, watch?v=, embed/, etc.
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
   const match = url.match(regExp);
   const videoId = (match && match[2].length === 11) ? match[2] : null;
 
   if (!videoId) return null;
 
-  // Parámetros CLAVE para que funcione como un GIF de fondo:
-  // autoplay=1: Iniciar solo.
-  // mute=1: OBLIGATORIO para que Chrome/Safari permitan el autoplay.
-  // loop=1 + playlist={id}: Truco necesario para loopear un solo video.
-  // controls=0: Sin barra de reproducción.
-  // playsinline=1: Para que en iPhone no se abra en pantalla completa.
   return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&fs=0`;
 };
 
@@ -45,8 +37,9 @@ interface Exercise {
   rpe?: number;
   notes?: string;
   imageUrl?: string | null;
-  url?: string; // <--- URL del video de YouTube
+  url?: string; 
   equipment?: string;
+  suggestedLoad?: string; // <--- ¡NUEVO CAMPO AGREGADO!
 }
 
 interface Block {
@@ -463,10 +456,10 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                                 <p className="text-xs text-zinc-400 mt-1">Repeticiones</p>
                             </div>
                             <div className="pl-6 flex flex-col justify-center items-center">
-                                <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Usar</p>
-                                {/* AQUÍ SE MUESTRA EL EQUIPO ESPECÍFICO QUE MANDÓ EL BACKEND */}
+                                <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Carga Sugerida</p>
+                                {/* Priorizamos suggestedLoad, si no, equipment, si no, genérico */}
                                 <p className="text-sm font-bold text-lime-400 leading-tight mt-1">
-                                    {exercise.equipment || "Peso Corporal / Tu Equipo"}
+                                    {exercise.suggestedLoad || exercise.equipment || "Peso Corporal / Tu Equipo"}
                                 </p>
                             </div>
                         </div>
