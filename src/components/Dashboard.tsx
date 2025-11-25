@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { type User, signOut, type Auth } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { Firestore, doc, onSnapshot } from 'firebase/firestore';
@@ -11,21 +11,23 @@ import {
     CheckCircle2,
     Play,
     LogOut,
-    Zap
+    Zap,
+    Scale,
+    BatteryCharging,
+    X,
+    ChevronDown,
 } from 'lucide-react';
 
-// 👇 IMPORTACIÓN NUEVA
 import InstallPwaBanner from './InstallPwaBanner';
 
 // ====================================================================
-// 1. DEFINICIÓN DE TIPOS (Igual que antes)
+// 1. DEFINICIÓN DE TIPOS
 // ====================================================================
 
 interface SessionPlan {
     dayOfWeek: string;
     sessionFocus: string;
 }
-// ... (MANTENEMOS TUS INTERFACES EXACTAMENTE IGUAL) ...
 interface Microcycle {
     week: number;
     focus: string;
@@ -48,7 +50,7 @@ interface CurrentMesocycleData {
 }
 interface CurrentSessionData {
     meta?: {
-        date: string; 
+        date: string;
         generatedAt: string;
     };
     completed?: boolean;
@@ -70,6 +72,11 @@ interface DashboardProps {
     auth: Auth;
 }
 
+interface PreSessionFeedback {
+    energyLevel: number; // Escala 1-5
+    sorenessLevel: number; // Escala 1-5
+}
+
 // FRASES MOTIVADORAS PARA EL LOADING
 const MOTIVATIONAL_QUOTES = [
     "Calibrando cargas...",
@@ -82,7 +89,127 @@ const MOTIVATIONAL_QUOTES = [
 ];
 
 // ====================================================================
-// 2. COMPONENTE DASHBOARD
+// 2. COMPONENTE MODAL DE FEEDBACK (Inalterado)
+// ====================================================================
+
+interface FeedbackModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSubmit: (feedback: PreSessionFeedback) => void;
+    isLoading: boolean;
+    isRecovery?: boolean;
+}
+
+const scaleOptions = [
+    { value: 5, label: '5 - Fantástico/Nada' },
+    { value: 4, label: '4 - Muy Bien/Leve' },
+    { value: 3, label: '3 - Normal/Moderado' },
+    { value: 2, label: '2 - Cansado/Alto' },
+    { value: 1, label: '1 - Exhausto/Incapacitante' },
+];
+
+
+const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, onSubmit, isLoading, isRecovery = false }) => {
+    const [energyLevel, setEnergyLevel] = useState(3);
+    const [sorenessLevel, setSorenessLevel] = useState(3);
+
+    // Resetear estados al abrir
+    useEffect(() => {
+        if (isOpen) {
+            setEnergyLevel(3);
+            setSorenessLevel(3);
+        }
+    }, [isOpen]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSubmit({ energyLevel, sorenessLevel });
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+            <div className="bg-zinc-800 p-6 rounded-2xl w-full max-w-md border border-lime-500/30 animate-in zoom-in-95 duration-300">
+                <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-xl font-bold text-lime-400 flex items-center gap-2">
+                        <Zap className="w-6 h-6" />
+                        Chequeo Pre-Sesión
+                    </h3>
+                    <button onClick={onClose} className="text-zinc-400 hover:text-white p-1">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <p className="text-zinc-300 mb-6 text-sm">
+                    {isRecovery ? (
+                        "Tu plan de hoy es de Movilidad. Este feedback nos ayudará a priorizar la recuperación más adecuada."
+                    ) : (
+                        "Tu respuesta ajustará el peso, series y repeticiones de HOY en tiempo real."
+                    )}
+                </p>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* Nivel de Energía */}
+                    <div>
+                        <label className="block text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
+                            <BatteryCharging className="w-4 h-4 text-lime-500" /> Nivel de Energía <span className="text-xs text-zinc-500">(1=Exhausto, 5=Fantástico)</span>
+                        </label>
+                        <div className="relative">
+                            <select
+                                value={energyLevel}
+                                onChange={(e) => setEnergyLevel(parseInt(e.target.value))}
+                                required
+                                className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-lg text-white appearance-none focus:ring-lime-500 focus:border-lime-500"
+                            >
+                                {scaleOptions.map(option => (
+                                    <option key={option.value} value={option.value}>{option.label.split('/')[0].trim()}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+                        </div>
+                    </div>
+
+                    {/* Dolor Muscular */}
+                    <div>
+                        <label className="block text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
+                            <Scale className="w-4 h-4 text-lime-500" /> Dolor Muscular / Agujetas <span className="text-xs text-zinc-500">(1=Nada, 5=Incapacitante)</span>
+                        </label>
+                        <div className="relative">
+                            <select
+                                value={sorenessLevel}
+                                onChange={(e) => setSorenessLevel(parseInt(e.target.value))}
+                                required
+                                className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-lg text-white appearance-none focus:ring-lime-500 focus:border-lime-500"
+                            >
+                                {scaleOptions.map(option => (
+                                    <option key={option.value} value={option.value}>{option.label.split('/')[1].trim()}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+                        </div>
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full bg-lime-500 text-zinc-900 font-bold py-3 px-4 rounded-xl transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-lime-400 flex items-center justify-center gap-2"
+                    >
+                        {isLoading ? (
+                            <Activity className="animate-spin w-5 h-5" />
+                        ) : (
+                            'Confirmar y Generar Rutina'
+                        )}
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+
+// ====================================================================
+// 3. COMPONENTE DASHBOARD
 // ====================================================================
 
 const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
@@ -91,12 +218,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // Estados para botones de carga
+    // Estados para botones de carga y feedback
     const [generatingSession, setGeneratingSession] = useState(false);
     const [creatingPlan, setCreatingPlan] = useState(false);
+    const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+    const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+
     const [quoteIndex, setQuoteIndex] = useState(0);
 
-    // A. Suscripción a Firestore
+    // A. Suscripción a Firestore (Lógica inalterada)
     useEffect(() => {
         if (!user) return;
         const userRef = doc(db, 'users', user.uid);
@@ -114,7 +244,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         return () => unsubscribe();
     }, [user, db]);
 
-    // Efecto para rotar frases
+    // Efecto para rotar frases (Lógica inalterada)
     useEffect(() => {
         let interval: any;
         if (generatingSession) {
@@ -125,8 +255,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         return () => clearInterval(interval);
     }, [generatingSession]);
 
-    // B. Lógica de Tiempo y Estado
+    // B. Lógica de Tiempo y Estado (Lógica inalterada)
     const dashboardState = useMemo(() => {
+        // ... (Tu lógica de cálculo de la semana y sesión de hoy) ...
         if (!userProfile?.currentMesocycle) return null;
 
         const mesocycle = userProfile.currentMesocycle;
@@ -136,7 +267,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         if (mesocycle.startDate) {
             const startString = mesocycle.startDate.split('T')[0];
             const start = new Date(`${startString}T00:00:00`);
-            if (isNaN(start.getTime())) return null; 
+            if (isNaN(start.getTime())) return null;
             const weeksDiff = differenceInCalendarWeeks(today, start, { weekStartsOn: 1 });
             currentWeekCalc = weeksDiff + 1;
         }
@@ -154,8 +285,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
         let isSessionReady = false;
         if (userProfile.currentSession?.meta?.date) {
-            const sessionDate = parseISO(userProfile.currentSession.meta.date);
-            if (isSameDay(sessionDate, today)) {
+            // Aseguramos que parseISO no cambie el día por timezone
+            // Si el backend guarda "2025-11-24", parseISO lo maneja bien.
+            // Si el backend guardaba la ISO completa UTC, esto también podría fallar.
+            
+            // RECOMENDACIÓN: Compara strings directos si es posible para evitar líos de hora
+            const sessionDateStr = userProfile.currentSession.meta.date.split('T')[0]; // "2025-11-24"
+            const todayStr = format(today, 'yyyy-MM-dd'); // "2025-11-24"
+            
+            if (sessionDateStr === todayStr) {
                 isSessionReady = true;
             }
         }
@@ -168,7 +306,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             currentMicrocycle,
             todaysSession,
             mesocycleGoal: mesocycle.mesocyclePlan.mesocycleGoal,
-            isSessionReady 
+            isSessionReady
         };
     }, [userProfile]);
 
@@ -197,21 +335,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         }
     };
 
-    const handleGenerateSession = async (isRecovery: boolean = false) => {
+    // Función modificada para recibir el feedback
+    const handleGenerateSession = useCallback(async (feedback: PreSessionFeedback, isRecovery: boolean) => {
+        setIsFeedbackModalOpen(false); // Cerrar modal primero
         setGeneratingSession(true);
-        setQuoteIndex(0); 
+        setQuoteIndex(0);
 
         try {
             const token = await user.getIdToken();
             const endpoint = `${import.meta.env.VITE_BACKEND_URL}/api/session/generate`;
 
+            const todayDate = format(new Date(), 'yyyy-MM-dd');
+
+            // El foco de la sesión se basa en el día programado (todaysSession) o 'Recuperación Activa'
             const contextFocus = isRecovery
                 ? 'Recuperación Activa'
                 : dashboardState?.todaysSession?.sessionFocus;
 
             const payload = {
                 userId: user.uid,
-                date: new Date().toISOString(),
+                date: todayDate, // Usamos la fecha de HOY
+                realTimeFeedback: feedback,
                 isRecovery: isRecovery,
                 contextFocus: contextFocus
             };
@@ -224,17 +368,31 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
             const data = await res.json();
             if (data.success) {
-                console.log("Sesión generada OK");
+                console.log("Sesión generada OK con feedback:", feedback);
             } else {
                 alert("Error: " + data.error);
             }
         } catch (error) {
             console.error(error);
-            alert("Error de conexión.");
+            alert("Error de conexión al generar la sesión.");
         } finally {
             setGeneratingSession(false);
         }
+    }, [user, dashboardState]);
+
+
+    // Nueva función para manejar el envío del modal
+    const handleModalSubmit = (feedback: PreSessionFeedback) => {
+        // Llamamos a la función principal con el feedback y el modo de recuperación
+        handleGenerateSession(feedback, isRecoveryMode);
     };
+
+    // Nueva función para abrir el modal (reemplaza las llamadas directas en los botones)
+    const openFeedbackModal = (isRec: boolean) => {
+        setIsRecoveryMode(isRec);
+        setIsFeedbackModalOpen(true);
+    };
+
 
     const handleStartWorkout = () => {
         navigate('/workout/today');
@@ -251,7 +409,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         );
     }
 
-    // DASHBOARD VACÍO (SIN PLAN)
+    // DASHBOARD VACÍO (SIN PLAN) - Lógica inalterada
     if (!dashboardState) {
         return (
             <div className="min-h-screen bg-zinc-900 p-6 flex flex-col items-center justify-center text-center relative">
@@ -270,9 +428,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         {creatingPlan ? <Activity className="animate-spin w-5 h-5" /> : "Generar Primer Mesociclo"}
                     </button>
                 </div>
-                
-                {/* 👇 AÑADIDO: Banner PWA aquí también por si el usuario es nuevo */}
-                <InstallPwaBanner /> 
+
+                <InstallPwaBanner />
             </div>
         );
     }
@@ -280,9 +437,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     const { currentWeek, duration, todayName, currentMicrocycle, todaysSession, mesocycleGoal, isSessionReady } = dashboardState;
 
     return (
-        <div className="min-h-screen bg-zinc-900 text-white pb-24 relative"> {/* relative para posicionar banner */}
+        <div className="min-h-screen bg-zinc-900 text-white pb-24 relative">
 
-            {/* HEADER */}
+            {/* MODAL DE FEEDBACK - AÑADIDO */}
+            <FeedbackModal
+                isOpen={isFeedbackModalOpen}
+                onClose={() => setIsFeedbackModalOpen(false)}
+                onSubmit={handleModalSubmit}
+                isLoading={generatingSession}
+                isRecovery={isRecoveryMode}
+            />
+
+            {/* HEADER - Lógica inalterada */}
             <header className="bg-zinc-800 p-6 rounded-b-3xl shadow-xl mb-6 border-b border-zinc-700 relative">
                 <div className="flex justify-between items-start mb-5">
                     <div>
@@ -312,7 +478,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
                     {todaysSession ? (
                         <div className="group bg-gradient-to-br from-zinc-800 to-zinc-900 border border-lime-500/30 p-6 rounded-2xl relative overflow-hidden shadow-lg">
-                            
+
                             {/* --- OVERLAY DE CARGA --- */}
                             {generatingSession && (
                                 <div className="absolute inset-0 z-50 bg-zinc-900/95 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6 animate-in fade-in duration-300">
@@ -332,7 +498,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                                     ENTRENAMIENTO PROGRAMADO
                                 </span>
                                 <h3 className="text-2xl font-bold text-white mb-2 leading-tight">{todaysSession.sessionFocus}</h3>
-                                
+
                                 <div className="bg-zinc-900/50 p-3 rounded-lg mb-6 border-l-2 border-zinc-600">
                                     <p className="text-xs text-zinc-300 italic">"{currentMicrocycle?.notes}"</p>
                                 </div>
@@ -347,7 +513,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                                     </button>
                                 ) : (
                                     <button
-                                        onClick={() => handleGenerateSession(false)}
+                                        // Abrir modal, sin lógica de mañana.
+                                        onClick={() => openFeedbackModal(false)}
                                         disabled={generatingSession}
                                         className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 border border-zinc-600 hover:border-lime-500/50 hover:text-lime-400 transition-all"
                                     >
@@ -364,14 +531,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                             </div>
                             <h3 className="text-xl font-bold text-white mb-2">Día de Descanso</h3>
                             <p className="text-zinc-400 text-sm mb-6">El músculo crece cuando descansas.</p>
-                            <button onClick={() => handleGenerateSession(true)} disabled={generatingSession} className="w-full bg-zinc-700 text-white py-3 rounded-xl text-sm">
+                            <button
+                                // Abre modal en modo recuperación
+                                onClick={() => openFeedbackModal(true)}
+                                disabled={generatingSession}
+                                className="w-full bg-zinc-700 text-white py-3 rounded-xl text-sm"
+                            >
                                 {generatingSession ? 'Generando...' : 'Generar Movilidad (Opcional)'}
                             </button>
                         </div>
                     )}
                 </section>
 
-                {/* LISTA SEMANAL */}
+                {/* LISTA SEMANAL - Lógica inalterada */}
                 <section>
                     <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4 px-1">Esta Semana</h3>
                     <div className="grid grid-cols-1 gap-3">

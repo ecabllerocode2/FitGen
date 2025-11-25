@@ -11,10 +11,11 @@ import {
   Info,
   Layers,
   Repeat,
-  Activity
+  Activity,
+  Layers3, // Nuevo ícono para Core
 } from 'lucide-react';
 
-// --- TIPOS (Basados en tu JSON de Firestore) ---
+// --- TIPOS (Actualizados para incluir Core) ---
 
 interface Exercise {
   id: string;
@@ -38,8 +39,10 @@ interface Block {
 interface SessionData {
   sessionGoal: string;
   estimatedDurationMin: number;
+  intensityLevel?: string;
   warmup: { exercises: Exercise[] };
   mainBlocks: Block[];
+  coreBlocks?: Block[]; // <--- ¡NUEVO! Bloques dedicados al Core
   cooldown: { exercises: Exercise[] };
   meta?: any;
 }
@@ -48,7 +51,7 @@ interface WorkoutOverviewProps {
   session: SessionData;
 }
 
-// --- SUB-COMPONENTE: ACORDEÓN ---
+// --- SUB-COMPONENTE: ACORDEÓN (Inalterado) ---
 const AccordionSection = ({ 
   title, 
   icon: Icon, 
@@ -62,7 +65,8 @@ const AccordionSection = ({
   defaultOpen?: boolean, 
   colorClass?: string 
 }) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  // CAMBIO CLAVE: Cambiar el estado inicial a 'defaultOpen' (que ahora es false)
+  const [isOpen, setIsOpen] = useState(defaultOpen); 
 
   return (
     <div className="bg-zinc-800 rounded-xl overflow-hidden border border-zinc-700/50 mb-4 shadow-sm">
@@ -88,7 +92,7 @@ const AccordionSection = ({
   );
 };
 
-// --- SUB-COMPONENTE: FILA DE EJERCICIO ---
+// --- SUB-COMPONENTE: FILA DE EJERCICIO (Inalterado) ---
 const ExerciseRow = ({ exercise, isSimple = false }: { exercise: Exercise, isSimple?: boolean }) => (
   <div className="flex items-start gap-4 py-3 border-b border-zinc-800 last:border-0">
     {/* Placeholder de Imagen */}
@@ -140,16 +144,14 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session }) => {
   const navigate = useNavigate();
 
   const handleStartSession = () => {
-    // Aquí navegaremos al "Player" (Pantalla 2 - Ejecución)
-    // Por ahora, puedes poner un alert o navegar a una ruta temporal
     console.log("Iniciando sesión...");
-    navigate('/workout/player'); // Asegúrate de crear esta ruta después
+    navigate('/workout/player'); 
   };
 
   return (
     <div className="min-h-screen bg-zinc-900 text-white pb-28">
       
-      {/* 1. HEADER DE SESIÓN */}
+      {/* 1. HEADER DE SESIÓN (Inalterado) */}
       <header className="relative pt-8 pb-6 px-6 bg-zinc-800 rounded-b-3xl border-b border-zinc-700 shadow-xl z-10">
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -166,21 +168,28 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session }) => {
         <div className="flex items-center gap-4 text-sm text-zinc-400">
            <div className="flex items-center gap-1.5 bg-zinc-900/50 px-3 py-1.5 rounded-full border border-zinc-700/50">
              <Clock className="w-4 h-4 text-lime-500" />
-             <span>{session.estimatedDurationMin} min</span>
+             {/* Duración Dinámica */}
+             <span>{session.estimatedDurationMin || 60} min</span> 
            </div>
+           
            <div className="flex items-center gap-1.5 bg-zinc-900/50 px-3 py-1.5 rounded-full border border-zinc-700/50">
-             <Activity className="w-4 h-4 text-orange-500" />
-             <span>Intensidad Alta</span>
+             <Activity className={`w-4 h-4 ${
+                 session.intensityLevel?.includes('Alta') ? 'text-red-500' : 
+                 session.intensityLevel?.includes('Baja') ? 'text-blue-400' : 'text-orange-500'
+             }`} />
+             {/* Intensidad Dinámica */}
+             <span>{session.intensityLevel || "Media"}</span>
            </div>
         </div>
       </header>
 
       <main className="px-5 py-6 space-y-2">
         
-        {/* 2. CALENTAMIENTO */}
+        {/* 2. CALENTAMIENTO (defaultOpen=false) */}
         <AccordionSection 
           title="Calentamiento" 
           icon={Flame} 
+          defaultOpen={false} // Cambiado a False
           colorClass="text-orange-400 bg-orange-500/10"
         >
           {session.warmup.exercises.map((ex, idx) => (
@@ -197,10 +206,10 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session }) => {
 
             return (
               <AccordionSection 
-                key={index} 
+                key={`main-${index}`} 
                 title={blockTitle} 
                 icon={Dumbbell} 
-                defaultOpen={true} // Los bloques principales abiertos por defecto
+                defaultOpen={false} // Cambiado a False
                 colorClass={isComplex ? "text-purple-400 bg-purple-500/10" : "text-lime-400 bg-lime-500/10"}
               >
                 <div className="relative">
@@ -225,10 +234,36 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session }) => {
             );
         })}
 
-        {/* 4. VUELTA A LA CALMA */}
+        {/* 4. BLOQUE DE CORE (NUEVO) */}
+        {session.coreBlocks && session.coreBlocks.length > 0 && (
+            <AccordionSection 
+                title="Bloque de Core" 
+                icon={Layers3} // Usamos un ícono dedicado para Core
+                defaultOpen={false} // Cerrado por defecto
+                colorClass="text-yellow-400 bg-yellow-500/10"
+            >
+                {session.coreBlocks.map((block, index) => (
+                    <div key={`core-${index}`} className="relative mb-4">
+                        <p className="text-xs text-zinc-400 font-medium mb-2">Rutina de Estabilidad {index + 1}</p>
+                        {block.exercises.map((ex, idx) => (
+                           <div key={idx} className="relative z-10 bg-zinc-900 mb-3 last:mb-0 rounded-xl p-2 border border-zinc-800/50 shadow-sm">
+                               <ExerciseRow exercise={ex} />
+                           </div>
+                        ))}
+                         <div className="mt-4 flex items-center justify-center gap-2 text-xs text-zinc-500 bg-zinc-950/30 p-2 rounded-lg border border-zinc-800 border-dashed">
+                           <Clock className="w-3.5 h-3.5" />
+                           <span>Descanso entre series: <strong className="text-zinc-300">{block.restBetweenSetsSec}s</strong></span>
+                        </div>
+                    </div>
+                ))}
+            </AccordionSection>
+        )}
+
+        {/* 5. VUELTA A LA CALMA (defaultOpen=false) */}
         <AccordionSection 
           title="Vuelta a la Calma" 
           icon={Wind} 
+          defaultOpen={false} // Cambiado a False
           colorClass="text-cyan-400 bg-cyan-500/10"
         >
           {session.cooldown.exercises.map((ex, idx) => (
@@ -238,7 +273,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session }) => {
 
       </main>
 
-      {/* 5. STICKY FOOTER - BOTÓN DE INICIO */}
+      {/* 6. STICKY FOOTER - BOTÓN DE INICIO (Inalterado) */}
       <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-zinc-900 via-zinc-900 to-transparent z-50">
         <button 
           onClick={handleStartSession}

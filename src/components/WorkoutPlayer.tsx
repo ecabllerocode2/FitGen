@@ -462,26 +462,30 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                                 <p className="text-3xl font-black text-white">{exercise.targetReps || "Fallo"}</p>
                                 <p className="text-xs text-zinc-400 mt-1">Repeticiones</p>
                             </div>
-                            <div className="pl-6">
+                            <div className="pl-6 flex flex-col justify-center items-center">
                                 <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Usar</p>
+                                {/* AQUÍ SE MUESTRA EL EQUIPO ESPECÍFICO QUE MANDÓ EL BACKEND */}
                                 <p className="text-sm font-bold text-lime-400 leading-tight mt-1">
-                                    {exercise.equipment || "Tu Equipo Disponible"}
+                                    {exercise.equipment || "Peso Corporal / Tu Equipo"}
                                 </p>
                             </div>
                         </div>
                         
-                        {exercise.rpe && (
-                             <div className="mt-4 pt-4 border-t border-zinc-700 text-center">
-                                 <span className="text-xs bg-zinc-700/50 px-3 py-1 rounded-full text-zinc-300 border border-zinc-600">
-                                     Intensidad (RPE): <strong className="text-white">{exercise.rpe}/10</strong>
-                                 </span>
-                             </div>
+                        {/* NOTAS EXTRA (TEMPO, RPE) */}
+                        {exercise.notes && (
+                            <div className="mt-4 pt-4 border-t border-zinc-700/50">
+                                <div className="flex items-start gap-2 text-xs text-zinc-300 bg-zinc-950/30 p-3 rounded-lg">
+                                    <Info className="w-4 h-4 text-lime-500 flex-shrink-0 mt-0.5" />
+                                    <span>{exercise.notes}</span>
+                                </div>
+                            </div>
                         )}
                     </div>
                 ) : (
-                    <div className="bg-zinc-800 rounded-xl p-4 mb-6 border border-zinc-700 flex items-center justify-center gap-3">
+                    // Vista simple para Warmup/Cool
+                    <div className="mb-6 flex items-center gap-3 text-zinc-400 bg-zinc-800/30 p-3 rounded-xl border border-zinc-700/50">
                         <Clock className="w-5 h-5 text-lime-500" />
-                        <span className="text-lg font-bold text-white">{exercise.durationOrReps}</span>
+                        <span className="font-mono text-lg text-white">{exercise.durationOrReps || "A criterio"}</span>
                     </div>
                 )}
 

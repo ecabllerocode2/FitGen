@@ -3,14 +3,13 @@ import type { User } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore'; 
 
 // Las URL de las imágenes son placeholders que asumen que las cargarás en la carpeta public/
-// ¡Asegúrate de que existan en la carpeta 'public' de tu proyecto!
 interface EquipmentDetail {
     key: string; 
     name: string;
     imagePath: string;
     description: string;
-    isWeightBased: boolean; // Indica si el equipo tiene opciones de peso
-    weightOptions?: number[]; // Opciones de peso en kg
+    isWeightBased: boolean;
+    weightOptions?: number[]; 
 }
 
 // Lista detallada de equipo que el usuario puede tener en casa
@@ -71,9 +70,9 @@ const homeEquipmentList: EquipmentDetail[] = [
 
 
 const trainingLocationOptions = [
-    'Gimnasio (Máquinas y Pesos Libres)', // Opción 1: Acceso completo
-    'En Casa (Solo Peso Corporal)', // Opción 2: Sin equipo
-    'En Casa (Con Equipo Limitado)', // Opción 3: Despliega la lista de detalle
+    'Gimnasio (Máquinas y Pesos Libres)',
+    'En Casa (Solo Peso Corporal)',
+    'En Casa (Con Equipo Limitado)',
 ];
 
 const goals = [
@@ -94,11 +93,14 @@ const genderOptions = [
     'Prefiero no decir'
 ];
 
-// Lista de días de la semana para la selección
-const daysOfWeek = [
-    'Lunes', 'Martes', 'Miércoles', 'Jueves', 
-    'Viernes', 'Sábado', 'Domingo'
-];
+
+interface DayContext {
+    day: string;
+    canTrain: boolean;
+    externalLoad: 'none' | 'medium' | 'high' | 'extreme'; // Representa el nivel de desgaste
+}
+
+const DAYS_ORDER = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 
 // Corregido: Acceso directo a la variable de entorno para evitar errores de compilación
@@ -106,7 +108,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 interface ProfileOnboardingProps {
   user: User;
-  db: Firestore; // Se mantiene por tipado, aunque no se usa para guardar en el Frontend
+  db: Firestore;
 }
 
 const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
@@ -120,8 +122,8 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
     const [weight, setWeight] = useState('');
     const [goal, setGoal] = useState('');
     const [experienceLevel, setExperienceLevel] = useState('');
-    // *** MODIFICADO: Ahora es un array de strings con los días seleccionados ***
-    const [selectedTrainingDays, setSelectedTrainingDays] = useState<string[]>([]);
+    // *** CORRECCIÓN: Eliminamos el estado redundante selectedTrainingDays ***
+    
     const [focusArea, setFocusArea] = useState(''); 
     const [injuries, setInjuries] = useState(''); 
 
@@ -132,19 +134,20 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [weeklySchedule, setWeeklySchedule] = useState<DayContext[]>(
+        DAYS_ORDER.map(d => ({ day: d, canTrain: false, externalLoad: 'none' }))
+    );
 
-    /**
-     * Maneja la selección/deselección de los días de entrenamiento.
-     */
-    const handleDaySelection = (day: string) => {
-        setSelectedTrainingDays(prev => {
-            if (prev.includes(day)) {
-                return prev.filter(d => d !== day);
-            } else {
-                return [...prev, day];
-            }
-        });
+    // Helper para actualizar un día específico
+    const updateDayContext = (day: string, field: keyof DayContext, value: any) => {
+        setWeeklySchedule(prev => prev.map(d => 
+            d.day === day ? { ...d, [field]: value } : d
+        ));
     };
+
+    // Calculamos trainingDaysPerWeek basado en la matriz (Usado para la validación del botón)
+    const trainingDaysCount = weeklySchedule.filter(d => d.canTrain).length;
+
 
     /**
      * Maneja el cambio en la ubicación principal (Gimnasio, Peso Corporal, Equipo Limitado).
@@ -160,7 +163,6 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
 
     /**
      * Maneja los cambios en los detalles del equipo en casa.
-     * Incluye la lógica para manejar las opciones de peso junto con el nombre del equipo.
      */
     const handleDetailedEquipmentChange = (equipmentName: string, weight?: number | null) => {
         const key = weight ? `${equipmentName} (${weight}kg)` : equipmentName;
@@ -198,7 +200,6 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
 
         const parsedWeight = parseFloat(weight);
         const parsedAge = parseInt(age, 10);
-        const trainingDaysCount = selectedTrainingDays.length; // Usamos el conteo de días seleccionados
         const parsedHeight = parseInt(height, 10); 
 
         // 1. Construir la lista final de equipo para el backend
@@ -227,7 +228,8 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
             setIsLoading(false);
             return;
         }
-        // *** MODIFICADO: Validamos que se haya seleccionado al menos un día ***
+        
+        // *** CORRECCIÓN: Validamos que se haya seleccionado al menos un día usando el conteo derivado ***
         if (trainingDaysCount === 0) {
             setError('Por favor, selecciona al menos un día de la semana para entrenar (*).');
             setIsLoading(false);
@@ -248,6 +250,11 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
             const idToken = await user.getIdToken(true); 
 
             // 4. Preparar los datos del perfil
+            // *** IMPORTANTE: Derivamos la lista simple de días preferidos del weeklySchedule ***
+            const preferredDaysList = weeklySchedule
+                .filter(d => d.canTrain)
+                .map(d => d.day);
+
             const profileData = {
                 name: name.trim(),
                 age: parsedAge,
@@ -256,8 +263,8 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
                 experienceLevel,
                 // ** MODIFICADOS **
                 trainingDaysPerWeek: trainingDaysCount, 
-                preferredTrainingDays: selectedTrainingDays, // <--- NUEVO CAMPO
-                // *****************
+                preferredTrainingDays: preferredDaysList, // Lista simple
+                weeklyScheduleContext: weeklySchedule,    // Objeto complejo para la IA Heurística
                 availableEquipment: finalEquipment, 
                 initialWeight: parsedWeight,
                 fitnessGoal: goal,
@@ -286,7 +293,7 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
                 throw new Error(result.error || 'Error al guardar el perfil en el servidor.');
             }
             
-            // Si todo fue bien, podrías redirigir al dashboard (lógica pendiente)
+            // Si todo fue bien, redirigir al dashboard
 
         } catch (e) {
             console.error("Error al guardar el perfil:", e);
@@ -329,7 +336,7 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
                         />
                     </div>
                     
-                    {/* CAMPOS: Edad, Peso y Estatura (en una fila de 3) */}
+                    {/* CAMPOS: Edad, Peso y Estatura */}
                     <div className="grid grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-zinc-300 mb-2">Edad (*)</label>
@@ -419,34 +426,49 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
                         </select>
                     </div>
 
-                    {/* *** MODIFICADO: DÍAS DE ENTRENAMIENTO ESPECÍFICOS *** */}
-                    <div>
-                        <label className="block text-sm font-medium text-zinc-300 mb-2">
-                            Días de Entrenamiento Semanal (Mínimo 1) (*)
-                        </label>
-                        <p className="text-xs text-zinc-400 mb-3">
-                            Selecciona los días **fijos** de la semana para tu plan de fuerza. Cualquier día libre puede usarse para sesiones de movilidad/regeneración.
-                        </p>
-                        <div className="flex flex-wrap gap-2 justify-center p-3 bg-zinc-700 rounded-lg">
-                            {daysOfWeek.map(day => (
-                                <button
-                                    key={day}
-                                    type="button"
-                                    onClick={() => handleDaySelection(day)}
-                                    className={`
-                                        px-3 py-2 text-sm font-semibold rounded-full transition-colors duration-150 ease-in-out
-                                        ${selectedTrainingDays.includes(day)
-                                            ? 'bg-lime-500 text-zinc-900 shadow-md'
-                                            : 'bg-zinc-600 text-zinc-300 hover:bg-zinc-500'
-                                        }
-                                    `}
-                                >
-                                    {day}
-                                </button>
-                            ))}
-                        </div>
+                    {/* --- NUEVA SECCIÓN: PLANIFICACIÓN INTELIGENTE (TEXTOS CORREGIDOS) --- */}
+                <div className="space-y-4 border-t border-zinc-700 pt-6">
+                    <h3 className="text-xl font-semibold text-lime-400">Planificación Semanal y Desgaste</h3>
+                    <p className="text-sm text-zinc-400">
+                        Indica qué días deseas entrenar con la app y tu **Nivel de Desgaste** por otras actividades (trabajo físico, otros deportes) en cada día de la semana.
+                    </p>
+
+                    <div className="grid gap-3">
+                        {weeklySchedule.map((dayCtx) => (
+                            <div key={dayCtx.day} className={`p-3 rounded-lg border flex items-center justify-between ${dayCtx.canTrain ? 'bg-zinc-700 border-lime-500' : 'bg-zinc-700/50 border-zinc-600'}`}>
+                                
+                                {/* Toggle Entrenar */}
+                                <div className="flex items-center gap-3">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={dayCtx.canTrain}
+                                        onChange={(e) => updateDayContext(dayCtx.day, 'canTrain', e.target.checked)}
+                                        className="w-5 h-5 text-lime-500 rounded focus:ring-lime-500"
+                                    />
+                                    <span className={dayCtx.canTrain ? 'text-white font-medium' : 'text-zinc-500'}>
+                                        {dayCtx.day}: Puedo Entrenar
+                                    </span>
+                                </div>
+
+                                {/* Selector de Desgaste/Fatiga Externa */}
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-zinc-400">Desgaste Diario:</span>
+                                    <select 
+                                        value={dayCtx.externalLoad}
+                                        onChange={(e) => updateDayContext(dayCtx.day, 'externalLoad', e.target.value)}
+                                        className="bg-zinc-800 text-xs text-white p-1 rounded border border-zinc-600 focus:border-lime-500"
+                                    >
+                                        <option value="none">Bajo (Descanso, Oficina)</option>
+                                        <option value="medium">Medio (Actividad moderada)</option>
+                                        <option value="high">Alto (Trabajo físico, deporte)</option>
+                                        <option value="extreme">Extremo (Competición, Maratón)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                    {/* ****************************************************** */}
+                    {trainingDaysCount === 0 && <p className="text-red-400 text-xs">Selecciona al menos 1 día para entrenar (*).</p>}
+                </div>
 
                     {/* CAMPO PRINCIPAL: DÓNDE ENTRENAS */}
                     <div>
@@ -481,16 +503,12 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
                                                 src={item.imagePath} 
                                                 alt={item.name} 
                                                 className="w-10 h-10 rounded-md object-cover mr-4 border border-zinc-500"
-                                                // Fallback simple: si la imagen no carga, muestra un icono
+                                                // Fallback simple: si la imagen no carga, oculta la imagen.
                                                 onError={(e) => {
                                                     const target = e.target as HTMLImageElement;
                                                     target.style.display = 'none';
-                                                    // Usamos un div invisible para el espacio en caso de fallo
-                                                    target.nextElementSibling!.classList.remove('hidden'); 
                                                 }}
                                             />
-                                            {/* Icono de Fallback (visible solo si la imagen falla) */}
-                                            <span className="text-2xl mr-4 hidden" aria-hidden="true">🏋️</span>
                                             
                                             <div className="flex-grow">
                                                 {/* Checkbox principal del equipo */}
@@ -571,8 +589,8 @@ const ProfileOnboarding: FC<ProfileOnboardingProps> = ({ user }) => {
 
                     <button
                         type="submit"
-                        // *** MODIFICADO: Se valida que haya al menos 1 día seleccionado (selectedTrainingDays.length) ***
-                        disabled={isLoading || !goal || !weight || !name || !age || !experienceLevel || selectedTrainingDays.length === 0 || !trainingLocation || !gender || !height || (trainingLocation === 'En Casa (Con Equipo Limitado)' && homeEquipmentSelections.length === 0)}
+                        // *** CORRECCIÓN: Usamos trainingDaysCount para validar el botón. ***
+                        disabled={isLoading || !goal || !weight || !name || !age || !experienceLevel || trainingDaysCount === 0 || !trainingLocation || !gender || !height || (trainingLocation === 'En Casa (Con Equipo Limitado)' && homeEquipmentSelections.length === 0)}
                         className="w-full bg-lime-500 text-zinc-900 font-bold py-3 px-4 rounded-lg transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-lime-400 flex items-center justify-center"
                     >
                         {isLoading ? (
