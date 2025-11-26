@@ -1,78 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import { Download, X, Share, PlusSquare, MoreVertical, ArrowUpRight } from 'lucide-react';
 
-// 1. VARIABLE GLOBAL (Fuera del componente)
-// Esto asegura que si el evento ocurre antes de que React cargue, no lo perdamos.
-let deferredPrompt: any = null;
-
 const InstallPwaBanner: React.FC = () => {
-    // Estado para controlar la visibilidad general del banner
+    // Visibilidad general del banner
     const [isVisible, setIsVisible] = useState(false);
-    // Estado para saber si tenemos el "permiso" del navegador para mostrar el botón
+    // Indica si el navegador ha disparado el evento 'beforeinstallprompt' (Botón Mágico)
     const [supportsPWA, setSupportsPWA] = useState(false);
+    // Indica si es un dispositivo iOS (requiere instrucciones manuales)
     const [isIOS, setIsIOS] = useState(false);
 
     useEffect(() => {
-        // --- A. DETECCIÓN DE INSTALACIÓN PREVIA ---
-        const checkInstalled = () => {
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                                 (window.navigator as any).standalone || 
-                                 document.referrer.includes('android-app://');
-            
-            // Si ya es standalone, ocultamos todo y salimos
-            if (isStandalone) {
-                setIsVisible(false);
-                setSupportsPWA(false);
-            }
-        };
-
-        checkInstalled();
-
-        // --- B. DETECCIÓN DE DISPOSITIVO ---
+        // --- 1. DETECCIÓN DE ESTADO Y DISPOSITIVO ---
         const userAgent = window.navigator.userAgent.toLowerCase();
-        // Detectar iOS explícitamente
         const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                             (window.navigator as any).standalone || 
+                             document.referrer.includes('android-app://');
+
         setIsIOS(isIosDevice);
 
-        // --- C. MANEJADOR DEL EVENTO MÁGICO (beforeinstallprompt) ---
-        const handler = (e: any) => {
-            // Prevenir que Chrome muestre su barra nativa automática (si la tuviera)
-            e.preventDefault();
-            console.log("Evento 'beforeinstallprompt' capturado y guardado ✅");
-            
-            // Guardamos el evento en la variable global
-            deferredPrompt = e;
-            
-            // Actualizamos estado para reactivar la UI
-            setSupportsPWA(true);
-            setIsVisible(true);
-        };
-
-        // Escuchar el evento
-        window.addEventListener('beforeinstallprompt', handler);
-
-        // 🚨 CRÍTICO: Revisar si el evento ya ocurrió antes de montar este componente
-        if (deferredPrompt) {
-            console.log("Evento recuperado de la memoria global ✅");
-            setSupportsPWA(true);
-            setIsVisible(true);
-        } else if (!isIosDevice) {
-             // Si no es iOS y no tenemos prompt aún, mostramos el banner
-             // (posiblemente mostrará instrucciones manuales hasta que el evento salte)
-             const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-             if (!isStandalone) setIsVisible(true);
-        } else if (isIosDevice) {
-            // En iOS siempre mostramos el banner si no está instalada
-            const isStandalone = (window.navigator as any).standalone;
-            if (!isStandalone) setIsVisible(true);
+        if (isStandalone) {
+            setIsVisible(false); // Ocultar si ya está instalada
+            return;
         }
 
-        // Listener para cuando la instalación se completa con éxito
+        // --- 2. MANEJO DEL EVENTO beforeinstallprompt (La Trampa Global) ---
+        
+        // @ts-ignore
+        const currentDeferredPrompt = window.deferredPrompt;
+        
+        // CRÍTICO: Buscar el evento capturado globalmente en main.tsx
+        if (currentDeferredPrompt) {
+            setSupportsPWA(true);
+            setIsVisible(true);
+        } else if (isIosDevice) {
+            // iOS: Siempre mostramos instrucciones si no está instalada
+            setIsVisible(true);
+        } else {
+            // Android/Desktop sin prompt: Mostramos instrucciones manuales por defecto
+            setIsVisible(true);
+        }
+
+        // Listener para capturar el evento si ocurre DESPUÉS del montaje
+        const handler = (e: any) => {
+            e.preventDefault();
+            // @ts-ignore
+            window.deferredPrompt = e;
+            setSupportsPWA(true);
+            setIsVisible(true);
+            console.log("Evento capturado en tiempo real ✅");
+        };
+
+        window.addEventListener('beforeinstallprompt', handler);
+
+        // Listener para limpiar si el usuario instala la app
         window.addEventListener('appinstalled', () => {
             console.log('PWA Instalada con éxito');
             setIsVisible(false);
             setSupportsPWA(false);
-            deferredPrompt = null;
+            // @ts-ignore
+            window.deferredPrompt = null;
         });
 
         return () => {
@@ -81,29 +68,27 @@ const InstallPwaBanner: React.FC = () => {
     }, []);
 
     const handleInstallClick = async () => {
-        console.log("Intentando instalar...");
-        if (!deferredPrompt) {
-            console.error("No hay evento deferredPrompt disponible");
-            return;
-        }
+        // @ts-ignore
+        const promptEvent = window.deferredPrompt;
+        if (!promptEvent) return;
 
-        // Mostrar el prompt nativo
-        deferredPrompt.prompt();
-
-        // Esperar a que el usuario decida
-        const { outcome } = await deferredPrompt.userChoice;
+        // Muestra el diálogo de instalación nativo
+        promptEvent.prompt();
+        
+        const { outcome } = await promptEvent.userChoice;
         console.log(`El usuario respondió: ${outcome}`);
 
-        // Limpiamos la variable global, ya no sirve
-        deferredPrompt = null;
-        setSupportsPWA(false);
+        // Limpiar el estado y la variable global
+        // @ts-ignore
+        window.deferredPrompt = null;
         setIsVisible(false);
+        setSupportsPWA(false);
     };
 
     if (!isVisible) return null;
 
     return (
-        <div className="fixed bottom-4 left-4 right-4 z-50 animate-in slide-in-from-bottom-5 duration-500">
+        <div className="fixed bottom-4 left-4 right-4 z-[100] animate-in slide-in-from-bottom-5 duration-500">
             <div className="bg-zinc-800 border border-lime-500/50 p-4 rounded-xl shadow-2xl flex flex-col gap-3 relative max-w-md mx-auto">
                 
                 {/* Botón de cerrar */}
@@ -121,25 +106,13 @@ const InstallPwaBanner: React.FC = () => {
                     </div>
                     <div>
                         <h4 className="font-bold text-white text-sm">Instalar FitGen</h4>
-                        <p className="text-xs text-zinc-400">Mejor rendimiento y pantalla completa.</p>
+                        <p className="text-xs text-zinc-400">Mejor rendimiento y sin barra de navegación.</p>
                     </div>
                 </div>
 
-                {/* --- LÓGICA DE UI --- */}
+                {/* --- LÓGICA DE UI INTELIGENTE --- */}
 
-                {/* OPCIÓN 1: Botón de Instalación Automática (Android/PC) */}
-                {/* Solo sale si tenemos el evento capturado (supportsPWA) */}
-                {!isIOS && supportsPWA && (
-                    <button
-                        onClick={handleInstallClick}
-                        className="w-full bg-lime-500 hover:bg-lime-400 text-zinc-900 font-bold py-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 shadow-[0_0_10px_rgba(132,204,22,0.3)] cursor-pointer"
-                    >
-                        Instalar Ahora
-                    </button>
-                )}
-
-                {/* OPCIÓN 2: Instrucciones para iOS (iPhone/iPad) */}
-                {/* iOS no soporta el botón automático, así que siempre mostramos esto */}
+                {/* CASO 1: iOS (Siempre instrucciones manuales) */}
                 {isIOS && (
                     <div className="text-xs text-zinc-300 bg-zinc-900/50 p-2 rounded border border-zinc-700">
                         <div className="flex items-center gap-2 mb-1">
@@ -151,16 +124,27 @@ const InstallPwaBanner: React.FC = () => {
                     </div>
                 )}
 
-                {/* OPCIÓN 3: Fallback Android/PC (Instrucciones manuales) */}
-                {/* Si NO es iOS y el navegador AÚN NO nos ha dado el evento (o no lo soporta), mostramos ayuda manual */}
+                {/* CASO 2: Android/Desktop con "Botón Mágico" disponible */}
+                {/* Sale si NO es iOS y el evento fue capturado (supportsPWA=true) */}
+                {!isIOS && supportsPWA && (
+                    <button
+                        onClick={handleInstallClick}
+                        className="w-full bg-lime-500 hover:bg-lime-400 text-zinc-900 font-bold py-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 shadow-[0_0_10px_rgba(132,204,22,0.3)] cursor-pointer"
+                    >
+                        Instalar Ahora
+                    </button>
+                )}
+
+                {/* CASO 3: Android/Desktop SIN evento (Fallback Manual) */}
+                {/* Sale si NO es iOS y el evento NO fue capturado (supportsPWA=false) */}
                 {!isIOS && !supportsPWA && (
                     <div className="bg-zinc-900/80 p-3 rounded-lg border border-zinc-700 text-xs text-zinc-300">
                         <p className="mb-2 font-semibold text-lime-500">Instalación Manual:</p>
                         <div className="flex items-start gap-2">
                             <ArrowUpRight className="w-4 h-4 text-zinc-400 mt-0.5 shrink-0" />
                             <span>
-                                Abre el menú (<MoreVertical className="w-3 h-3 inline align-middle" />) 
-                                y busca <strong>"Instalar aplicación"</strong>.
+                                Abre el menú de tu navegador (<MoreVertical className="w-3 h-3 inline align-middle" />) 
+                                y selecciona <strong>"Instalar aplicación"</strong> o <strong>"Agregar a pantalla de inicio"</strong>.
                             </span>
                         </div>
                     </div>
