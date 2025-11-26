@@ -10,9 +10,11 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      // ¡IMPORTANTE! Asegúrate de que tus archivos de íconos (pwa-192x192.png, etc.) 
-      // y registerSW.js estén en la raíz de la carpeta 'dist' después de la compilación.
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'], // Agregué los íconos para asegurar que sean copiados a 'dist'
+      
+      // 🎯 CRÍTICO 1: Usar el nombre de archivo robusto para evitar colisiones
+      filename: 'service-worker.js', 
+      
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'], 
       manifest: {
         name: 'FitGen',
         short_name: 'FitGen',
@@ -25,19 +27,19 @@ export default defineConfig({
         scope: '/',
         icons: [
           {
-            // <-- CAMBIO CRÍTICO: Añadir la barra inicial (/)
+            // 🎯 CRÍTICO 2: Rutas absolutas (con /)
             src: '/pwa-192x192.png', 
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            // <-- CAMBIO CRÍTICO: Añadir la barra inicial (/)
+            // 🎯 CRÍTICO 2: Rutas absolutas (con /)
             src: '/pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            // <-- CAMBIO CRÍTICO: Añadir la barra inicial (/)
+            // 🎯 CRÍTICO 2: Rutas absolutas (con /)
             src: '/pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',

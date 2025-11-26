@@ -1,25 +1,29 @@
 {
-  "rewrites": [
+  "headers": [
     {
-      "source": "/sw.js",
-      "destination": "/sw.js"
-    },
-    {
-      "source": "/registerSW.js",
-      "destination": "/registerSW.js"
+      "source": "/service-worker.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/javascript"
+        }
+      ]
     },
     {
       "source": "/manifest.webmanifest",
-      "destination": "/manifest.webmanifest"
-    },
-    {
-      "source": "/pwa-512x512.png",
-      "destination": "/pwa-512x512.png"
-    },
-    {
-      "source": "/pwa-192x192.png",
-      "destination": "/pwa-192x192.png"
-    },
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
     {
       "source": "/(.*)",
       "destination": "/index.html"
