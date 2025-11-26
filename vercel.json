@@ -1,0 +1,28 @@
+{
+  "rewrites": [
+    {
+      "source": "/sw.js",
+      "destination": "/sw.js"
+    },
+    {
+      "source": "/registerSW.js",
+      "destination": "/registerSW.js"
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "destination": "/manifest.webmanifest"
+    },
+    {
+      "source": "/pwa-512x512.png",
+      "destination": "/pwa-512x512.png"
+    },
+    {
+      "source": "/pwa-192x192.png",
+      "destination": "/pwa-192x192.png"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
