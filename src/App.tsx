@@ -1,16 +1,15 @@
 import { useState, useEffect, useMemo, type FC } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom'; 
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Importaciones de Firebase
 import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, type User, type Auth } from 'firebase/auth'; 
-import { getFirestore, doc, onSnapshot, type Firestore, type DocumentData } from 'firebase/firestore'; 
+import { getAuth, onAuthStateChanged, type User, type Auth } from 'firebase/auth';
+import { getFirestore, doc, onSnapshot, type Firestore, type DocumentData } from 'firebase/firestore';
 
 // Importación de Componentes
 import AuthLayout from './components/AuthLayout';
 import ProfileOnboarding from './components/ProfileOnboarding';
 import Dashboard from './components/Dashboard';
-// 👇 NUEVAS IMPORTACIONES
 import WorkoutOverview from './components/WorkoutOverview';
 import WorkoutPlayer from './components/WorkoutPlayer';
 
@@ -18,17 +17,33 @@ import WorkoutPlayer from './components/WorkoutPlayer';
 // TIPOS Y ESTADOS
 // ====================================================================
 
-type UserStatus = 'pending_onboarding' | 'pending_approval' | 'approved'; 
-type AppStatus = 'unauthenticated' | 'loading_profile' | UserStatus; 
+type UserStatus = 'pending_onboarding' | 'pending_approval' | 'approved';
+type AppStatus = 'unauthenticated' | 'loading_profile' | UserStatus;
 
 export interface UserProfile extends DocumentData {
     status: UserStatus;
-    onboardingData?: any; 
-    name?: string; 
-    fitnessGoal?: string; 
+    onboardingData?: any;
+    name?: string;
+    fitnessGoal?: string;
     plan?: 'free' | 'premium';
-    // Añadimos currentSession opcional para evitar errores de TS básicos aquí
-    currentSession?: any; 
+    currentSession?: any;
+    profileData?: { 
+        name: string;
+        age: number;
+        gender: string;
+        heightCm: number;
+        initialWeight: number;
+        fitnessGoal: string;
+        experienceLevel: string;
+        focusArea: string;
+        injuriesOrLimitations: string;
+        trainingDaysPerWeek: number;
+        preferredTrainingDays: string[];
+        weeklyScheduleContext: any[]; // Usaremos 'any[]' aquí para simplicidad de App
+        availableEquipment: string[];
+        location: string;
+        [key: string]: any;
+    };
 }
 
 // ====================================================================
@@ -39,8 +54,8 @@ const PendingAccessView: FC<{ user: User }> = ({ user }) => {
     const simulateApproval = async () => {
         try {
             console.log("Simulando aprobación... forzando refresco de token.");
-            await user.getIdTokenResult(true); 
-            window.location.reload(); 
+            await user.getIdTokenResult(true);
+            window.location.reload();
         } catch (e) {
             console.error("Error al forzar refresco de token (simulación):", e);
         }
@@ -54,7 +69,7 @@ const PendingAccessView: FC<{ user: User }> = ({ user }) => {
                 <p className="text-zinc-400 mb-6">
                     ¡Gracias por completar tu perfil! Tu solicitud ha sido enviada.
                 </p>
-                <button 
+                <button
                     onClick={simulateApproval}
                     className="w-full bg-lime-500 text-zinc-900 font-bold py-3 px-4 rounded-lg hover:bg-lime-400 transition duration-150"
                 >
@@ -88,7 +103,7 @@ const App: FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [authServices, setAuthServices] = useState<{ auth: Auth, db: Firestore } | null>(null);
-    const [isAuthReady, setIsAuthReady] = useState(false); 
+    const [isAuthReady, setIsAuthReady] = useState(false);
     const [globalError, setGlobalError] = useState<string | null>(null);
 
     // EFECTO 1: Inicialización de Firebase
@@ -112,10 +127,10 @@ const App: FC = () => {
         } catch (e) {
             setGlobalError(`ERROR CRÍTICO: ${(e as Error).message}`);
             setIsAuthReady(true);
-            return () => {}; 
+            return () => { };
         }
         return () => { if (unsubscribeAuth) unsubscribeAuth(); };
-    }, []); 
+    }, []);
 
     // EFECTO 2: Carga del Perfil
     useEffect(() => {
@@ -125,7 +140,7 @@ const App: FC = () => {
             unsubscribeProfile = onSnapshot(userDocRef, async (docSnapshot) => {
                 if (!docSnapshot.exists()) {
                     setUserProfile({ status: 'pending_onboarding' as UserStatus });
-                    return; 
+                    return;
                 }
                 const rawData = docSnapshot.data() as DocumentData;
                 const profileData: UserProfile = {
@@ -143,13 +158,13 @@ const App: FC = () => {
                 try {
                     const tokenResult = await user.getIdTokenResult();
                     if (tokenResult.claims.role === 'approved') {
-                         setUserProfile(prev => ({ ...(prev as UserProfile || {}), status: 'approved' as UserStatus }));
+                        setUserProfile(prev => ({ ...(prev as UserProfile || {}), status: 'approved' as UserStatus }));
                     }
-                } catch(e) { console.error(e); }
-                
+                } catch (e) { console.error(e); }
+
             }, (error) => {
                 console.error("Error perfil:", error);
-                setGlobalError("Error al cargar perfil."); 
+                setGlobalError("Error al cargar perfil.");
             });
         } else {
             setUserProfile(null);
@@ -159,10 +174,10 @@ const App: FC = () => {
 
     // Lógica de Estado
     const currentStatus: AppStatus = useMemo(() => {
-        if (!isAuthReady) return 'unauthenticated'; 
-        if (!user) return 'unauthenticated';       
-        if (!userProfile) return 'loading_profile'; 
-        return userProfile.status;                 
+        if (!isAuthReady) return 'unauthenticated';
+        if (!user) return 'unauthenticated';
+        if (!userProfile) return 'loading_profile';
+        return userProfile.status;
     }, [isAuthReady, user, userProfile]);
 
     // --- RENDERIZADO ---
@@ -180,7 +195,7 @@ const App: FC = () => {
     }
 
     if (currentStatus === 'unauthenticated' && authServices) {
-        return <AuthLayout onAuthSuccess={() => {}} auth={authServices.auth}/>;
+        return <AuthLayout onAuthSuccess={() => { }} auth={authServices.auth} />;
     }
 
     if (currentStatus === 'pending_onboarding' && user && authServices?.db) {
@@ -193,21 +208,31 @@ const App: FC = () => {
 
     // 4. APROBADO: CONFIGURACIÓN DE RUTAS
     if (currentStatus === 'approved' && user && userProfile && authServices) {
+        if (!userProfile.currentMesocycle && window.location.pathname !== '/') {
+            return <Navigate to="/" replace />;
+        }
         return (
             <Routes>
                 {/* 1. DASHBOARD (Home) */}
                 <Route path="/" element={
-                    <Dashboard 
-                        user={user} 
+                    <Dashboard
+                        user={user}
                         db={authServices.db}
                         auth={authServices.auth}
                     />
                 } />
 
+                <Route path="/profile-onboarding" element={
+                    <ProfileOnboarding 
+                    user={user} 
+                    db={authServices.db} 
+                    initialData={userProfile} />
+                } />
+
                 {/* 2. VISTA GENERAL DE ENTRENAMIENTO (Resumen) */}
                 <Route path="/workout/today" element={
                     userProfile?.currentSession ? (
-                        <WorkoutOverview session={userProfile.currentSession as any} /> 
+                        <WorkoutOverview session={userProfile.currentSession as any} />
                     ) : (
                         <Navigate to="/" replace />
                     )

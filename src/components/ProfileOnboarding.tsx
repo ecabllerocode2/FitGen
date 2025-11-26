@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { User } from 'firebase/auth';
-import type { Firestore } from 'firebase/firestore'; 
+import type { Firestore } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import { 
   Dumbbell, 
   Calendar, 
@@ -12,7 +13,7 @@ import {
   Info
 } from 'lucide-react';
 
-// --- TIPOS Y CONSTANTES ---
+// --- TIPOS Y CONSTANTES (Sin Modificación) ---
 
 interface EquipmentDetail {
     key: string; 
@@ -116,14 +117,39 @@ interface DayContext {
 const DAYS_ORDER = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
+// 📌 Interfaz para la precarga (la estructura que viene de Firestore)
+interface UserProfile {
+    profileData?: {
+        name: string;
+        age: number;
+        gender: string;
+        heightCm: number;
+        initialWeight: number;
+        fitnessGoal: string;
+        experienceLevel: string;
+        focusArea: string;
+        injuriesOrLimitations: string;
+        trainingDaysPerWeek: number;
+        preferredTrainingDays: string[];
+        weeklyScheduleContext: DayContext[];
+        availableEquipment: string[];
+        location: string;
+        [key: string]: any;
+    };
+    name?: string; 
+    [key: string]: any;
+}
+
 interface ProfileOnboardingProps {
   user: User;
   db: Firestore;
+  initialData?: UserProfile; // <-- Prop para precargar datos en edición
 }
 
-const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
+const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData }) => {
     // --- ESTADOS ---
-     // Para futura paginación si quisieras, hoy todo en 1
+
+    const navigate = useNavigate();
     
     // Personal
     const [name, setName] = useState(user.displayName || '');
@@ -142,12 +168,54 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
     const [trainingLocation, setTrainingLocation] = useState('');
     const [homeEquipmentSelections, setHomeEquipmentSelections] = useState<string[]>([]);
     const [weeklySchedule, setWeeklySchedule] = useState<DayContext[]>(
-        DAYS_ORDER.map(d => ({ day: d, canTrain: false, externalLoad: 'none' }))
+        // Inicializar 'externalLoad' en 'none' como valor por defecto, no como "no seleccionado"
+        DAYS_ORDER.map(d => ({ day: d, canTrain: false, externalLoad: 'none' })) 
     );
 
     // UI
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // 📌 EFECTO PARA PRE-CARGAR DATOS EN MODO EDICIÓN
+    useEffect(() => {
+        // Solo carga si initialData existe Y tiene el objeto profileData completo (modo edición)
+        if (!initialData || !initialData.profileData) return;
+        
+        const profile = initialData.profileData;
+        
+        // 1. Cargar Datos Biométricos
+        if (profile.name) setName(profile.name);
+        if (profile.age) setAge(String(profile.age));
+        if (profile.gender) setGender(profile.gender);
+        if (profile.heightCm) setHeight(String(profile.heightCm));
+        if (profile.initialWeight) setWeight(String(profile.initialWeight));
+
+        // 2. Cargar Perfil de Entrenamiento
+        if (profile.fitnessGoal) setGoal(profile.fitnessGoal);
+        if (profile.experienceLevel) setExperienceLevel(profile.experienceLevel);
+        if (profile.focusArea) setFocusArea(profile.focusArea);
+        if (profile.injuriesOrLimitations) setInjuries(profile.injuriesOrLimitations);
+
+        // 3. Cargar Logística
+        if (profile.location) setTrainingLocation(profile.location);
+
+        if (profile.availableEquipment) {
+            // Filtra la ubicación (que es el primer elemento) para obtener el equipo detallado
+            const detailedEquipment = profile.availableEquipment.filter((item: string) => item !== profile.location);
+            setHomeEquipmentSelections(detailedEquipment);
+        }
+        
+        // 4. Cargar Contexto Semanal
+        if (profile.weeklyScheduleContext && profile.weeklyScheduleContext.length === DAYS_ORDER.length) {
+             // Mapeamos para asegurar que el orden sea correcto y manejamos el tipado
+             const sortedSchedule: DayContext[] = DAYS_ORDER.map(dayName => 
+                 profile.weeklyScheduleContext.find(d => d.day === dayName) || 
+                 { day: dayName, canTrain: false, externalLoad: 'none' } // Fallback seguro
+             );
+            setWeeklySchedule(sortedSchedule);
+        }
+
+    }, [initialData]);
 
     // --- HELPERS ---
 
@@ -156,6 +224,12 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
     };
 
     const trainingDaysCount = useMemo(() => weeklySchedule.filter(d => d.canTrain).length, [weeklySchedule]);
+    
+    // NUEVO: Verifica que todos los días tengan una carga externa seleccionada.
+    const areAllLoadsSelected = useMemo(() => {
+        return weeklySchedule.every(d => d.externalLoad !== undefined);
+    }, [weeklySchedule]);
+
 
     const handleDetailedEquipmentChange = (equipmentName: string, weightVal?: number | null) => {
         const baseKey = equipmentName;
@@ -194,6 +268,13 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
             setIsLoading(false);
             return;
         }
+        
+        // VALIDACIÓN DE CARGA EXTERNA
+        if (!areAllLoadsSelected) {
+            setError("Debes especificar la carga externa (Actividad diaria) para **todos** los días de la semana (Lunes a Domingo).");
+            setIsLoading(false);
+            return;
+        }
 
         if (trainingDaysCount === 0) {
             setError("Debes seleccionar al menos 1 día para entrenar.");
@@ -212,6 +293,14 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
         } else {
             finalEquipment = [trainingLocation];
         }
+        
+        // 📌 NUEVA LÓGICA: Determinar si es modo edición
+        const isEditMode = initialData && initialData.profileData; 
+        // Define la acción para el backend
+        const actionType = isEditMode 
+            ? 'profile_update_and_invalidate_plan' 
+            : 'initial_onboarding_complete';
+
 
         try {
             const idToken = await user.getIdToken();
@@ -220,6 +309,8 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
             const payload = {
                 userId: user.uid,
                 userEmail: user.email,
+                // 📌 CAMBIO CLAVE: Incluir la acción para el backend
+                action: actionType, 
                 profileData: {
                     name: name.trim(),
                     age: parseInt(age),
@@ -251,8 +342,10 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Error al guardar perfil.");
 
-            // Éxito: Recargar o redirigir (lo maneja el padre usualmente, o navegación aquí)
-            window.location.reload(); 
+            // Éxito: Recargar o redirigir (App.tsx detectará el cambio de estado/invalidez del plan)
+            window.location.reload();
+
+            navigate('/', { replace: true });
 
         } catch (err) {
             console.error(err);
@@ -262,6 +355,18 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
         }
     };
 
+    // Determinar si el botón debe estar deshabilitado
+    const isSubmitDisabled = isLoading || !areAllLoadsSelected;
+    
+    // Mensaje para el botón si está deshabilitado
+    let disabledButtonText = 'Generar Plan Maestro';
+    if (isLoading) {
+        disabledButtonText = 'Guardando Perfil...';
+    } else if (!areAllLoadsSelected) {
+        disabledButtonText = 'Selecciona la Carga Externa de todos los días';
+    }
+    
+    
     return (
         <div className="min-h-screen bg-zinc-950 flex justify-center items-start pt-10 pb-20 px-4">
             <div className="w-full max-w-3xl bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
@@ -279,7 +384,7 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
 
                 <form onSubmit={handleSubmit} className="p-8 space-y-10">
                     
-                    {/* 1. DATOS BIOMÉTRICOS */}
+                    {/* 1. DATOS BIOMÉTRICOS (Sin Modificación) */}
                     <section>
                         <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-6">
                             <Activity className="w-5 h-5 text-lime-500" /> 
@@ -324,7 +429,7 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
                         </div>
                     </section>
 
-                    {/* 2. PERFIL DE ENTRENAMIENTO */}
+                    {/* 2. PERFIL DE ENTRENAMIENTO (Sin Modificación) */}
                     <section className="border-t border-zinc-800 pt-8">
                         <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-6">
                             <Dumbbell className="w-5 h-5 text-lime-500" /> 
@@ -365,24 +470,33 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
                         </div>
                     </section>
 
-                    {/* 3. CONTEXTO SEMANAL (EL CEREBRO) */}
+                    {/* 3. CONTEXTO SEMANAL (EL CEREBRO) - MODIFICADO */}
                     <section className="border-t border-zinc-800 pt-8">
                         <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-2">
                             <Calendar className="w-5 h-5 text-lime-500" /> 
                             Planificación Inteligente
                         </h3>
-                        <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg mb-6 flex gap-3 items-start">
+                        <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg mb-4 flex gap-3 items-start">
                             <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
                             <p className="text-sm text-blue-200">
                                 El algoritmo ajustará la intensidad basándose en tu vida diaria. Si tienes un trabajo físico o juegas fútbol el sábado, márcalo como "Carga Alta/Extrema" para que el entrenador te dé descanso previo.
                             </p>
                         </div>
+                        
+                        {/* NUEVA NOTA OBLIGATORIA */}
+                        <div className={`p-3 rounded-lg mb-6 flex gap-2 items-start ${areAllLoadsSelected ? 'bg-lime-500/10 border border-lime-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+                             <AlertCircle className={`w-4 h-4 shrink-0 mt-0.5 ${areAllLoadsSelected ? 'text-lime-400' : 'text-red-400'}`} />
+                            <p className={`text-xs font-medium ${areAllLoadsSelected ? 'text-lime-200' : 'text-red-200'}`}>
+                                **Atención:** Debes seleccionar una **Carga Externa** para **TODOS** los días (Lunes a Domingo), entrenes o no.
+                            </p>
+                        </div>
 
                         <div className="space-y-2">
                             {weeklySchedule.map((dayCtx) => (
-                                <div key={dayCtx.day} className={`group p-4 rounded-xl border transition-all duration-200 flex items-center justify-between ${dayCtx.canTrain ? 'bg-zinc-800 border-lime-500/50 shadow-[0_0_15px_rgba(132,204,22,0.1)]' : 'bg-zinc-900 border-zinc-800 opacity-70 hover:opacity-100'}`}>
+                                <div key={dayCtx.day} className={`group p-4 rounded-xl border transition-all duration-200 flex flex-col sm:flex-row items-start sm:items-center justify-between ${dayCtx.canTrain ? 'bg-zinc-800 border-lime-500/50 shadow-[0_0_15px_rgba(132,204,22,0.1)]' : 'bg-zinc-900 border-zinc-800 opacity-70 hover:opacity-100'}`}>
                                     
-                                    <div className="flex items-center gap-4">
+                                    {/* Contenedor del Checkbox y Día */}
+                                    <div className="flex items-center gap-4 w-full sm:w-auto"> 
                                         <div className="relative flex items-center">
                                             <input 
                                                 type="checkbox" 
@@ -398,12 +512,13 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
                                         </label>
                                     </div>
 
-                                    <div className="flex flex-col items-end">
+                                    {/* Contenedor del Select - Ajustado para móvil */}
+                                    <div className="mt-3 sm:mt-0 flex flex-col items-start sm:items-end min-w-[150px]"> 
                                         <label className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 mb-1">Carga Externa</label>
                                         <select 
                                             value={dayCtx.externalLoad}
                                             onChange={(e) => updateDayContext(dayCtx.day, 'externalLoad', e.target.value)}
-                                            className={`text-xs p-2 rounded-lg border focus:outline-none cursor-pointer ${
+                                            className={`text-xs p-2 rounded-lg border focus:outline-none cursor-pointer w-full sm:w-auto ${
                                                 dayCtx.externalLoad === 'none' ? 'bg-zinc-800 border-zinc-700 text-zinc-400' :
                                                 dayCtx.externalLoad === 'low' ? 'bg-blue-900/30 border-blue-800 text-blue-300' :
                                                 dayCtx.externalLoad === 'medium' ? 'bg-yellow-900/30 border-yellow-800 text-yellow-300' :
@@ -423,7 +538,7 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
                         </div>
                     </section>
 
-                    {/* 4. EQUIPAMIENTO */}
+                    {/* 4. EQUIPAMIENTO (Sin Modificación) */}
                     <section className="border-t border-zinc-800 pt-8">
                         <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-6">
                             <Scale className="w-5 h-5 text-lime-500" /> 
@@ -529,10 +644,10 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user }) => {
 
                     <button
                         type="submit"
-                        disabled={isLoading}
+                        disabled={isSubmitDisabled} 
                         className="w-full bg-lime-500 hover:bg-lime-400 text-zinc-900 font-bold text-lg py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(132,204,22,0.3)] hover:shadow-[0_0_30px_rgba(132,204,22,0.5)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
-                        {isLoading ? 'Guardando Perfil...' : 'Generar Plan Maestro'}
+                        {disabledButtonText}
                     </button>
 
                 </form>

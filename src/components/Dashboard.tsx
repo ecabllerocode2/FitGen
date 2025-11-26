@@ -10,7 +10,6 @@ import {
     Activity,
     CheckCircle2,
     Play,
-    LogOut,
     Zap,
     Scale,
     BatteryCharging,
@@ -19,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import InstallPwaBanner from './InstallPwaBanner';
+import ProfileMenu from './ProfileMenu';
 
 // ====================================================================
 // 1. DEFINICIÓN DE TIPOS
@@ -317,6 +317,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         try { await signOut(auth); } catch (e) { console.error(e); }
     };
 
+    const handleNavigateToProfile = () => {
+        navigate('/profile-onboarding');
+    };
+
     const handleCreatePlan = async () => {
         setCreatingPlan(true);
         try {
@@ -413,9 +417,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     if (!dashboardState) {
         return (
             <div className="min-h-screen bg-zinc-900 p-6 flex flex-col items-center justify-center text-center relative">
-                <button onClick={handleLogout} className="absolute top-6 right-6 p-2 bg-zinc-800 rounded-full text-zinc-400">
-                    <LogOut className="w-5 h-5" />
-                </button>
+                <div className="absolute top-6 right-6">
+                    <ProfileMenu 
+                        userName={userName}
+                        onLogout={handleLogout}
+                        onNavigateToProfile={handleNavigateToProfile}
+                    />
+                </div>
                 <div className="bg-zinc-800 p-8 rounded-2xl border border-zinc-700 max-w-md w-full">
                     <Dumbbell className="w-16 h-16 text-lime-500 mx-auto mb-6" />
                     <h2 className="text-2xl font-bold text-white mb-2">Bienvenido, {userName.split(' ')[0]}</h2>
@@ -455,7 +463,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         <h1 className="text-2xl font-bold text-white tracking-tight">Hola, <span className="text-lime-400">{userName.split(' ')[0]}</span></h1>
                         <p className="text-xs text-zinc-400 mt-1 font-medium uppercase"> {mesocycleGoal}</p>
                     </div>
-                    <button onClick={handleLogout} className="p-2 bg-zinc-700/50 rounded-full text-zinc-400"><LogOut className="w-4 h-4" /></button>
+                    <ProfileMenu 
+                        userName={userName}
+                        onLogout={handleLogout}
+                        onNavigateToProfile={handleNavigateToProfile}
+                    />
                 </div>
                 <div className="bg-zinc-900/60 p-4 rounded-xl border border-zinc-700/50">
                     <div className="flex justify-between text-sm mb-2 font-medium">
