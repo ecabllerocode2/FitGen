@@ -507,7 +507,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         // 1. EVALUACIÓN PENDIENTE (PRIORIDAD ALTA)
                         <div className="group bg-gradient-to-br from-zinc-800 to-zinc-900 border border-blue-500/50 p-6 rounded-2xl relative overflow-hidden shadow-lg shadow-blue-500/20">
                             <h3 className="text-2xl font-bold text-white mb-2 leading-tight">¡Mesociclo Finalizado!</h3>
-                            <p className="text-zinc-400 mb-6">Completa la evaluación para que la IA pueda generar tu próximo mesociclo hiper-optimizado.</p>
+                            <p className="text-zinc-400 mb-6">Completa la evaluación para que nuestro motor pueda generar tu próximo mesociclo hiper-optimizado.</p>
                             
                             <button
                                 onClick={() => navigate('/mesocycle/evaluate')}

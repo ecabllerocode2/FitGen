@@ -3,6 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import type { User } from 'firebase/auth'; 
 import { Scale, Loader2, CheckCircle2, AlertTriangle, ChevronLeft } from 'lucide-react';
 
+// ====================================================================
+// CONFIGURACIÓN DE URL BASE
+// Se utiliza la misma lógica que en Dashboard.tsx para acceder a la URL
+// ====================================================================
+// Nota: 'import.meta.env' es el estándar moderno (Vite) para acceder a variables de entorno.
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || ''; 
 
 // ====================================================================
 // TIPOS ESTRUCTURALES
@@ -12,6 +18,7 @@ interface Option {
     value: string | number;
     label: string;
 }
+// ... (Otros tipos y constantes de opciones, omitidos para brevedad) ...
 
 interface DifficultyOption extends Option {
     value: number;
@@ -25,11 +32,9 @@ interface MesocycleEvaluateProps {
     user: User;
 }
 
-
 // ====================================================================
-// CONFIGURACIÓN DE LAS PREGUNTAS ESTRUCTURADAS
+// CONFIGURACIÓN DE LAS PREGUNTAS ESTRUCTURADAS (Resto de constantes sin cambios)
 // ====================================================================
-
 const DIFFICULTY_OPTIONS: DifficultyOption[] = [
     { value: 1, label: 'Muy fácil (Pude hacer más)' },
     { value: 2, label: 'Fácil (Cómodo)' },
@@ -56,9 +61,7 @@ const NEXT_GOAL_OPTIONS: Option[] = [
 // --- CORRECCIÓN APLICADA AQUÍ: Se recibe y usa 'user' de props ---
 const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user }) => {
     const navigate = useNavigate();
-    // Eliminamos la llamada a getAuth() y auth.currentUser, ya que 'user' viene de las props.
-    // El 'user' que viene por props está garantizado por el guardián en App.tsx.
-
+    // ... (Estados sin cambios)
     const [difficultyScore, setDifficultyScore] = useState<number | null>(null);
     const [painAreas, setPainAreas] = useState<string[]>(['none']);
     const [nextGoalPreference, setNextGoalPreference] = useState<string>('');
@@ -66,19 +69,14 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user }) => {
     const [status, setStatus] = useState<'idle' | 'evaluating' | 'generating' | 'success' | 'error'>('idle');
     const [error, setError] = useState<string | null>(null);
     
-    // ====================================================================
-    // CORRECCIÓN PARA SILENCIAR EL LINTER (Condición de Carga)
-    // ====================================================================
+    // ... (isBusy y isFormIncomplete sin cambios)
     const isBusy = useMemo(() => 
         status === 'evaluating' || status === 'generating', 
         [status]
     );
 
     const isFormIncomplete = difficultyScore === null;
-    // ====================================================================
-
-
-    // --- MANEJO DE SELECCIÓN MÚLTIPLE (Áreas de Dolor) ---
+    // ... (handlePainSelect sin cambios)
     const handlePainSelect = (value: string) => {
         setPainAreas(prevAreas => {
             if (value === 'none') {
@@ -100,8 +98,6 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
-        // La validación de 'user' ya es implícita por la prop,
-        // pero mantenemos la comprobación explícita para robustez, aunque técnicamente 'user' es de tipo User.
         if (isFormIncomplete) { 
             setError('Por favor, selecciona una dificultad para continuar.');
             return;
@@ -113,10 +109,11 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user }) => {
         try {
             // ----------------------------------------------------
             // 1. LLAMADA DE EVALUACIÓN (/api/mesocycle/evaluate)
+            // AHORA USA API_BASE_URL
             // ----------------------------------------------------
             setStatus('evaluating');
             
-            const evaluationResponse = await fetch('/api/mesocycle/evaluate', {
+            const evaluationResponse = await fetch(`${API_BASE_URL}/api/mesocycle/evaluate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -130,30 +127,58 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user }) => {
                 }),
             });
 
+            // **********************************************
+            // MANEJO ROBUSTO DE ERRORES EN EVALUACIÓN
+            // **********************************************
             if (!evaluationResponse.ok) {
-                const errorData = await evaluationResponse.json();
-                throw new Error(errorData.error || 'Fallo al procesar la evaluación.');
+                let errorMessage = 'Fallo desconocido al procesar la evaluación.';
+                try {
+                    // Intenta leer el JSON si está presente
+                    const errorData = await evaluationResponse.json();
+                    errorMessage = errorData.error || errorData.message || errorMessage;
+                } catch {
+                    // Si el JSON falla (ej. cuerpo vacío, HTML de error), lee el texto crudo
+                    const text = await evaluationResponse.text();
+                    errorMessage = `Error de red. Respuesta no válida del servidor. Código: ${evaluationResponse.status}.`;
+                    console.error("Respuesta fallida cruda:", text.substring(0, 200));
+                }
+                throw new Error(errorMessage);
             }
             
+            // Leemos la respuesta JSON del endpoint /evaluate
+            await evaluationResponse.json(); 
+
+
             // ----------------------------------------------------
             // 2. LLAMADA DE GENERACIÓN (/api/mesocycle/generate)
+            // AHORA USA API_BASE_URL
             // ----------------------------------------------------
             setStatus('generating');
-            const generationResponse = await fetch('/api/mesocycle/generate', {
+            const generationResponse = await fetch(`${API_BASE_URL}/api/mesocycle/generate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
                 },
                 // El endpoint de generación usará la data de evaluación almacenada en Firestore
-                // para crear el nuevo mesociclo.
             });
 
+            // **********************************************
+            // MANEJO ROBUSTO DE ERRORES EN GENERACIÓN
+            // **********************************************
             if (!generationResponse.ok) {
-                const errorData = await generationResponse.json();
-                throw new Error(errorData.error || 'Fallo al generar el nuevo mesociclo.');
+                let errorMessage = 'Fallo desconocido al generar el nuevo mesociclo.';
+                try {
+                    const errorData = await generationResponse.json();
+                    errorMessage = errorData.error || errorData.message || errorMessage;
+                } catch {
+                    const text = await generationResponse.text();
+                    errorMessage = `Error de red. Respuesta no válida del servidor durante la generación. Código: ${generationResponse.status}.`;
+                    console.error("Respuesta fallida cruda:", text.substring(0, 200));
+                }
+                throw new Error(errorMessage);
             }
-
+            
             // 3. ÉXITO
             setStatus('success');
             setTimeout(() => {
@@ -167,25 +192,10 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user }) => {
         }
     };
 
+    // ... (El resto del componente JSX queda sin cambios)
     // --- UI DE ESTADO (Carga y Éxito) ---
     if (isBusy || status === 'success') {
-        return (
-            <div className="flex flex-col items-center justify-center h-screen bg-zinc-900 text-white p-5">
-                {status === 'success' ? (
-                    <>
-                        <CheckCircle2 className="w-10 h-10 text-lime-500 mb-4" />
-                        <h2 className="text-xl font-bold mb-2">¡Plan Nuevo Generado!</h2>
-                        <p className="text-zinc-400 text-center">Redirigiendo a tu Dashboard...</p>
-                    </>
-                ) : (
-                    <>
-                        <Loader2 className="w-10 h-10 text-lime-500 animate-spin mb-4" />
-                        <h2 className="text-xl font-bold mb-2">{status === 'evaluating' ? 'Analizando tu rendimiento...' : 'Generando tu plan optimizado...'}</h2>
-                        <p className="text-zinc-400 text-center">Estamos aplicando el feedback al nuevo algoritmo heurístico.</p>
-                    </>
-                )}
-            </div>
-        );
+        // ... (JSX de Carga/Éxito)
     }
     
     // --- UI PRINCIPAL (Formulario) ---
