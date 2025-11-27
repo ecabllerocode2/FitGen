@@ -46,7 +46,8 @@ interface CurrentMesocycleData {
     endDate: string | null;
     generationDate: string;
     currentWeek: number;
-    status?: string;
+    // Estado posible: 'active', 'evaluation_pending', 'completed'
+    status?: string; 
 }
 interface CurrentSessionData {
     meta?: {
@@ -255,9 +256,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         return () => clearInterval(interval);
     }, [generatingSession]);
 
-    // B. Lógica de Tiempo y Estado (Lógica inalterada)
+    // B. Lógica de Tiempo y Estado (ACTUALIZADA con isEvaluationPending)
     const dashboardState = useMemo(() => {
-        // ... (Tu lógica de cálculo de la semana y sesión de hoy) ...
         if (!userProfile?.currentMesocycle) return null;
 
         const mesocycle = userProfile.currentMesocycle;
@@ -274,6 +274,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
         const duration = mesocycle.mesocyclePlan.durationWeeks;
         const isFinished = currentWeekCalc > duration;
+        
+        // **********************************************
+        // LÓGICA DE EVALUACIÓN:
+        // Es pendiente si el estado lo indica O si el ciclo ya terminó
+        // **********************************************
+        const isEvaluationPending = mesocycle.status === 'evaluation_pending' || isFinished;
+
+
         const todayNameLower = format(today, 'eeee', { locale: es });
         const todayName = todayNameLower.charAt(0).toUpperCase() + todayNameLower.slice(1);
         const weekIndex = Math.min(currentWeekCalc, duration) - 1;
@@ -285,13 +293,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
         let isSessionReady = false;
         if (userProfile.currentSession?.meta?.date) {
-            // Aseguramos que parseISO no cambie el día por timezone
-            // Si el backend guarda "2025-11-24", parseISO lo maneja bien.
-            // Si el backend guardaba la ISO completa UTC, esto también podría fallar.
-            
-            // RECOMENDACIÓN: Compara strings directos si es posible para evitar líos de hora
-            const sessionDateStr = userProfile.currentSession.meta.date.split('T')[0]; // "2025-11-24"
-            const todayStr = format(today, 'yyyy-MM-dd'); // "2025-11-24"
+            const sessionDateStr = userProfile.currentSession.meta.date.split('T')[0];
+            const todayStr = format(today, 'yyyy-MM-dd');
             
             if (sessionDateStr === todayStr) {
                 isSessionReady = true;
@@ -306,7 +309,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             currentMicrocycle,
             todaysSession,
             mesocycleGoal: mesocycle.mesocyclePlan.mesocycleGoal,
-            isSessionReady
+            isSessionReady,
+            isEvaluationPending // <--- AÑADIDO
         };
     }, [userProfile]);
 
@@ -325,6 +329,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         setCreatingPlan(true);
         try {
             const token = await user.getIdToken();
+            // Asumiendo que el endpoint de generación de plan es el mismo
             const endpoint = `${import.meta.env.VITE_BACKEND_URL}/api/mesocycle/generate`;
             const res = await fetch(endpoint, {
                 method: 'POST',
@@ -442,12 +447,22 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         );
     }
 
-    const { currentWeek, duration, todayName, currentMicrocycle, todaysSession, mesocycleGoal, isSessionReady } = dashboardState;
+    // Desestructuramos el nuevo estado de evaluación
+    const { 
+        currentWeek, 
+        duration, 
+        todayName, 
+        currentMicrocycle, 
+        todaysSession, 
+        mesocycleGoal, 
+        isSessionReady, 
+        isEvaluationPending // <--- Usamos aquí
+    } = dashboardState;
 
     return (
         <div className="min-h-screen bg-zinc-900 text-white pb-24 relative">
 
-            {/* MODAL DE FEEDBACK - AÑADIDO */}
+            {/* MODAL DE FEEDBACK */}
             <FeedbackModal
                 isOpen={isFeedbackModalOpen}
                 onClose={() => setIsFeedbackModalOpen(false)}
@@ -481,77 +496,95 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             </header>
 
             <main className="px-5 space-y-8">
-                {/* CARD PRINCIPAL */}
+                {/* CARD PRINCIPAL (Lógica de Evaluación o Sesión) */}
                 <section>
                     <div className="flex items-center gap-2 mb-4">
                         <Calendar className="w-5 h-5 text-lime-400" />
                         <h2 className="text-lg font-bold uppercase text-zinc-100">{todayName} <span className="text-zinc-500 text-sm font-normal">(Hoy)</span></h2>
                     </div>
 
-                    {todaysSession ? (
-                        <div className="group bg-gradient-to-br from-zinc-800 to-zinc-900 border border-lime-500/30 p-6 rounded-2xl relative overflow-hidden shadow-lg">
-
-                            {/* --- OVERLAY DE CARGA --- */}
-                            {generatingSession && (
-                                <div className="absolute inset-0 z-50 bg-zinc-900/95 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6 animate-in fade-in duration-300">
-                                    <div className="relative mb-6">
-                                        <div className="absolute inset-0 bg-lime-500 blur-xl opacity-20 animate-pulse"></div>
-                                        <Dumbbell className="w-16 h-16 text-lime-500 animate-[spin_3s_linear_infinite]" />
-                                    </div>
-                                    <h3 className="text-xl font-bold text-white mb-2">Diseñando Sesión...</h3>
-                                    <p key={quoteIndex} className="text-zinc-400 text-sm min-h-[40px] animate-in slide-in-from-bottom-2 duration-500">
-                                        "{MOTIVATIONAL_QUOTES[quoteIndex]}"
-                                    </p>
-                                </div>
-                            )}
-
-                            <div className="relative z-10">
-                                <span className="inline-block bg-lime-500/10 text-lime-400 text-xs font-bold px-2 py-1 rounded mb-3 border border-lime-500/20">
-                                    ENTRENAMIENTO PROGRAMADO
-                                </span>
-                                <h3 className="text-2xl font-bold text-white mb-2 leading-tight">{todaysSession.sessionFocus}</h3>
-
-                                <div className="bg-zinc-900/50 p-3 rounded-lg mb-6 border-l-2 border-zinc-600">
-                                    <p className="text-xs text-zinc-300 italic">"{currentMicrocycle?.notes}"</p>
-                                </div>
-
-                                {isSessionReady ? (
-                                    <button
-                                        onClick={handleStartWorkout}
-                                        className="w-full bg-lime-500 hover:bg-lime-400 text-zinc-900 font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(132,204,22,0.4)] animate-in zoom-in-95 duration-300"
-                                    >
-                                        <Play className="w-5 h-5 fill-current" />
-                                        COMENZAR SESIÓN
-                                    </button>
-                                ) : (
-                                    <button
-                                        // Abrir modal, sin lógica de mañana.
-                                        onClick={() => openFeedbackModal(false)}
-                                        disabled={generatingSession}
-                                        className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 border border-zinc-600 hover:border-lime-500/50 hover:text-lime-400 transition-all"
-                                    >
-                                        <Zap className="w-5 h-5" />
-                                        GENERAR RUTINA INTELIGENTE
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="bg-zinc-800 border border-zinc-700 p-6 rounded-2xl text-center">
-                            <div className="w-14 h-14 bg-zinc-700 rounded-full flex items-center justify-center mb-4 mx-auto">
-                                <CheckCircle2 className="w-7 h-7 text-zinc-400" />
-                            </div>
-                            <h3 className="text-xl font-bold text-white mb-2">Día de Descanso</h3>
-                            <p className="text-zinc-400 text-sm mb-6">El músculo crece cuando descansas.</p>
+                    {isEvaluationPending ? (
+                        // 1. EVALUACIÓN PENDIENTE (PRIORIDAD ALTA)
+                        <div className="group bg-gradient-to-br from-zinc-800 to-zinc-900 border border-blue-500/50 p-6 rounded-2xl relative overflow-hidden shadow-lg shadow-blue-500/20">
+                            <h3 className="text-2xl font-bold text-white mb-2 leading-tight">¡Mesociclo Finalizado!</h3>
+                            <p className="text-zinc-400 mb-6">Completa la evaluación para que la IA pueda generar tu próximo mesociclo hiper-optimizado.</p>
+                            
                             <button
-                                // Abre modal en modo recuperación
-                                onClick={() => openFeedbackModal(true)}
-                                disabled={generatingSession}
-                                className="w-full bg-zinc-700 text-white py-3 rounded-xl text-sm"
+                                onClick={() => navigate('/mesocycle/evaluate')}
+                                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 transition-all active:scale-95"
                             >
-                                {generatingSession ? 'Generando...' : 'Generar Movilidad (Opcional)'}
+                                <Scale className="w-6 h-6" />
+                                Evaluar y Generar Nuevo Plan
                             </button>
                         </div>
+                    ) : (
+                        // 2. PLAN ACTIVO: Muestra el plan de sesión de hoy o de descanso.
+                        todaysSession ? (
+                            <div className="group bg-gradient-to-br from-zinc-800 to-zinc-900 border border-lime-500/30 p-6 rounded-2xl relative overflow-hidden shadow-lg">
+
+                                {/* --- OVERLAY DE CARGA --- */}
+                                {generatingSession && (
+                                    <div className="absolute inset-0 z-50 bg-zinc-900/95 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6 animate-in fade-in duration-300">
+                                        <div className="relative mb-6">
+                                            <div className="absolute inset-0 bg-lime-500 blur-xl opacity-20 animate-pulse"></div>
+                                            <Dumbbell className="w-16 h-16 text-lime-500 animate-[spin_3s_linear_infinite]" />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-white mb-2">Diseñando Sesión...</h3>
+                                        <p key={quoteIndex} className="text-zinc-400 text-sm min-h-[40px] animate-in slide-in-from-bottom-2 duration-500">
+                                            "{MOTIVATIONAL_QUOTES[quoteIndex]}"
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div className="relative z-10">
+                                    <span className="inline-block bg-lime-500/10 text-lime-400 text-xs font-bold px-2 py-1 rounded mb-3 border border-lime-500/20">
+                                        ENTRENAMIENTO PROGRAMADO
+                                    </span>
+                                    <h3 className="text-2xl font-bold text-white mb-2 leading-tight">{todaysSession.sessionFocus}</h3>
+
+                                    <div className="bg-zinc-900/50 p-3 rounded-lg mb-6 border-l-2 border-zinc-600">
+                                        <p className="text-xs text-zinc-300 italic">"{currentMicrocycle?.notes}"</p>
+                                    </div>
+
+                                    {isSessionReady ? (
+                                        // Botón 2a: Iniciar Sesión Lista
+                                        <button
+                                            onClick={handleStartWorkout}
+                                            className="w-full bg-lime-500 hover:bg-lime-400 text-zinc-900 font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(132,204,22,0.4)] animate-in zoom-in-95 duration-300"
+                                        >
+                                            <Play className="w-5 h-5 fill-current" />
+                                            COMENZAR SESIÓN
+                                        </button>
+                                    ) : (
+                                        // Botón 2b: Generar Sesión
+                                        <button
+                                            onClick={() => openFeedbackModal(false)}
+                                            disabled={generatingSession}
+                                            className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 border border-zinc-600 hover:border-lime-500/50 hover:text-lime-400 transition-all"
+                                        >
+                                            <Zap className="w-5 h-5" />
+                                            GENERAR RUTINA INTELIGENTE
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            // 2c: Día de Descanso
+                            <div className="bg-zinc-800 border border-zinc-700 p-6 rounded-2xl text-center">
+                                <div className="w-14 h-14 bg-zinc-700 rounded-full flex items-center justify-center mb-4 mx-auto">
+                                    <CheckCircle2 className="w-7 h-7 text-zinc-400" />
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">Día de Descanso</h3>
+                                <p className="text-zinc-400 text-sm mb-6">El músculo crece cuando descansas.</p>
+                                <button
+                                    onClick={() => openFeedbackModal(true)}
+                                    disabled={generatingSession}
+                                    className="w-full bg-zinc-700 text-white py-3 rounded-xl text-sm"
+                                >
+                                    {generatingSession ? 'Generando...' : 'Generar Movilidad (Opcional)'}
+                                </button>
+                            </div>
+                        )
                     )}
                 </section>
 

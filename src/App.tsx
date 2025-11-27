@@ -12,6 +12,7 @@ import ProfileOnboarding from './components/ProfileOnboarding';
 import Dashboard from './components/Dashboard';
 import WorkoutOverview from './components/WorkoutOverview';
 import WorkoutPlayer from './components/WorkoutPlayer';
+import MesocycleEvaluate from './components/MesocycleEvaluate';
 
 // ====================================================================
 // TIPOS Y ESTADOS
@@ -27,7 +28,8 @@ export interface UserProfile extends DocumentData {
     fitnessGoal?: string;
     plan?: 'free' | 'premium';
     currentSession?: any;
-    profileData?: { 
+    currentMesocycle?: any; // Añadido para evitar errores de tipo en el guard de ruta
+    profileData?: {
         name: string;
         age: number;
         gender: string;
@@ -223,10 +225,10 @@ const App: FC = () => {
                 } />
 
                 <Route path="/profile-onboarding" element={
-                    <ProfileOnboarding 
-                    user={user} 
-                    db={authServices.db} 
-                    initialData={userProfile} />
+                    <ProfileOnboarding
+                        user={user}
+                        db={authServices.db}
+                        initialData={userProfile} />
                 } />
 
                 {/* 2. VISTA GENERAL DE ENTRENAMIENTO (Resumen) */}
@@ -243,6 +245,18 @@ const App: FC = () => {
                     userProfile?.currentSession ? (
                         <WorkoutPlayer session={userProfile.currentSession as any} />
                     ) : (
+                        <Navigate to="/" replace />
+                    )
+                } />
+
+                {/* 4. VISTA DE EVALUACIÓN DEL MESOCICLO */}
+                <Route path="/mesocycle/evaluate" element={
+                    userProfile?.currentMesocycle ? ( // Se requiere que exista un mesociclo para evaluar
+                        <MesocycleEvaluate
+                            user={user} // Propiedad 'user' pasada y con tipo corregido
+                        />
+                    ) : (
+                        // Si no hay plan, regresa al dashboard
                         <Navigate to="/" replace />
                     )
                 } />
