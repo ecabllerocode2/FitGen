@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAuth } from 'firebase/auth'; // 🚨 NUEVO: Import para obtener la sesión de Firebase
+import { getAuth } from 'firebase/auth';
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -18,7 +18,17 @@ import {
   Sparkles 
 } from 'lucide-react';
 
-// --- TIPOS (Inalterados) ---
+const getYoutubeThumbnailUrl = (url?: string | null) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  const videoId = (match && match[2].length === 11) ? match[2] : null;
+
+  if (!videoId) return null;
+
+  // Se usa 'default.jpg' (calidad básica, máxima compatibilidad)
+  return `https://img.youtube.com/vi/${videoId}/default.jpg`; 
+};
 
 interface Exercise {
   id: string;
@@ -26,13 +36,14 @@ interface Exercise {
   instructions?: string;
   durationOrReps?: string; 
   sets?: number;           
-  targetReps?: string;     
+  targetReps?: string;
   rpe?: number;
   notes?: string;
   imageUrl?: string | null;
   musculoObjetivo?: string;
   equipo?: string; 
   suggestedLoad?: string;
+  url?: string; 
 }
 
 interface Block {
@@ -48,7 +59,7 @@ interface SessionData {
   intensityLevel?: string;
   warmup: { exercises: Exercise[] };
   mainBlocks: Block[];
-  coreBlocks?: Block[]; 
+  coreBlocks?: Block[];
   cooldown: { exercises: Exercise[] };
   meta?: any;
 }
@@ -57,7 +68,6 @@ interface WorkoutOverviewProps {
   session: SessionData;
 }
 
-// --- NUEVO COMPONENTE: TIP DE UX (Inalterado) ---
 const SwapTip = () => (
   <div className="mx-5 mb-4 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-start gap-3">
     <div className="bg-indigo-500/20 p-1.5 rounded-full mt-0.5">
@@ -66,14 +76,13 @@ const SwapTip = () => (
     <div>
       <p className="text-xs text-indigo-200 font-medium">Personaliza tu sesión</p>
       <p className="text-[10px] text-indigo-300/80 leading-relaxed">
-        ¿No te gusta un ejercicio o te falta equipo? Toca el botón <RefreshCw className="w-3 h-3 inline mx-0.5" /> para cambiarlo por una alternativa equivalente.
+        ¿No te gusta un ejercicio o te falta equipo? Toca el botón <RefreshCw className="w-3 h-3 inline mx-0.5" /> para cambiarlo por 
+        una alternativa equivalente.
       </p>
     </div>
   </div>
 );
 
-
-// --- SUB-COMPONENTE: ACORDEÓN (Inalterado) ---
 const AccordionSection = ({ 
   title, 
   icon: Icon, 
@@ -112,7 +121,6 @@ const AccordionSection = ({
   );
 };
 
-// --- SUB-COMPONENTE: FILA DE EJERCICIO (Inalterado) ---
 const ExerciseRow = ({ 
     exercise, 
     isSimple = false, 
@@ -123,72 +131,76 @@ const ExerciseRow = ({
     isSimple?: boolean, 
     onSwap?: () => void,
     isSwapping?: boolean
-}) => (
-  <div className="flex items-start gap-4 py-3 border-b border-zinc-800 last:border-0 relative group">
-    
-    {/* Imagen / Placeholder con indicador de carga */}
-    <div className="w-16 h-16 bg-zinc-700 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden relative">
-        {isSwapping && (
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
-                <RefreshCw className="w-5 h-5 text-white animate-spin" />
-            </div>
-        )}
-        {exercise.imageUrl ? (
-             <img src={exercise.imageUrl} alt={exercise.name} className="w-full h-full object-cover" />
-        ) : (
-             <Dumbbell className="w-6 h-6 text-zinc-500 opacity-50" />
-        )}
-    </div>
-    
-    <div className="flex-1 min-w-0 pr-8"> 
-      <h4 className="text-zinc-100 font-semibold text-sm leading-tight mb-1 truncate">
-        {exercise.name}
-      </h4>
-      
-      {isSimple ? (
-        <p className="text-xs text-zinc-400 flex items-center gap-1">
-          <Clock className="w-3 h-3" />
-          {exercise.durationOrReps || "A criterio"}
-        </p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-3 mt-1">
-           <div className="flex items-center gap-1 bg-zinc-800 px-2 py-0.5 rounded text-xs text-zinc-300 border border-zinc-700">
-             <Layers className="w-3 h-3 text-lime-500" />
-             <span className="font-bold">{exercise.sets}</span> Series
-           </div>
-           <div className="flex items-center gap-1 bg-zinc-800 px-2 py-0.5 rounded text-xs text-zinc-300 border border-zinc-700">
-             <Repeat className="w-3 h-3 text-lime-500" />
-             <span className="font-bold">{exercise.targetReps}</span> Reps
-           </div>
+}) => {
+    const thumbnail = getYoutubeThumbnailUrl(exercise.url);
+    const finalImageUrl = thumbnail || exercise.imageUrl;
+
+    return (
+        <div className="flex items-start gap-4 py-3 border-b border-zinc-800 last:border-0 relative group">
+          
+          <div 
+          className="w-16 h-16 bg-zinc-700 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden relative">
+              {isSwapping && (
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
+                      <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                  </div>
+              )}
+              {finalImageUrl ? (
+                <img src={finalImageUrl} alt={exercise.name} className="w-full h-full object-cover" />
+              ) : (
+                  <Dumbbell className="w-6 h-6 text-zinc-500 opacity-50" />
+              )}
+          </div>
+          
+          <div className="flex-1 min-w-0 pr-8"> 
+            <h4 className="text-zinc-100 font-semibold text-sm leading-tight mb-1 truncate">
+              {exercise.name}
+            </h4>
+            
+            {isSimple ?
+            (
+              <p className="text-xs text-zinc-400 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {exercise.durationOrReps || "A criterio"}
+              </p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3 mt-1">
+                <div className="flex items-center gap-1 bg-zinc-800 px-2 py-0.5 rounded text-xs text-zinc-300 border border-zinc-700">
+                  <Layers className="w-3 h-3 text-lime-500" />
+                  <span className="font-bold">{exercise.sets}</span> Series
+                </div>
+                <div className="flex items-center gap-1 bg-zinc-800 px-2 py-0.5 rounded text-xs text-zinc-300 border border-zinc-700">
+                  <Repeat className="w-3 h-3 text-lime-500" />
+                  <span className="font-bold">{exercise.targetReps}</span> Reps
+                </div>
+              </div>
+            )}
+
+            {exercise.notes && (
+              <p className="text-xs text-zinc-500 mt-2 italic flex items-start gap-1">
+                <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                {exercise.notes}
+              </p>
+            )}
+          </div>
+          
+          {!isSimple && onSwap && (
+              <button 
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onSwap();
+                }}
+                disabled={isSwapping}
+                className="absolute right-0 top-3 p-2 rounded-full bg-transparent hover:bg-zinc-700 text-zinc-500 hover:text-lime-400 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Cambiar ejercicio"
+              >
+                {!isSwapping && <RefreshCw className={`w-4 h-4`} />}
+              </button>
+          )}
         </div>
-      )}
+    );
+};
 
-      {exercise.notes && (
-        <p className="text-xs text-zinc-500 mt-2 italic flex items-start gap-1">
-          <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
-          {exercise.notes}
-        </p>
-      )}
-    </div>
-    
-    {/* Botón de Swap (Solo aparece si pasamos la función onSwap) */}
-    {!isSimple && onSwap && (
-        <button 
-          onClick={(e) => {
-              e.stopPropagation(); 
-              onSwap();
-          }}
-          disabled={isSwapping}
-          className="absolute right-0 top-3 p-2 rounded-full bg-transparent hover:bg-zinc-700 text-zinc-500 hover:text-lime-400 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Cambiar ejercicio"
-        >
-          {!isSwapping && <RefreshCw className={`w-4 h-4`} />}
-        </button>
-    )}
-  </div>
-);
-
-// --- COMPONENTE PRINCIPAL (CORREGIDO) ---
 const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSession }) => {
   const navigate = useNavigate();
   const [currentSession, setCurrentSession] = useState<SessionData>(initialSession);
@@ -198,19 +210,14 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
     console.log("Iniciando sesión...");
     navigate('/workout/player'); 
   };
-  
-  /**
-   * Llama al endpoint de swap y actualiza el estado de la sesión local.
-   */
+
   const handleSwapExercise = async (
     blockType: 'warmup' | 'main' | 'core' | 'cooldown', 
     blockIndex: number, 
     exerciseIndex: number, 
     oldExercise: Exercise
   ) => {
-    setSwappingId(oldExercise.id); 
-    
-    // 🚨 CORRECCIÓN CLAVE 1: Obtener el token real de Firebase
+    setSwappingId(oldExercise.id);
     const authInstance = getAuth();
     const user = authInstance.currentUser;
 
@@ -219,7 +226,6 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         return alert("Error de autenticación. Por favor, vuelva a iniciar sesión.");
     }
     
-    // Obtener el JWT real. Esto es asíncrono y crucial.
     let userToken: string;
     try {
         userToken = await user.getIdToken();
@@ -228,25 +234,21 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         console.error("Error al obtener el token:", e);
         return alert("No se pudo obtener el token de usuario. Inténtalo de nuevo.");
     }
-    // FIN DEL BLOQUE CRÍTICO DE AUTENTICACIÓN
     
-    // 🚨 CORRECCIÓN CLAVE 2: Usar la URL ABSOLUTA con la variable de entorno
     // @ts-ignore
     const endpoint = `${import.meta.env.VITE_BACKEND_URL}/api/session/swap-exercise`;
-    
     const allIds = [
         ...currentSession.warmup.exercises.map(e => e.id),
         ...currentSession.cooldown.exercises.map(e => e.id),
         ...currentSession.mainBlocks.flatMap(b => b.exercises.map(e => e.id)),
         ...(currentSession.coreBlocks?.flatMap(b => b.exercises.map(e => e.id)) || [])
     ];
-    
     try {
-        const response = await fetch(endpoint, { // <-- Endpoint ABSOLUTO
+        const response = await fetch(endpoint, { 
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${userToken}` // <-- Token JWT real
+                'Authorization': `Bearer ${userToken}` 
             },
             body: JSON.stringify({
                 blockType,
@@ -257,16 +259,14 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
                 userInventory: currentSession.meta?.availableEquipment || ["Gimnasio completo"] 
             })
         });
-        
-        // Manejo explícito de un error de token fallido (401)
+
         if (response.status === 401) {
              throw new Error("Sesión expirada o token inválido. Por favor, vuelve a iniciar sesión.");
         }
         
         const data = await response.json();
-
         if (response.ok && data.success && data.newExercise) {
-            // Actualizar el estado de manera inmutable
+            
             setCurrentSession(prevSession => {
                 const newSession = JSON.parse(JSON.stringify(prevSession));
                 
@@ -294,16 +294,16 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
     }
   };
 
-
   return (
     <div className="min-h-screen bg-zinc-900 text-white pb-28">
       
-      {/* 1. HEADER DE SESIÓN (Inalterado) */}
+      {/* 1. HEADER DE SESIÓN */}
       <header className="relative pt-8 pb-6 px-6 bg-zinc-800 rounded-b-3xl border-b border-zinc-700 shadow-xl z-10">
         <div className="flex items-start justify-between mb-4">
           <div>
              <p className="text-xs font-bold text-lime-500 uppercase tracking-wider mb-1">Sesión de Hoy</p>
-             <h1 className="text-2xl font-bold text-white leading-tight max-w-[80%]">
+             <h1 
+             className="text-2xl font-bold text-white leading-tight max-w-[80%]">
                {currentSession.sessionGoal || "Entrenamiento Personalizado"}
              </h1>
           </div>
@@ -315,15 +315,19 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         <div className="flex items-center gap-4 text-sm text-zinc-400">
            <div className="flex items-center gap-1.5 bg-zinc-900/50 px-3 py-1.5 rounded-full border border-zinc-700/50">
              <Clock className="w-4 h-4 text-lime-500" />
-             <span>{currentSession.estimatedDurationMin || 60} min</span> 
+             <span>{currentSession.estimatedDurationMin ||
+             60} min</span> 
            </div>
            
            <div className="flex items-center gap-1.5 bg-zinc-900/50 px-3 py-1.5 rounded-full border border-zinc-700/50">
              <Activity className={`w-4 h-4 ${
-                 currentSession.intensityLevel?.includes('Alta') ? 'text-red-500' : 
-                 currentSession.intensityLevel?.includes('Baja') ? 'text-blue-400' : 'text-orange-500'
+                 currentSession.intensityLevel?.includes('Alta') ?
+                 'text-red-500' : 
+                 currentSession.intensityLevel?.includes('Baja') ?
+                 'text-blue-400' : 'text-orange-500'
              }`} />
-             <span>{currentSession.intensityLevel || "Media"}</span>
+             <span>{currentSession.intensityLevel ||
+             "Media"}</span>
            </div>
         </div>
       </header>
@@ -332,7 +336,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         
         <SwapTip />
 
-        {/* 2. CALENTAMIENTO (Añadido Swap) */}
+        {/* 2. CALENTAMIENTO */}
         <AccordionSection 
           title="Calentamiento" 
           icon={Flame} 
@@ -351,21 +355,23 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           ))}
         </AccordionSection>
 
-        {/* 3. BLOQUES PRINCIPALES (Añadido Swap) */}
+        {/* 3. BLOQUES PRINCIPALES */}
         {currentSession.mainBlocks.map((block, index) => {
             
-            const isComplex = block.blockType === 'superset' || block.blockType === 'circuit';
+            const isComplex = block.blockType === 'superset' ||
+            block.blockType === 'circuit';
             const blockTitle = isComplex 
-                ? `Bloque ${index + 1} (${block.blockType === 'superset' ? 'Superserie' : 'Circuito'})` 
+                ?
+                `Bloque ${index + 1} (${block.blockType === 'superset' ? 'Superserie' : 'Circuito'})` 
                 : `Bloque ${index + 1}`;
-
             return (
               <AccordionSection 
                 key={`main-${index}`} 
                 title={blockTitle} 
                 icon={Dumbbell} 
                 defaultOpen={false}
-                colorClass={isComplex ? "text-purple-400 bg-purple-500/10" : "text-lime-400 bg-lime-500/10"}
+                colorClass={isComplex 
+                ? "text-purple-400 bg-purple-500/10" : "text-lime-400 bg-lime-500/10"}
               >
                 <div className="relative">
                   {/* Línea visual para conectar ejercicios si es Superserie/Circuito */}
@@ -374,7 +380,8 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
                   )}
                   
                   {block.exercises.map((ex, idx) => (
-                    <div key={ex.id + idx} className="relative z-10 bg-zinc-900 mb-3 last:mb-0 rounded-xl p-2 border border-zinc-800/50 shadow-sm">
+                    <div key={ex.id + idx} className="relative z-10 bg-zinc-900 mb-3 last:mb-0 rounded-xl p-2 border 
+                    border-zinc-800/50 shadow-sm">
                       <ExerciseRow 
                           exercise={ex} 
                           isSimple={false}
@@ -383,18 +390,20 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
                       />
                     </div>
                   ))}
+    
                 </div>
                 
                 {/* Footer del Bloque (Descansos) */}
                 <div className="mt-4 flex items-center justify-center gap-2 text-xs text-zinc-500 bg-zinc-950/30 p-2 rounded-lg border border-zinc-800 border-dashed">
-                   <Clock className="w-3.5 h-3.5" />
+                   <Clock className="w-3.5 h-3.5" 
+                   />
                    <span>Descanso entre series: <strong className="text-zinc-300">{block.restBetweenSetsSec}s</strong></span>
                 </div>
               </AccordionSection>
             );
         })}
 
-        {/* 4. BLOQUE DE CORE (Añadido Swap) */}
+        {/* 4. BLOQUE DE CORE */}
         {currentSession.coreBlocks && currentSession.coreBlocks.length > 0 && (
             <AccordionSection 
                 title="Bloque de Core" 
@@ -405,6 +414,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
                 {currentSession.coreBlocks.map((block, index) => (
                     <div key={`core-${index}`} className="relative mb-4">
                         <p className="text-xs text-zinc-400 font-medium mb-2">Rutina de Estabilidad {index + 1}</p>
+ 
                         {block.exercises.map((ex, idx) => (
                            <div key={ex.id + idx} className="relative z-10 bg-zinc-900 mb-3 last:mb-0 rounded-xl p-2 border border-zinc-800/50 shadow-sm">
                             <ExerciseRow 
@@ -417,14 +427,14 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
                         ))}
                          <div className="mt-4 flex items-center justify-center gap-2 text-xs text-zinc-500 bg-zinc-950/30 p-2 rounded-lg border border-zinc-800 border-dashed">
                             <Clock className="w-3.5 h-3.5" />
-                           <span>Descanso entre series: <strong className="text-zinc-300">{block.restBetweenSetsSec}s</strong></span>
+                            <span>Descanso entre series: <strong className="text-zinc-300">{block.restBetweenSetsSec}s</strong></span>
                         </div>
                     </div>
                 ))}
             </AccordionSection>
         )}
 
-        {/* 5. VUELTA A LA CALMA (Añadido Swap) */}
+        {/* 5. VUELTA A LA CALMA */}
         <AccordionSection 
           title="Vuelta a la Calma" 
           icon={Wind} 
@@ -432,7 +442,8 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           colorClass="text-cyan-400 bg-cyan-500/10"
         >
           {currentSession.cooldown.exercises.map((ex, idx) => (
-             <div key={ex.id + idx} className="relative z-10 bg-zinc-900 mb-3 last:mb-0 rounded-xl p-2 border border-zinc-800/50 shadow-sm">
+             <div key={ex.id + idx} className="relative 
+             z-10 bg-zinc-900 mb-3 last:mb-0 rounded-xl p-2 border border-zinc-800/50 shadow-sm">
                 <ExerciseRow 
                     exercise={ex} 
                     isSimple={true} 
@@ -445,7 +456,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
 
       </main>
 
-      {/* 6. STICKY FOOTER - BOTÓN DE INICIO (Inalterado) */}
+      {/* 6. STICKY FOOTER - BOTÓN DE INICIO */}
       <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-zinc-900 via-zinc-900 to-transparent z-50">
         <button 
           onClick={handleStartSession}
