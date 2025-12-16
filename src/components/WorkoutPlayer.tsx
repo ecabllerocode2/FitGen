@@ -9,7 +9,9 @@ import {
   Info,
   Trophy,
   MessageSquare,
-  Loader2 
+  Loader2,
+  Activity,
+  Zap
 } from 'lucide-react';
 
 const getYoutubeEmbedUrl = (url: string) => {
@@ -31,12 +33,24 @@ interface Exercise {
   durationOrReps?: string;
   sets?: number;
   targetReps?: string;
+  targetRIR?: number;  // ⭐ NUEVO V5
+  loadProgression?: string;  // ⭐ NUEVO V5
+  technique?: string;  // ⭐ NUEVO V5: standard, tempo_3-0-3, rest_pause
   rpe?: number;
   notes?: string;
   imageUrl?: string | null;
   url?: string;
   equipment?: string;
-  suggestedLoad?: string; 
+  suggestedLoad?: string;
+  performanceData?: {  // ⭐ NUEVO V5
+    plannedSets?: number;
+    actualSets?: Array<{
+      set: number;
+      reps: number;
+      rir: number;
+      load: string;
+    }>;
+  };
 }
 
 interface Block {
@@ -92,6 +106,28 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
   const [timerActive, setTimerActive] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const timerRef = useRef<number | null>(null);
+
+  // \u2b50 NUEVO V5: Estado para capturar rendimiento por ejercicio
+  const [exercisesPerformance, setExercisesPerformance] = useState<Record<string, Array<{
+    set: number;
+    reps: number;
+    rir: number;
+    load: string;
+  }>>>({});
+  
+  // \u2b50 NUEVO V5: Modal para capturar datos de la serie
+  const [showSetModal, setShowSetModal] = useState(false);
+  const [currentSetData, setCurrentSetData] = useState<{
+    exerciseId: string;
+    exerciseName: string;
+    setNumber: number;
+    targetReps?: string;
+    targetRIR?: number;
+    suggestedLoad?: string;
+  } | null>(null);
+  const [setReps, setSetReps] = useState<string>('');
+  const [setRIR, setSetRIR] = useState<string>('2');
+  const [setLoad, setSetLoad] = useState<string>('');
 
   useEffect(() => {
     if (session?.feedback) { 
@@ -201,6 +237,36 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
   
   // --- NAVEGACIÓN ---
   const handleNext = () => {
+    const currentStep = workoutSteps[currentStepIndex];
+    
+    // \u2b50 NUEVO V5: Capturar datos de rendimiento después de cada serie de ejercicio principal
+    const isMainExercise = (currentStep.type === 'exercise' || currentStep.type === 'core') && currentStep.data;
+    
+    if (isMainExercise && currentStep.data) {
+      const exercise = currentStep.data;
+      // Solo capturar en ejercicios con series definidas (no calentamiento/cooldown)
+      if (exercise.sets && exercise.sets > 0) {
+        setCurrentSetData({
+          exerciseId: exercise.id,
+          exerciseName: exercise.name,
+          setNumber: currentStep.setIndex || 1,
+          targetReps: exercise.targetReps,
+          targetRIR: exercise.targetRIR,
+          suggestedLoad: exercise.suggestedLoad || exercise.equipment
+        });
+        setSetReps('');
+        setSetRIR(exercise.targetRIR?.toString() || '2');
+        setSetLoad(exercise.suggestedLoad || '');
+        setShowSetModal(true);
+        return; // Detener la navegación hasta que se capture el dato
+      }
+    }
+    
+    // Continuar normalmente si no hay que capturar datos
+    proceedToNextStep();
+  };
+  
+  const proceedToNextStep = () => {
     const nextIndex = currentStepIndex + 1;
     if (nextIndex >= workoutSteps.length) {
       setIsFinished(true); 
@@ -212,6 +278,43 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
         setTimerActive(true);
       }
     }
+  };
+  
+  // \u2b50 NUEVO V5: Guardar datos de la serie y continuar
+  const handleSaveSetData = () => {
+    if (!currentSetData) return;
+    
+    const repsNum = parseInt(setReps);
+    const rirNum = parseInt(setRIR);
+    
+    if (isNaN(repsNum) || repsNum < 0) {
+      alert('Por favor ingresa un número válido de repeticiones');
+      return;
+    }
+    
+    if (isNaN(rirNum) || rirNum < 0 || rirNum > 10) {
+      alert('RIR debe estar entre 0 y 10');
+      return;
+    }
+    
+    const newSetRecord = {
+      set: currentSetData.setNumber,
+      reps: repsNum,
+      rir: rirNum,
+      load: setLoad || 'Peso Corporal'
+    };
+    
+    setExercisesPerformance(prev => ({
+      ...prev,
+      [currentSetData.exerciseId]: [
+        ...(prev[currentSetData.exerciseId] || []),
+        newSetRecord
+      ]
+    }));
+    
+    setShowSetModal(false);
+    setCurrentSetData(null);
+    proceedToNextStep();
   };
 
   const handlePrevious = () => {
@@ -231,6 +334,12 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
         if (!user) throw new Error("Usuario no autenticado");
         const token = await user.getIdToken();
         
+        // \u2b50 NUEVO V5: Formatear datos de rendimiento para el backend
+        const formattedPerformance = Object.entries(exercisesPerformance).map(([exerciseId, sets]) => ({
+          exerciseId,
+          actualSets: sets
+        }));
+        
         const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/session/complete`, {
             method: 'POST',
             headers: {
@@ -241,7 +350,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                 sessionFeedback: {
                     rpe: sessionRPE,
                     notes: sessionNotes
-                }
+                },
+                exercisesPerformance: formattedPerformance  // \u2b50 NUEVO V5
             })
         });
         const data = await response.json();
@@ -262,7 +372,106 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
   // --- RENDERIZADO PRINCIPAL ---
   
   if (!session) return <div className="min-h-screen bg-zinc-900 flex items-center justify-center text-white">Cargando datos de sesión...</div>;
-  const currentStep = workoutSteps[currentStepIndex]; 
+  const currentStep = workoutSteps[currentStepIndex];
+  
+  // \u2b50 NUEVO V5: Modal para capturar datos de la serie
+  const SetCaptureModal = () => {
+    if (!showSetModal || !currentSetData) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="bg-zinc-800 p-6 rounded-2xl w-full max-w-md border border-lime-500/30">
+          <h3 className="text-xl font-bold text-lime-400 mb-2 flex items-center gap-2">
+            <Dumbbell className="w-6 h-6" />
+            Serie {currentSetData.setNumber} Completada
+          </h3>
+          <p className="text-zinc-300 text-sm mb-1">{currentSetData.exerciseName}</p>
+          {currentSetData.targetReps && (
+            <p className="text-zinc-500 text-xs mb-4">
+              \ud83c\udfaf Objetivo: {currentSetData.targetReps} reps | RIR {currentSetData.targetRIR || 2}
+            </p>
+          )}
+          
+          <div className="space-y-4">
+            {/* Repeticiones */}
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-2">
+                ¿Cuántas repeticiones hiciste?
+              </label>
+              <input
+                type="number"
+                value={setReps}
+                onChange={(e) => setSetReps(e.target.value)}
+                placeholder="Ej: 12"
+                min="0"
+                className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-lg text-white text-lg font-bold focus:ring-lime-500 focus:border-lime-500"
+                autoFocus
+              />
+            </div>
+            
+            {/* RIR */}
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-2">
+                RIR - ¿Cuántas más podías hacer?
+              </label>
+              <div className="flex gap-2">
+                {[0, 1, 2, 3, 4, 5].map(rir => (
+                  <button
+                    key={rir}
+                    type="button"
+                    onClick={() => setSetRIR(rir.toString())}
+                    className={`flex-1 py-3 rounded-lg font-bold transition-all ${
+                      setRIR === rir.toString()
+                        ? 'bg-lime-500 text-zinc-900'
+                        : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
+                    }`}
+                  >
+                    {rir}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-zinc-500 mt-2">
+                0 = Fallo muscular | 5 = Muy fácil
+              </p>
+            </div>
+            
+            {/* Carga */}
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-2">
+                ¿Qué carga usaste? (opcional)
+              </label>
+              <input
+                type="text"
+                value={setLoad}
+                onChange={(e) => setSetLoad(e.target.value)}
+                placeholder={currentSetData.suggestedLoad || "Ej: 20kg, Banda Roja, Peso Corporal"}
+                className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-lg text-white focus:ring-lime-500 focus:border-lime-500"
+              />
+            </div>
+          </div>
+          
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={() => {
+                setShowSetModal(false);
+                setCurrentSetData(null);
+              }}
+              className="flex-1 bg-zinc-700 text-white py-3 rounded-xl font-bold hover:bg-zinc-600"
+            >
+              Saltar
+            </button>
+            <button
+              onClick={handleSaveSetData}
+              disabled={!setReps}
+              className="flex-1 bg-lime-500 text-zinc-900 py-3 rounded-xl font-bold hover:bg-lime-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Guardar y Continuar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }; 
   
   // === VISTA FINAL: FEEDBACK O MENSAJE DE COMPLETED ===
   if (isFinished) {
@@ -498,6 +707,12 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                                 <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Meta</p>
                                 <p className="text-3xl font-black text-white">{exercise.targetReps || "Fallo"}</p>
                                 <p className="text-xs text-zinc-400 mt-1">Repeticiones</p>
+                                {exercise.targetRIR !== undefined && (
+                                  <div className="mt-2 inline-flex items-center gap-1 bg-lime-500/10 px-2 py-1 rounded text-xs text-lime-400 border border-lime-500/30">
+                                    <Activity className="w-3 h-3" />
+                                    <span className="font-bold">RIR {exercise.targetRIR}</span>
+                                  </div>
+                                )}
                             </div>
                             <div className="pl-6 flex flex-col justify-center items-center">
                                 <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Carga Sugerida</p>
@@ -505,6 +720,14 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                                     {exercise.suggestedLoad || exercise.equipment ||
                                       "Peso Corporal / Tu Equipo"}
                                 </p>
+                                {exercise.technique && exercise.technique !== 'standard' && (
+                                  <div className="mt-2 inline-flex items-center gap-1 bg-purple-500/10 px-2 py-1 rounded text-xs text-purple-400 border border-purple-500/30">
+                                    <Zap className="w-3 h-3" />
+                                    <span className="font-bold">
+                                      {exercise.technique === 'tempo_3-0-3' ? 'Tempo 3-0-3' : exercise.technique === 'rest_pause' ? 'Rest-Pause' : exercise.technique}
+                                    </span>
+                                  </div>
+                                )}
                             </div>
                         </div>
                         {exercise.notes && (
@@ -541,6 +764,9 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                   'TERMINAR SESIÓN' : 'LISTO / SIGUIENTE'}
             </button>
         </div>
+
+        {/* \u2b50 NUEVO V5: Modal de captura de datos */}
+        <SetCaptureModal />
 
     </div>
   );

@@ -37,13 +37,25 @@ interface Exercise {
   durationOrReps?: string; 
   sets?: number;           
   targetReps?: string;
+  targetRIR?: number;  // ⭐ NUEVO V5
+  loadProgression?: string;  // ⭐ NUEVO V5
+  technique?: string;  // ⭐ NUEVO V5
   rpe?: number;
   notes?: string;
   imageUrl?: string | null;
   musculoObjetivo?: string;
   equipo?: string; 
   suggestedLoad?: string;
-  url?: string; 
+  url?: string;
+  performanceData?: {  // ⭐ NUEVO V5
+    plannedSets?: number;
+    actualSets?: Array<{
+      set: number;
+      reps: number;
+      rir: number;
+      load: string;
+    }>;
+  };
 }
 
 interface Block {
@@ -164,7 +176,7 @@ const ExerciseRow = ({
                 {exercise.durationOrReps || "A criterio"}
               </p>
             ) : (
-              <div className="flex flex-wrap items-center gap-3 mt-1">
+              <div className="flex flex-wrap items-center gap-2 mt-1">
                 <div className="flex items-center gap-1 bg-zinc-800 px-2 py-0.5 rounded text-xs text-zinc-300 border border-zinc-700">
                   <Layers className="w-3 h-3 text-lime-500" />
                   <span className="font-bold">{exercise.sets}</span> Series
@@ -173,6 +185,20 @@ const ExerciseRow = ({
                   <Repeat className="w-3 h-3 text-lime-500" />
                   <span className="font-bold">{exercise.targetReps}</span> Reps
                 </div>
+                {exercise.targetRIR !== undefined && (
+                  <div className="flex items-center gap-1 bg-lime-500/10 px-2 py-0.5 rounded text-xs text-lime-400 border border-lime-500/30">
+                    <Activity className="w-3 h-3" />
+                    <span className="font-bold">RIR {exercise.targetRIR}</span>
+                  </div>
+                )}
+                {exercise.technique && exercise.technique !== 'standard' && (
+                  <div className="flex items-center gap-1 bg-purple-500/10 px-2 py-0.5 rounded text-xs text-purple-400 border border-purple-500/30">
+                    <Sparkles className="w-3 h-3" />
+                    <span className="font-bold">
+                      {exercise.technique === 'tempo_3-0-3' ? 'Tempo 3-0-3' : exercise.technique === 'rest_pause' ? 'Rest-Pause' : exercise.technique}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
