@@ -1,3 +1,4 @@
+// ...existing code...
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth } from 'firebase/auth'; 
@@ -94,6 +95,7 @@ type WorkoutStep = {
 };
 
 const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
+    const [sorenessLevel, setSorenessLevel] = useState<number>(1); // 1-10, 1 por defecto
   const navigate = useNavigate();
   const auth = getAuth();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -101,6 +103,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
   const [isFinished, setIsFinished] = useState(false);
   const [sessionRPE, setSessionRPE] = useState<number>(7); 
   const [sessionNotes, setSessionNotes] = useState<string>('');
+  const [energyLevel, setEnergyLevel] = useState<number>(5); // 1-10, 5 por defecto
   const [isSaving, setIsSaving] = useState(false); 
 
   const [timerActive, setTimerActive] = useState(false);
@@ -224,6 +227,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
       handleNext(); 
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerActive, timeLeft]);
   
   const formatTime = (seconds: number) => {
@@ -341,18 +345,20 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
         }));
         
         const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/session/complete`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            sessionFeedback: {
+              rpe: sessionRPE,
+              notes: sessionNotes,
+              energyLevel: energyLevel,
+              sorenessLevel: sorenessLevel
             },
-            body: JSON.stringify({
-                sessionFeedback: {
-                    rpe: sessionRPE,
-                    notes: sessionNotes
-                },
-                exercisesPerformance: formattedPerformance  // \u2b50 NUEVO V5
-            })
+            exercisesPerformance: formattedPerformance  // \u2b50 NUEVO V5
+          })
         });
         const data = await response.json();
 
@@ -520,13 +526,11 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                       <label className="block text-sm font-bold text-zinc-300 mb-4 uppercase tracking-wide">
                           ¿Qué tan difícil fue? (RPE)
                       </label>
-                      
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-xs text-zinc-500">Muy Fácil</span>
                         <span className="text-2xl font-bold text-lime-400">{sessionRPE}</span> 
                         <span className="text-xs text-zinc-500">Fallo Muscular</span>
                       </div>
-                      
                       <input 
                         type="range" 
                         min="1" 
@@ -536,26 +540,72 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                         onChange={(e) => setSessionRPE(Number(e.target.value))}
                         className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-lime-500"
                       />
-                      <div className="mt-4 flex justify-center gap-1">
+                      <div className="mt-4 flex justify-center gap-1 mb-6">
                           {[...Array(10)].map((_, i) => (
                               <div key={i} className={`h-1 w-full rounded-full ${i + 1 <= sessionRPE 
                                 ? 'bg-lime-500' : 'bg-zinc-700'}`}></div>
                           ))}
                       </div>
+                      <label className="block text-sm font-bold text-zinc-300 mb-4 uppercase tracking-wide mt-6">
+                          ¿Cómo estuvo tu energía?
+                      </label>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs text-zinc-500">Bajísima</span>
+                        <span className="text-2xl font-bold text-cyan-400">{energyLevel}</span> 
+                        <span className="text-xs text-zinc-500">Altísima</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="1" 
+                        max="10" 
+                        step="1" 
+                        value={energyLevel}
+                        onChange={(e) => setEnergyLevel(Number(e.target.value))}
+                        className="w-full h-2 bg-cyan-700 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                      />
+                      <div className="mt-4 flex justify-center gap-1 mb-6">
+                          {[...Array(10)].map((_, i) => (
+                              <div key={i} className={`h-1 w-full rounded-full ${i + 1 <= energyLevel 
+                                ? 'bg-cyan-400' : 'bg-zinc-700'}`}></div>
+                          ))}
+                      </div>
+                      <label className="block text-sm font-bold text-zinc-300 mb-4 uppercase tracking-wide mt-6">
+                          ¿Cómo estuvo tu dolor muscular?
+                      </label>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs text-zinc-500">Sin dolor</span>
+                        <span className="text-2xl font-bold text-pink-400">{sorenessLevel}</span> 
+                        <span className="text-xs text-zinc-500">Dolor máximo</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="1" 
+                        max="10" 
+                        step="1" 
+                        value={sorenessLevel}
+                        onChange={(e) => setSorenessLevel(Number(e.target.value))}
+                        className="w-full h-2 bg-pink-700 rounded-lg appearance-none cursor-pointer accent-pink-400"
+                      />
+                      <div className="mt-4 flex justify-center gap-1">
+                          {[...Array(10)].map((_, i) => (
+                              <div key={i} className={`h-1 w-full rounded-full ${i + 1 <= sorenessLevel 
+                                ? 'bg-pink-400' : 'bg-zinc-700'}`}></div>
+                          ))}
+                      </div>
                   </div>
 
-                  <div className="w-full bg-zinc-800/50 p-4 rounded-2xl border border-zinc-700">
+                    <div className="w-full bg-zinc-800/50 p-4 rounded-2xl border border-zinc-700">
                       <label className="flex items-center gap-2 text-sm font-bold text-zinc-300 mb-3 uppercase tracking-wide">
-                          <MessageSquare className="w-4 h-4 text-zinc-400" />
-                          Notas de la sesión (Opcional)
+                        <MessageSquare className="w-4 h-4 text-zinc-400" />
+                        Notas de la sesión (Opcional)
                       </label>
                       <textarea 
-                          value={sessionNotes}
-                          onChange={(e) => setSessionNotes(e.target.value)}
-                          placeholder="¿Alguna molestia? ¿Subiste peso en algún ejercicio?"
-                          className="w-full bg-zinc-900 border border-zinc-600 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-lime-500 min-h-[80px]"
+                        value={sessionNotes}
+                        onChange={(e) => setSessionNotes(e.target.value)}
+                        placeholder="¿Alguna molestia? ¿Subiste peso en algún ejercicio?"
+                        className="w-full bg-zinc-900 border border-zinc-600 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-lime-500 min-h-20"
                       />
-                  </div>
+                    </div>
               </div>
 
               <div className="mt-6">
@@ -701,7 +751,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
 
                 {isMainExercise ?
                 (
-                    <div className="bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-2xl p-6 border border-zinc-700 shadow-lg mb-6">
+                    <div className="bg-linear-to-br from-zinc-800 to-zinc-900 rounded-2xl p-6 border border-zinc-700 shadow-lg mb-6">
                         <div className="grid grid-cols-2 gap-6 text-center divide-x divide-zinc-700">
                             <div>
                                 <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Meta</p>
@@ -733,7 +783,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session }) => {
                         {exercise.notes && (
                             <div className="mt-4 pt-4 border-t border-zinc-700/50">
                                 <div className="flex items-start gap-2 text-xs text-zinc-300 bg-zinc-950/30 p-3 rounded-lg">
-                                    <Info className="w-4 h-4 text-lime-500 flex-shrink-0 mt-0.5" />
+                                  <Info className="w-4 h-4 text-lime-500 shrink-0 mt-0.5" />
                                     <span>{exercise.notes}</span>
                                 </div>
                             </div>
