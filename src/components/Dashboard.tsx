@@ -15,10 +15,13 @@ import {
     BatteryCharging,
     X,
     ChevronDown,
+    Trophy,
 } from 'lucide-react';
 
 import InstallPwaBanner from './InstallPwaBanner';
 import ProfileMenu from './ProfileMenu';
+import LevelUpCelebration from './LevelUpCelebration';
+import StatsAndAchievements from './StatsAndAchievements';
 
 // ====================================================================
 // 1. DEFINICIÓN DE TIPOS
@@ -46,6 +49,7 @@ interface CurrentMesocycleData {
     endDate: string | null;
     generationDate: string;
     currentWeek: number;
+    progress?: number;
     // Estado posible: 'active', 'evaluation_pending', 'completed'
     status?: string; 
 }
@@ -60,12 +64,15 @@ interface UserProfile {
     profileData?: {
         name: string;
         fitnessGoal?: string;
-        [key: string]: any;
+        [key: string]: unknown;
     };
     plan?: 'free' | 'premium' | 'trial';
     currentMesocycle?: CurrentMesocycleData;
     currentSession?: CurrentSessionData;
     name?: string;
+    createdAt?: string;
+    lastWorkoutDate?: string;
+    _history?: Record<string, unknown>;
 }
 interface DashboardProps {
     user: User;
@@ -76,6 +83,22 @@ interface DashboardProps {
 interface PreSessionFeedback {
     energyLevel: number; // Escala 1-5
     sorenessLevel: number; // Escala 1-5
+}
+
+interface LevelUpgradeData {
+    upgraded: boolean;
+    shouldShowCelebration: boolean;
+    celebrationTitle?: string;
+    celebrationMessage?: string;
+    newLevel?: string;
+    previousLevel?: string;
+    nextGoal?: string;
+    metrics?: {
+        completedSessions?: number;
+        weeksTraining?: number;
+        completionRate?: string;
+        progressionRate?: string;
+    };
 }
 
 // FRASES MOTIVADORAS PARA EL LOADING
@@ -153,7 +176,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, onSubmit
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {/* Nivel de Energía */}
                     <div>
-                        <label className="block text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
+                        <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
                             <BatteryCharging className="w-4 h-4 text-lime-500" /> Nivel de Energía <span className="text-xs text-zinc-500">(1=Exhausto, 5=Fantástico)</span>
                         </label>
                         <div className="relative">
@@ -173,7 +196,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, onSubmit
 
                     {/* Dolor Muscular */}
                     <div>
-                        <label className="block text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
+                        <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
                             <Scale className="w-4 h-4 text-lime-500" /> Dolor Muscular / Agujetas <span className="text-xs text-zinc-500">(1=Nada, 5=Incapacitante)</span>
                         </label>
                         <div className="relative">
@@ -224,6 +247,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     const [creatingPlan, setCreatingPlan] = useState(false);
     const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
     const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+    
+    // Estados para el modal de celebración de nivel
+    const [showLevelUpModal, setShowLevelUpModal] = useState(false);
+    const [levelUpData, setLevelUpData] = useState<LevelUpgradeData | null>(null);
+    
+    // Estado para el modal de estadísticas
+    const [showStatsModal, setShowStatsModal] = useState(false);
 
     const [quoteIndex, setQuoteIndex] = useState(0);
 
@@ -378,6 +408,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             const data = await res.json();
             if (data.success) {
                 console.log("Sesión generada OK con feedback:", feedback);
+                
+                // 🎯 DETECTAR UPGRADE DE NIVEL
+                if (data.levelUpgrade?.shouldShowCelebration) {
+                    setLevelUpData(data.levelUpgrade);
+                    setShowLevelUpModal(true);
+                }
             } else {
                 alert("Error: " + data.error);
             }
@@ -478,11 +514,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         <h1 className="text-2xl font-bold text-white tracking-tight">Hola, <span className="text-lime-400">{userName.split(' ')[0]}</span></h1>
                         <p className="text-xs text-zinc-400 mt-1 font-medium uppercase"> {mesocycleGoal}</p>
                     </div>
-                    <ProfileMenu 
-                        userName={userName}
-                        onLogout={handleLogout}
-                        onNavigateToProfile={handleNavigateToProfile}
-                    />
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowStatsModal(true)}
+                            className="p-2 rounded-lg bg-gradient-to-br from-emerald-600/20 to-teal-600/20 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group"
+                            title="Ver Estadísticas y Logros"
+                        >
+                            <Trophy className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                        </button>
+                        <ProfileMenu 
+                            userName={userName}
+                            onLogout={handleLogout}
+                            onNavigateToProfile={handleNavigateToProfile}
+                        />
+                    </div>
                 </div>
                 <div className="bg-zinc-900/60 p-4 rounded-xl border border-zinc-700/50">
                     <div className="flex justify-between text-sm mb-2 font-medium">
@@ -530,7 +575,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                                             <Dumbbell className="w-16 h-16 text-lime-500 animate-[spin_3s_linear_infinite]" />
                                         </div>
                                         <h3 className="text-xl font-bold text-white mb-2">Diseñando Sesión...</h3>
-                                        <p key={quoteIndex} className="text-zinc-400 text-sm min-h-[40px] animate-in slide-in-from-bottom-2 duration-500">
+                                        <p key={quoteIndex} className="text-zinc-400 text-sm min-h-10 animate-in slide-in-from-bottom-2 duration-500">
                                             "{MOTIVATIONAL_QUOTES[quoteIndex]}"
                                         </p>
                                     </div>
@@ -610,6 +655,41 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
             {/* 👇 AÑADIDO: Banner de instalación PWA al final */}
             <InstallPwaBanner />
+            
+            {/* 🎉 Modal de Celebración de Nivel */}
+            {levelUpData && (
+                <LevelUpCelebration
+                    isOpen={showLevelUpModal}
+                    onClose={() => setShowLevelUpModal(false)}
+                    data={{
+                        celebrationTitle: levelUpData.celebrationTitle || '¡Nivel Mejorado!',
+                        celebrationMessage: levelUpData.celebrationMessage || 'Has alcanzado un nuevo nivel de entrenamiento',
+                        newLevel: levelUpData.newLevel || 'intermedio',
+                        previousLevel: levelUpData.previousLevel || 'principiante',
+                        nextGoal: levelUpData.nextGoal,
+                        metrics: levelUpData.metrics
+                    }}
+                />
+            )}
+            
+            {/* 📊 Modal de Estadísticas y Logros */}
+            {showStatsModal && userProfile && userProfile.createdAt && (
+                <StatsAndAchievements
+                    userProfile={{
+                        createdAt: userProfile.createdAt,
+                        lastWorkoutDate: userProfile.lastWorkoutDate,
+                        _history: userProfile._history as Record<string, { feedback?: { completedAt?: string } }> | undefined,
+                        currentMesocycle: userProfile.currentMesocycle ? {
+                            currentWeek: userProfile.currentMesocycle.currentWeek,
+                            progress: userProfile.currentMesocycle.progress || 0,
+                            mesocyclePlan: userProfile.currentMesocycle.mesocyclePlan,
+                            startDate: userProfile.currentMesocycle.startDate,
+                        } : undefined,
+                        profileData: userProfile.profileData,
+                    }}
+                    onClose={() => setShowStatsModal(false)}
+                />
+            )}
         </div>
     );
 };
