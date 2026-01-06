@@ -12,7 +12,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
   // Prevenir que Chrome muestre el mini-banner automático (opcional)
   e.preventDefault();
   // Guardar el evento en una variable global para que el componente lo recoja luego
-  // @ts-ignore
+  // @ts-expect-error
   window.deferredPrompt = e;
   console.log("Evento PWA capturado globalmente en main.tsx 🚀");
 });

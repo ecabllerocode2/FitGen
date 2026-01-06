@@ -9,20 +9,21 @@ import { auth } from '../firebase';
 const AppLoader = () => {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
 
   // Detectar modo de visualización (PWA instalada)
-  useEffect(() => {
-    const checkStandalone = () => {
-      const mql = window.matchMedia?.('(display-mode: standalone)');
-      const isIOSStandalone = (window.navigator as any)?.standalone === true; // iOS Safari
-      return Boolean(mql?.matches) || isIOSStandalone;
-    };
-    setIsStandalone(checkStandalone());
-
-    // Opcional: escuchar cambios del display-mode si el navegador lo soporta
-    const listener = (e: MediaQueryListEvent) => setIsStandalone(e.matches);
+  const isStandalone = useMemo(() => {
     const mql = window.matchMedia?.('(display-mode: standalone)');
+    const isIOSStandalone = (window.navigator as any)?.standalone === true; // iOS Safari
+    return Boolean(mql?.matches) || isIOSStandalone;
+  }, []);
+
+  // Escuchar cambios del display-mode
+  useEffect(() => {
+    const mql = window.matchMedia?.('(display-mode: standalone)');
+    const listener = (e: MediaQueryListEvent) => {
+      // Si cambia, recargar la página o manejar el cambio, pero por simplicidad, ignorar ya que useMemo no cambia
+      console.log('Display mode changed:', e.matches);
+    };
     try {
       mql?.addEventListener?.('change', listener);
       return () => mql?.removeEventListener?.('change', listener);

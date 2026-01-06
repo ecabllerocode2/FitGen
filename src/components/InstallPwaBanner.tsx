@@ -26,7 +26,7 @@ const InstallPwaBanner: React.FC = () => {
 
         // --- 2. MANEJO DEL EVENTO beforeinstallprompt (La Trampa Global) ---
         
-        // @ts-ignore
+        // @ts-expect-error
         const currentDeferredPrompt = window.deferredPrompt;
         
         // CRÍTICO: Buscar el evento capturado globalmente en main.tsx
@@ -44,7 +44,7 @@ const InstallPwaBanner: React.FC = () => {
         // Listener para capturar el evento si ocurre DESPUÉS del montaje
         const handler = (e: any) => {
             e.preventDefault();
-            // @ts-ignore
+            // @ts-expect-error
             window.deferredPrompt = e;
             setSupportsPWA(true);
             setIsVisible(true);
@@ -58,7 +58,7 @@ const InstallPwaBanner: React.FC = () => {
             console.log('PWA Instalada con éxito');
             setIsVisible(false);
             setSupportsPWA(false);
-            // @ts-ignore
+            // @ts-expect-error
             window.deferredPrompt = null;
         });
 
@@ -68,7 +68,7 @@ const InstallPwaBanner: React.FC = () => {
     }, []);
 
     const handleInstallClick = async () => {
-        // @ts-ignore
+        // @ts-expect-error
         const promptEvent = window.deferredPrompt;
         if (!promptEvent) return;
 
@@ -79,7 +79,7 @@ const InstallPwaBanner: React.FC = () => {
         console.log(`El usuario respondió: ${outcome}`);
 
         // Limpiar el estado y la variable global
-        // @ts-ignore
+        // @ts-expect-error
         window.deferredPrompt = null;
         setIsVisible(false);
         setSupportsPWA(false);

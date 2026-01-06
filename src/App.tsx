@@ -86,17 +86,6 @@ const PendingAccessView: FC<{ user: User }> = ({ user }) => {
 // FUNCIÓN DE CONFIGURACIÓN DE FIREBASE
 // ====================================================================
 
-const getFirebaseConfig = () => {
-    const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-    const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
-    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-    const appId = import.meta.env.VITE_FIREBASE_APP_ID;
-
-    if (!apiKey || !authDomain || !projectId || !appId) return null;
-
-    return { apiKey, authDomain, projectId, appId };
-};
-
 // ====================================================================
 // COMPONENTE PRINCIPAL APP
 // ====================================================================
@@ -108,30 +97,20 @@ const App: FC = () => {
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [globalError, setGlobalError] = useState<string | null>(null);
 
-    // EFECTO 1: Inicialización de Firebase
+    // EFECTO 1: Escuchar el estado de autenticación
     useEffect(() => {
-        const firebaseConfig = getFirebaseConfig();
-        if (!firebaseConfig) {
-            setGlobalError("Error CRÍTICO: Faltan variables de entorno.");
+        const unsubscribeAuth = onAuthStateChanged(firebaseAuth, async (authUser) => {
+            setUser(authUser);
             setIsAuthReady(true);
-            return;
-        }
-        let unsubscribeAuth: () => void;
-        try {
-            const app = initializeApp(firebaseConfig as any);
-            const authInstance = getAuth(app);
-            const dbInstance = getFirestore(app);
-            setAuthServices({ auth: authInstance, db: dbInstance });
-            unsubscribeAuth = onAuthStateChanged(authInstance, async (authUser) => {
-                setUser(authUser);
-                setIsAuthReady(true);
-            });
-        } catch (e) {
-            setGlobalError(`ERROR CRÍTICO: ${(e as Error).message}`);
-            setIsAuthReady(true);
-            return () => { };
-        }
-        return () => { if (unsubscribeAuth) unsubscribeAuth(); };
+        });
+        
+        // Setear los servicios de Firebase disponibles desde firebase.ts
+        setAuthServices({ 
+            auth: firebaseAuth as Auth, 
+            db: firebaseDb as Firestore 
+        });
+        
+        return () => unsubscribeAuth();
     }, []);
 
     // EFECTO 2: Carga del Perfil

@@ -1,5 +1,4 @@
 // src/pages/LandingPage.jsx
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Activity, 
@@ -35,7 +34,7 @@ const LandingPage = () => {
       {/* --- HERO SECTION --- */}
       <header className="relative px-6 pt-12 pb-24 text-center max-w-5xl mx-auto mt-8">
         {/* Glow de fondo */}
-        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-gradient-to-b from-lime-500/10 to-transparent blur-[120px] rounded-full -z-10"></div>
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-linear-to-b from-lime-500/10 to-transparent blur-[120px] rounded-full -z-10"></div>
         
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/50 border border-slate-800 text-lime-400 text-xs font-bold uppercase tracking-wide mb-8 backdrop-blur-sm">
           <Activity size={14} />
@@ -44,7 +43,7 @@ const LandingPage = () => {
         
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 leading-tight">
           Entrenamiento que se adapta <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-lime-400 to-emerald-400">
+          <span className="text-transparent bg-clip-text bg-linear-to-r from-lime-400 to-emerald-400">
             al ritmo de tu vida.
           </span>
         </h1>
@@ -187,7 +186,7 @@ const LandingPage = () => {
                 <span className="text-4xl font-bold text-white">$149</span>
                 <span className="text-slate-500"> / mes</span>
               </div>
-              <ul className="text-left space-y-3 mb-8 text-sm text-slate-400 flex-grow">
+              <ul className="text-left space-y-3 mb-8 text-sm text-slate-400 grow">
                 <li className="flex gap-2"><CheckCircle size={16} className="text-slate-500"/> Acceso total al Motor</li>
                 <li className="flex gap-2"><CheckCircle size={16} className="text-slate-500"/> Ajuste por fatiga diaria</li>
                 <li className="flex gap-2"><CheckCircle size={16} className="text-slate-500"/> Cancela cuando quieras</li>
@@ -211,7 +210,7 @@ const LandingPage = () => {
                 Facturado como $1,188 anuales
               </p>
               
-              <ul className="text-left space-y-3 mb-8 text-sm text-slate-300 flex-grow">
+              <ul className="text-left space-y-3 mb-8 text-sm text-slate-300 grow">
                 <li className="flex gap-2"><CheckCircle size={16} className="text-lime-400"/> <strong>Ahorras un 33%</strong></li>
                 <li className="flex gap-2"><CheckCircle size={16} className="text-lime-400"/> Compromiso con tus resultados</li>
                 <li className="flex gap-2"><CheckCircle size={16} className="text-lime-400"/> Todas las actualizaciones futuras</li>
@@ -228,7 +227,7 @@ const LandingPage = () => {
 
       {/* --- APP INSTALL CTA --- */}
       <section className="px-6 py-24 text-center">
-        <div className="max-w-2xl mx-auto bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-3xl border border-slate-700">
+        <div className="max-w-2xl mx-auto bg-linear-to-br from-slate-900 to-slate-800 p-8 rounded-3xl border border-slate-700">
           <Smartphone className="w-12 h-12 text-lime-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-4">Lleva el Motor en tu bolsillo</h2>
           <p className="text-slate-400 mb-8">
