@@ -3,7 +3,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
-import App from './App.tsx'
+import AppLoader from './components/AppLoader'
 
 // --- INICIO CÓDIGO NUEVO ---
 // 1. Captura global del evento PWA antes de que cargue React
@@ -21,7 +21,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter> 
-      <App />
+      <AppLoader />
     </BrowserRouter>
   </StrictMode>,
 )

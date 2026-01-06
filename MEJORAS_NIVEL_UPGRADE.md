@@ -1,4 +1,4 @@
-# 🎯 Mejoras Implementadas: Sistema de Notificación de Upgrade de Nivel
+ 🎯 Mejoras Implementadas: Sistema de Notificación de Upgrade de Nivel
 
 ## 📋 Resumen de Cambios
 
