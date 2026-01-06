@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo, type FC } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Importaciones de Firebase
-import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, type User, type Auth } from 'firebase/auth';
-import { getFirestore, doc, onSnapshot, type Firestore, type DocumentData } from 'firebase/firestore';
+import { onAuthStateChanged, type User, type Auth } from 'firebase/auth';
+import { doc, onSnapshot, type Firestore, type DocumentData } from 'firebase/firestore';
+import { auth as firebaseAuth, db as firebaseDb } from './firebase';
 
 // Importación de Componentes
 import AuthLayout from './components/AuthLayout';

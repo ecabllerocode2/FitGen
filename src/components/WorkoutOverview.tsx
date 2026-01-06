@@ -261,7 +261,6 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         return alert("No se pudo obtener el token de usuario. Inténtalo de nuevo.");
     }
     
-    // @ts-expect-error
     const endpoint = `${import.meta.env.VITE_BACKEND_URL}/api/session/swap-exercise`;
     const allIds = [
         ...currentSession.warmup.exercises.map(e => e.id),
