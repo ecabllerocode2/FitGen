@@ -23,4 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
+# Environment variables (keep .env.example)
 .env
+.env.local
+.env.development
+.env.production
