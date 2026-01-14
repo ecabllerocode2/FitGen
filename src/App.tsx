@@ -10,9 +10,12 @@ import { auth as firebaseAuth, db as firebaseDb } from './firebase';
 import AuthLayout from './components/AuthLayout';
 import ProfileOnboarding from './components/ProfileOnboarding';
 import Dashboard from './components/Dashboard';
-import WorkoutOverview from './components/WorkoutOverview';
+import WorkoutOverview from './components/WorkoutOverviewV3';
 import WorkoutPlayer from './components/WorkoutPlayer';
 import MesocycleEvaluate from './components/MesocycleEvaluate';
+
+// Tipos de sesión V2
+import type { GeneratedSession } from './types/session';
 
 // ====================================================================
 // TIPOS Y ESTADOS
@@ -41,9 +44,11 @@ export interface UserProfile extends DocumentData {
         injuriesOrLimitations: string;
         trainingDaysPerWeek: number;
         preferredTrainingDays: string[];
-        weeklyScheduleContext: any[]; // Usaremos 'any[]' aquí para simplicidad de App
+        weeklyScheduleContext: any[];
         availableEquipment: string[];
-        location: string;
+        homeEquipment: string[];
+        hasHomeEquipment: boolean;
+        externalLoad?: string;
         [key: string]: any;
     };
 }
@@ -213,7 +218,7 @@ const App: FC = () => {
                 {/* 2. VISTA GENERAL DE ENTRENAMIENTO (Resumen) */}
                 <Route path="/workout/today" element={
                     userProfile?.currentSession ? (
-                        <WorkoutOverview session={userProfile.currentSession as any} />
+                        <WorkoutOverview session={userProfile.currentSession as GeneratedSession} />
                     ) : (
                         <Navigate to="/" replace />
                     )
@@ -222,7 +227,7 @@ const App: FC = () => {
                 {/* 3. PLAYER DE ENTRENAMIENTO (Paso a paso) */}
                 <Route path="/workout/player" element={
                     userProfile?.currentSession ? (
-                        <WorkoutPlayer session={userProfile.currentSession as any} />
+                        <WorkoutPlayer session={userProfile.currentSession as GeneratedSession} />
                     ) : (
                         <Navigate to="/" replace />
                     )

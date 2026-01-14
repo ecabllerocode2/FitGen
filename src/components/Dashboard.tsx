@@ -11,20 +11,25 @@ import {
     CheckCircle2,
     Play,
     Zap,
-    Scale,
-    BatteryCharging,
     X,
-    ChevronDown,
     Trophy,
+    Scale,
 } from 'lucide-react';
 
 import InstallPwaBanner from './InstallPwaBanner';
 import ProfileMenu from './ProfileMenu';
 import LevelUpCelebration from './LevelUpCelebration';
 import StatsAndAchievements from './StatsAndAchievements';
+import LocationEquipmentForm, { type EquipmentData } from './LocationEquipmentForm';
+import ReadinessForm, { type ReadinessData } from './ReadinessForm';
+import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
+import type { 
+    EnergyLevel, 
+    SorenessLevel, 
+    SleepQuality, 
+    StressLevel
+} from '../types/session';
 
-// ====================================================================
-// 1. DEFINICIÓN DE TIPOS
 // ====================================================================
 
 interface SessionPlan {
@@ -81,8 +86,17 @@ interface DashboardProps {
 }
 
 interface PreSessionFeedback {
-    energyLevel: number; // Escala 1-5
-    sorenessLevel: number; // Escala 1-5
+    energyLevel: EnergyLevel;      // Escala 1-5
+    sorenessLevel: SorenessLevel;  // Escala 1-5
+    sleepQuality: SleepQuality;    // Escala 1-5
+    stressLevel: StressLevel;      // Escala 1-5
+    location: 'gym' | 'home';      // Ubicación
+    availableEquipment: string[];  // Equipamiento disponible
+    homeWeights?: {                // Pesos específicos (opcional)
+        dumbbells?: number[];
+        barbell?: number;
+        kettlebells?: number[];
+    };
 }
 
 interface LevelUpgradeData {
@@ -124,108 +138,81 @@ interface FeedbackModalProps {
     isRecovery?: boolean;
 }
 
-const scaleOptions = [
-    { value: 5, label: '5 - Fantástico/Nada' },
-    { value: 4, label: '4 - Muy Bien/Leve' },
-    { value: 3, label: '3 - Normal/Moderado' },
-    { value: 2, label: '2 - Cansado/Alto' },
-    { value: 1, label: '1 - Exhausto/Incapacitante' },
-];
-
-
+// Nuevo Modal de Feedback con dos pasos
 const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, onSubmit, isLoading, isRecovery = false }) => {
-    const [energyLevel, setEnergyLevel] = useState(3);
-    const [sorenessLevel, setSorenessLevel] = useState(3);
+    const [step, setStep] = useState<'equipment' | 'readiness'>('equipment');
+    const [equipmentData, setEquipmentData] = useState<EquipmentData | null>(null);
 
-    // Resetear estados al abrir
+    // Resetear al abrir
     useEffect(() => {
         if (isOpen) {
-            setEnergyLevel(3);
-            setSorenessLevel(3);
+            setStep('equipment');
+            setEquipmentData(null);
         }
     }, [isOpen]);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSubmit({ energyLevel, sorenessLevel });
+    const handleEquipmentNext = (data: EquipmentData) => {
+        setEquipmentData(data);
+        setStep('readiness');
+    };
+
+    const handleReadinessSubmit = (readinessData: ReadinessData) => {
+        if (!equipmentData) return;
+        
+        const feedback: PreSessionFeedback = {
+            ...readinessData,
+            location: equipmentData.location,
+            availableEquipment: equipmentData.availableEquipment,
+            homeWeights: equipmentData.homeWeights
+        };
+        
+        onSubmit(feedback);
+    };
+
+    const handleBackToEquipment = () => {
+        setStep('equipment');
     };
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-            <div className="bg-zinc-800 p-6 rounded-2xl w-full max-w-md border border-lime-500/30 animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-zinc-800 p-6 rounded-2xl w-full max-w-md border border-lime-500/30 animate-in zoom-in-95 duration-300 my-4">
                 <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-xl font-bold text-lime-400 flex items-center gap-2">
-                        <Zap className="w-6 h-6" />
-                        Chequeo Pre-Sesión
-                    </h3>
+                    <div>
+                        <h3 className="text-xl font-bold text-lime-400 flex items-center gap-2">
+                            <Zap className="w-6 h-6" />
+                            {step === 'equipment' ? '¿Dónde entrenas?' : '¿Cómo te sientes?'}
+                        </h3>
+                        <p className="text-xs text-zinc-400 mt-1">Paso {step === 'equipment' ? '1' : '2'} de 2</p>
+                    </div>
                     <button onClick={onClose} className="text-zinc-400 hover:text-white p-1">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
-                <p className="text-zinc-300 mb-6 text-sm">
-                    {isRecovery ? (
-                        "Tu plan de hoy es de Movilidad. Este feedback nos ayudará a priorizar la recuperación más adecuada."
+                <p className="text-zinc-300 mb-5 text-sm">
+                    {step === 'equipment' ? (
+                        "Selecciona dónde entrenarás y qué equipamiento tienes disponible."
+                    ) : isRecovery ? (
+                        "Este feedback nos ayudará a diseñar una sesión de recuperación óptima."
                     ) : (
-                        "Tu respuesta ajustará el peso, series y repeticiones de HOY en tiempo real."
+                        "Tu respuesta ajustará el volumen e intensidad de tu sesión en tiempo real."
                     )}
                 </p>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Nivel de Energía */}
-                    <div>
-                        <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
-                            <BatteryCharging className="w-4 h-4 text-lime-500" /> Nivel de Energía <span className="text-xs text-zinc-500">(1=Exhausto, 5=Fantástico)</span>
-                        </label>
-                        <div className="relative">
-                            <select
-                                value={energyLevel}
-                                onChange={(e) => setEnergyLevel(parseInt(e.target.value))}
-                                required
-                                className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-lg text-white appearance-none focus:ring-lime-500 focus:border-lime-500"
-                            >
-                                {scaleOptions.map(option => (
-                                    <option key={option.value} value={option.value}>{option.label.split('/')[0].trim()}</option>
-                                ))}
-                            </select>
-                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
-                        </div>
-                    </div>
-
-                    {/* Dolor Muscular */}
-                    <div>
-                        <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
-                            <Scale className="w-4 h-4 text-lime-500" /> Dolor Muscular / Agujetas <span className="text-xs text-zinc-500">(1=Nada, 5=Incapacitante)</span>
-                        </label>
-                        <div className="relative">
-                            <select
-                                value={sorenessLevel}
-                                onChange={(e) => setSorenessLevel(parseInt(e.target.value))}
-                                required
-                                className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-lg text-white appearance-none focus:ring-lime-500 focus:border-lime-500"
-                            >
-                                {scaleOptions.map(option => (
-                                    <option key={option.value} value={option.value}>{option.label.split('/')[1].trim()}</option>
-                                ))}
-                            </select>
-                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
-                        </div>
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full bg-lime-500 text-zinc-900 font-bold py-3 px-4 rounded-xl transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-lime-400 flex items-center justify-center gap-2"
-                    >
-                        {isLoading ? (
-                            <Activity className="animate-spin w-5 h-5" />
-                        ) : (
-                            'Confirmar y Generar Rutina'
-                        )}
-                    </button>
-                </form>
+                {step === 'equipment' ? (
+                    <LocationEquipmentForm 
+                        onNext={handleEquipmentNext}
+                        isLoading={false}
+                    />
+                ) : (
+                    <ReadinessForm 
+                        onSubmit={handleReadinessSubmit}
+                        onBack={handleBackToEquipment}
+                        isLoading={isLoading}
+                    />
+                )}
             </div>
         </div>
     );
@@ -322,13 +309,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         );
 
         let isSessionReady = false;
-        if (userProfile.currentSession?.meta?.date) {
-            const sessionDateStr = userProfile.currentSession.meta.date.split('T')[0];
-            const todayStr = format(today, 'yyyy-MM-dd');
-            
-            if (sessionDateStr === todayStr) {
-                isSessionReady = true;
-            }
+        if (userProfile.currentSession && !userProfile.currentSession.completed) {
+            // Si hay una sesión y no está completada, está lista
+            isSessionReady = true;
         }
 
         return {
@@ -359,11 +342,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         setCreatingPlan(true);
         try {
             const token = await user.getIdToken();
-            // Asumiendo que el endpoint de generación de plan es el mismo
-            const endpoint = `${import.meta.env.VITE_BACKEND_URL}/api/mesocycle/generate`;
-            const res = await fetch(endpoint, {
+            const res = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, token, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
             if (!data.success) throw new Error(data.error || "Error desconocido");
@@ -374,40 +354,71 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         }
     };
 
-    // Función modificada para recibir el feedback
-    const handleGenerateSession = useCallback(async (feedback: PreSessionFeedback, isRecovery: boolean) => {
+    // Función modificada para recibir el feedback - Actualizada para API V2
+    const handleGenerateSession = useCallback(async (feedback: PreSessionFeedback, _isRecovery: boolean) => {
         setIsFeedbackModalOpen(false); // Cerrar modal primero
         setGeneratingSession(true);
         setQuoteIndex(0);
 
         try {
             const token = await user.getIdToken();
-            const endpoint = `${import.meta.env.VITE_BACKEND_URL}/api/session/generate`;
 
-            const todayDate = format(new Date(), 'yyyy-MM-dd');
-
-            // El foco de la sesión se basa en el día programado (todaysSession) o 'Recuperación Activa'
-            const contextFocus = isRecovery
-                ? 'Recuperación Activa'
-                : dashboardState?.todaysSession?.sessionFocus;
-
+            // Payload según la estructura de API V2 + equipamiento
             const payload = {
                 userId: user.uid,
-                date: todayDate, // Usamos la fecha de HOY
-                realTimeFeedback: feedback,
-                isRecovery: isRecovery,
-                contextFocus: contextFocus
+                // Parámetros de autoregulación
+                energyLevel: feedback.energyLevel,
+                sorenessLevel: feedback.sorenessLevel,
+                sleepQuality: feedback.sleepQuality,
+                stressLevel: feedback.stressLevel,
+                // Contexto de sesión - NUEVO: ubicación y equipamiento
+                location: feedback.location,
+                availableEquipment: feedback.availableEquipment,
+                ...(feedback.homeWeights && { homeWeights: feedback.homeWeights }),
+                // Índices opcionales para sesión específica del mesociclo
+                microcycleIndex: dashboardState?.currentWeek ? dashboardState.currentWeek - 1 : undefined,
             };
 
-            const res = await fetch(endpoint, {
+            console.log('📤 Enviando payload V2 al backend:', JSON.stringify(payload, null, 2));
+            console.log('🔗 Endpoint:', API_ENDPOINTS.SESSION_GENERATE_V2);
+
+            const res = await authenticatedFetch(API_ENDPOINTS.SESSION_GENERATE_V2, token, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(payload)
             });
 
+            console.log('📊 Response status:', res.status);
+            console.log('📊 Response ok:', res.ok);
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                console.error('❌ Error del servidor (texto):', errorText);
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    console.error('❌ Error del servidor (JSON):', errorJson);
+                    console.error('❌ Código de error:', errorJson.code);
+                    console.error('❌ Mensaje:', errorJson.error);
+                    console.error('❌ Detalles:', errorJson.details);
+                    
+                    // Mensajes específicos según el código
+                    if (errorJson.code === 'CONTEXT_ERROR') {
+                        alert(`❌ Error de contexto: ${errorJson.error}\n\nPosibles causas:\n- No se encontró tu perfil en Firestore\n- No hay mesociclo activo\n- No se encontró el catálogo de ejercicios\n\nRevisa la consola del backend para más detalles.`);
+                    } else if (errorJson.code === 'NO_ACTIVE_MESOCYCLE') {
+                        alert('❌ No hay mesociclo activo. Por favor, genera un mesociclo primero.');
+                    } else {
+                        alert(`Error ${res.status}: ${errorJson.error || errorJson.message || 'Error desconocido'}\n\nCódigo: ${errorJson.code}`);
+                    }
+                } catch {
+                    alert(`Error ${res.status}: ${errorText || 'Error desconocido'}`);
+                }
+                return;
+            }
+
             const data = await res.json();
+            console.log('✅ Respuesta del servidor:', data);
+
             if (data.success) {
-                console.log("Sesión generada OK con feedback:", feedback);
+                console.log("✅ Sesión V2 generada OK:", data.session?.id);
                 
                 // 🎯 DETECTAR UPGRADE DE NIVEL
                 if (data.levelUpgrade?.shouldShowCelebration) {
@@ -415,11 +426,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     setShowLevelUpModal(true);
                 }
             } else {
-                alert("Error: " + data.error);
+                console.error('❌ Respuesta no exitosa:', data);
+                alert("Error: " + (data.error || "Error desconocido"));
             }
         } catch (error) {
-            console.error(error);
-            alert("Error de conexión al generar la sesión.");
+            console.error('❌ Error capturado:', error);
+            console.error('❌ Error stack:', (error as Error).stack);
+            alert("Error de conexión al generar la sesión: " + (error as Error).message);
         } finally {
             setGeneratingSession(false);
         }
@@ -517,7 +530,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => setShowStatsModal(true)}
-                            className="p-2 rounded-lg bg-gradient-to-br from-emerald-600/20 to-teal-600/20 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group"
+                            className="p-2 rounded-lg bg-linear-to-br from-emerald-600/20 to-teal-600/20 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group"
                             title="Ver Estadísticas y Logros"
                         >
                             <Trophy className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
@@ -550,7 +563,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
                     {isEvaluationPending ? (
                         // 1. EVALUACIÓN PENDIENTE (PRIORIDAD ALTA)
-                        <div className="group bg-gradient-to-br from-zinc-800 to-zinc-900 border border-blue-500/50 p-6 rounded-2xl relative overflow-hidden shadow-lg shadow-blue-500/20">
+                        <div className="group bg-linear-to-br from-zinc-800 to-zinc-900 border border-blue-500/50 p-6 rounded-2xl relative overflow-hidden shadow-lg shadow-blue-500/20">
                             <h3 className="text-2xl font-bold text-white mb-2 leading-tight">¡Mesociclo Finalizado!</h3>
                             <p className="text-zinc-400 mb-6">Completa la evaluación para que nuestro motor pueda generar tu próximo mesociclo hiper-optimizado.</p>
                             
@@ -565,7 +578,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     ) : (
                         // 2. PLAN ACTIVO: Muestra el plan de sesión de hoy o de descanso.
                         todaysSession ? (
-                            <div className="group bg-gradient-to-br from-zinc-800 to-zinc-900 border border-lime-500/30 p-6 rounded-2xl relative overflow-hidden shadow-lg">
+                            <div className="group bg-linear-to-br from-zinc-800 to-zinc-900 border border-lime-500/30 p-6 rounded-2xl relative overflow-hidden shadow-lg">
 
                                 {/* --- OVERLAY DE CARGA --- */}
                                 {generatingSession && (

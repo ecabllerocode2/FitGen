@@ -17,6 +17,7 @@ import {
   RefreshCw, 
   Sparkles 
 } from 'lucide-react';
+import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 
 const getYoutubeThumbnailUrl = (url?: string | null) => {
   if (!url) return null;
@@ -261,7 +262,6 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         return alert("No se pudo obtener el token de usuario. Inténtalo de nuevo.");
     }
     
-    const endpoint = `${import.meta.env.VITE_BACKEND_URL}/api/session/swap-exercise`;
     const allIds = [
         ...currentSession.warmup.exercises.map(e => e.id),
         ...currentSession.cooldown.exercises.map(e => e.id),
@@ -269,12 +269,8 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         ...(currentSession.coreBlocks?.flatMap(b => b.exercises.map(e => e.id)) || [])
     ];
     try {
-        const response = await fetch(endpoint, { 
+        const response = await authenticatedFetch(API_ENDPOINTS.SESSION_SWAP_EXERCISE, userToken, { 
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${userToken}` 
-            },
             body: JSON.stringify({
                 blockType,
                 blockIndex,

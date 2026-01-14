@@ -2,13 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User } from 'firebase/auth'; 
 import { Scale, Loader2, CheckCircle2, AlertTriangle, ChevronLeft } from 'lucide-react';
-
-// ====================================================================
-// CONFIGURACIÓN DE URL BASE
-// Se utiliza la misma lógica que en Dashboard.tsx para acceder a la URL
-// ====================================================================
-// Nota: 'import.meta.env' es el estándar moderno (Vite) para acceder a variables de entorno.
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || ''; 
+import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 
 // ====================================================================
 // TIPOS ESTRUCTURALES
@@ -109,16 +103,11 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user }) => {
         try {
             // ----------------------------------------------------
             // 1. LLAMADA DE EVALUACIÓN (/api/mesocycle/evaluate)
-            // AHORA USA API_BASE_URL
             // ----------------------------------------------------
             setStatus('evaluating');
             
-            const evaluationResponse = await fetch(`${API_BASE_URL}/api/mesocycle/evaluate`, {
+            const evaluationResponse = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_EVALUATE, token, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
                 body: JSON.stringify({
                     difficultyScore,
                     painAreas: painPayload,
@@ -151,17 +140,12 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user }) => {
 
             // ----------------------------------------------------
             // 2. LLAMADA DE GENERACIÓN (/api/mesocycle/generate)
-            // AHORA USA API_BASE_URL
             // ----------------------------------------------------
             setStatus('generating');
-            const generationResponse = await fetch(`${API_BASE_URL}/api/mesocycle/generate`, {
+            const generationResponse = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, token, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-                // El endpoint de generación usará la data de evaluación almacenada en Firestore
             });
+            // El endpoint de generación usará la data de evaluación almacenada en Firestore
 
             // **********************************************
             // MANEJO ROBUSTO DE ERRORES EN GENERACIÓN

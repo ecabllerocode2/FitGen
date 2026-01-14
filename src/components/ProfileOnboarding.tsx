@@ -12,6 +12,15 @@ import {
   AlertCircle,
   Info
 } from 'lucide-react';
+import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
+import type { 
+  ExternalLoad, 
+  FitnessGoal, 
+  ExperienceLevel as ExpLevel,
+  FocusArea as FocusAreaType,
+  InjuryType,
+  DayOfWeek
+} from '../types/session';
 
 // --- TIPOS Y CONSTANTES (Sin Modificación) ---
 
@@ -87,35 +96,50 @@ const homeEquipmentList: EquipmentDetail[] = [
     }
 ];
 
-const trainingLocationOptions = [
-    'Gimnasio (Máquinas y Pesos Libres)',
-    'En Casa (Con Equipo Limitado)',
-    'En Casa (Solo Peso Corporal)',
+// Opciones de objetivo según la API V2
+const goals: { value: FitnessGoal; label: string; desc: string }[] = [
+    { value: 'Hipertrofia', label: 'Hipertrofia (Ganancia Muscular)', desc: 'Rangos medios (6-12 reps), descansos medios' },
+    { value: 'Fuerza', label: 'Fuerza Máxima', desc: 'Rangos bajos (3-6 reps), descansos largos' },
+    { value: 'Resistencia', label: 'Resistencia Muscular', desc: 'Rangos altos (12-20 reps), descansos cortos' },
+    { value: 'Perdida_Grasa', label: 'Pérdida de Grasa / Definición', desc: 'Circuitos, descansos cortos, mayor densidad' }
 ];
 
-const goals = [
-    'Ganancia Muscular', 
-    'Pérdida de Grasa / Definición', 
-    'Fuerza',
-    'Salud General / Mantenimiento'
+const experienceLevels: { value: ExpLevel; label: string; desc: string }[] = [
+    { value: 'Principiante', label: 'Principiante (0-12 meses)', desc: 'Menos volumen, ejercicios simples, tempo controlado.' },
+    { value: 'Intermedio', label: 'Intermedio (1-3 años)', desc: 'Volumen y complejidad media.' },
+    { value: 'Avanzado', label: 'Avanzado (3+ años)', desc: 'Mayor volumen, técnicas avanzadas, ejercicios complejos.' }
 ];
 
-const experienceLevels = [
-    { value: 'Principiante', label: 'Principiante (0-1 año)', desc: 'Prioridad: Técnica y hábito.' },
-    { value: 'Intermedio', label: 'Intermedio (1-3 años)', desc: 'Prioridad: Carga progresiva.' },
-    { value: 'Avanzado', label: 'Avanzado (3+ años)', desc: 'Prioridad: Especialización e intensidad.' }
+const genderOptions = ['Masculino', 'Femenino', 'Otro'];
+
+// Opciones de área de enfoque según la API V2
+const focusAreaOptions: { value: FocusAreaType; label: string }[] = [
+    { value: 'General', label: 'General (Balanceado)' },
+    { value: 'Tren_Superior', label: 'Tren Superior (Pecho, Espalda, Hombros, Brazos)' },
+    { value: 'Tren_Inferior', label: 'Tren Inferior (Piernas y Glúteos)' },
+    { value: 'Core', label: 'Core (Énfasis en trabajo abdominal)' }
 ];
 
-const genderOptions = ['Masculino', 'Femenino', 'Prefiero no decir'];
+// Opciones de lesiones según la API V2
+const injuryOptions: InjuryType[] = [
+    'Ninguna',
+    'Hombro',
+    'Rodilla',
+    'Espalda Baja',
+    'Muñeca',
+    'Cuello',
+    'Cadera',
+    'Tobillo',
+    'Codo'
+];
 
-interface DayContext {
-    day: string;
+interface DayContextLocal {
+    day: DayOfWeek;
     canTrain: boolean;
-    externalLoad: 'none' | 'low' | 'medium' | 'high' | 'extreme'; 
+    externalLoad: ExternalLoad; 
 }
 
-const DAYS_ORDER = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
+const DAYS_ORDER: DayOfWeek[] = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 // 📌 Interfaz para la precarga (la estructura que viene de Firestore)
 interface UserProfile {
@@ -131,9 +155,9 @@ interface UserProfile {
         injuriesOrLimitations: string;
         trainingDaysPerWeek: number;
         preferredTrainingDays: string[];
-        weeklyScheduleContext: DayContext[];
-        availableEquipment: string[];
-        location: string;
+        weeklyScheduleContext: DayContextLocal[];
+        homeEquipment: string[];
+        hasHomeEquipment: boolean;
         [key: string]: any;
     };
     name?: string; 
@@ -161,20 +185,21 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
     // Perfil Fitness
     const [goal, setGoal] = useState('');
     const [experienceLevel, setExperienceLevel] = useState('');
-    const [focusArea, setFocusArea] = useState(''); 
-    const [injuries, setInjuries] = useState(''); 
+    const [focusArea, setFocusArea] = useState<FocusAreaType>('General'); 
+    const [injuries, setInjuries] = useState<InjuryType>('Ninguna'); 
 
     // Logística
-    const [trainingLocation, setTrainingLocation] = useState('');
+    const [hasHomeEquipment, setHasHomeEquipment] = useState(false); // Si tiene equipo en casa
     const [homeEquipmentSelections, setHomeEquipmentSelections] = useState<string[]>([]);
-    const [weeklySchedule, setWeeklySchedule] = useState<DayContext[]>(
-        // Inicializar 'externalLoad' en 'none' como valor por defecto, no como "no seleccionado"
-        DAYS_ORDER.map(d => ({ day: d, canTrain: false, externalLoad: 'none' })) 
+    const [weeklySchedule, setWeeklySchedule] = useState<DayContextLocal[]>(
+        // Inicializar 'externalLoad' en 'none' como valor por defecto
+        DAYS_ORDER.map(d => ({ day: d, canTrain: false, externalLoad: 'none' as ExternalLoad })) 
     );
 
     // UI
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
 
     // 📌 EFECTO PARA PRE-CARGAR DATOS EN MODO EDICIÓN
     useEffect(() => {
@@ -193,24 +218,21 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
         // 2. Cargar Perfil de Entrenamiento
         if (profile.fitnessGoal) setGoal(profile.fitnessGoal);
         if (profile.experienceLevel) setExperienceLevel(profile.experienceLevel);
-        if (profile.focusArea) setFocusArea(profile.focusArea);
-        if (profile.injuriesOrLimitations) setInjuries(profile.injuriesOrLimitations);
+        if (profile.focusArea) setFocusArea(profile.focusArea as FocusAreaType);
+        if (profile.injuriesOrLimitations) setInjuries(profile.injuriesOrLimitations as InjuryType);
 
-        // 3. Cargar Logística
-        if (profile.location) setTrainingLocation(profile.location);
-
-        if (profile.availableEquipment) {
-            // Filtra la ubicación (que es el primer elemento) para obtener el equipo detallado
-            const detailedEquipment = profile.availableEquipment.filter((item: string) => item !== profile.location);
-            setHomeEquipmentSelections(detailedEquipment);
+        // 3. Cargar Equipo en Casa
+        if (profile.homeEquipment && profile.homeEquipment.length > 0) {
+            setHasHomeEquipment(true);
+            setHomeEquipmentSelections(profile.homeEquipment);
         }
         
         // 4. Cargar Contexto Semanal
         if (profile.weeklyScheduleContext && profile.weeklyScheduleContext.length === DAYS_ORDER.length) {
              // Mapeamos para asegurar que el orden sea correcto y manejamos el tipado
-             const sortedSchedule: DayContext[] = DAYS_ORDER.map(dayName => 
+             const sortedSchedule: DayContextLocal[] = DAYS_ORDER.map(dayName => 
                  profile.weeklyScheduleContext.find(d => d.day === dayName) || 
-                 { day: dayName, canTrain: false, externalLoad: 'none' } // Fallback seguro
+                 { day: dayName, canTrain: false, externalLoad: 'none' as ExternalLoad } // Fallback seguro
              );
             setWeeklySchedule(sortedSchedule);
         }
@@ -219,7 +241,7 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
 
     // --- HELPERS ---
 
-    const updateDayContext = (day: string, field: keyof DayContext, value: any) => {
+    const updateDayContext = (day: string, field: keyof DayContextLocal, value: any) => {
         setWeeklySchedule(prev => prev.map(d => d.day === day ? { ...d, [field]: value } : d));
     };
 
@@ -254,18 +276,55 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+        setValidationErrors({});
         setIsLoading(true);
 
-        if (!BACKEND_URL) {
-            setError("Error técnico: Falta configuración del servidor (VITE_BACKEND_URL).");
-            setIsLoading(false);
-            return;
+        // VALIDACIONES CON MARCADO VISUAL
+        const errors: Record<string, boolean> = {};
+        let firstErrorField: string | null = null;
+
+        if (!name || name.trim() === '') {
+            errors.name = true;
+            if (!firstErrorField) firstErrorField = 'name';
+        }
+        if (!age || parseInt(age) < 15 || parseInt(age) > 100) {
+            errors.age = true;
+            if (!firstErrorField) firstErrorField = 'age';
+        }
+        if (!weight || parseFloat(weight) < 30 || parseFloat(weight) > 300) {
+            errors.weight = true;
+            if (!firstErrorField) firstErrorField = 'weight';
+        }
+        if (!height || parseInt(height) < 120 || parseInt(height) > 250) {
+            errors.height = true;
+            if (!firstErrorField) firstErrorField = 'height';
+        }
+        if (!gender) {
+            errors.gender = true;
+            if (!firstErrorField) firstErrorField = 'gender';
+        }
+        if (!goal) {
+            errors.goal = true;
+            if (!firstErrorField) firstErrorField = 'goal';
+        }
+        if (!experienceLevel) {
+            errors.experienceLevel = true;
+            if (!firstErrorField) firstErrorField = 'experienceLevel';
         }
 
-        // VALIDACIONES
-        if (!name || !age || !weight || !height || !gender || !goal || !experienceLevel || !trainingLocation) {
-            setError("Por favor completa todos los campos obligatorios.");
+        if (Object.keys(errors).length > 0) {
+            setValidationErrors(errors);
+            setError("Por favor completa todos los campos obligatorios marcados en rojo.");
             setIsLoading(false);
+            
+            // Scroll al primer campo con error
+            if (firstErrorField) {
+                const element = document.getElementById(`field-${firstErrorField}`);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => element.focus(), 500);
+                }
+            }
             return;
         }
         
@@ -273,25 +332,44 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
         if (!areAllLoadsSelected) {
             setError("Debes especificar la carga externa (Actividad diaria) para **todos** los días de la semana (Lunes a Domingo).");
             setIsLoading(false);
+            // Scroll a la sección de schedule
+            const scheduleSection = document.getElementById('weekly-schedule-section');
+            if (scheduleSection) {
+                scheduleSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
             return;
         }
 
         if (trainingDaysCount === 0) {
             setError("Debes seleccionar al menos 1 día para entrenar.");
             setIsLoading(false);
+            const scheduleSection = document.getElementById('weekly-schedule-section');
+            if (scheduleSection) {
+                scheduleSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            return;
+        }
+        
+        // Validar que los días de entrenamiento sean entre 2 y 6
+        if (trainingDaysCount < 2 || trainingDaysCount > 6) {
+            setError("Debes seleccionar entre 2 y 6 días de entrenamiento por semana.");
+            setIsLoading(false);
+            const scheduleSection = document.getElementById('weekly-schedule-section');
+            if (scheduleSection) {
+                scheduleSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
             return;
         }
 
+        // Equipo en casa es opcional
         let finalEquipment: string[] = [];
-        if (trainingLocation === 'En Casa (Con Equipo Limitado)') {
+        if (hasHomeEquipment) {
             if (homeEquipmentSelections.length === 0) {
-                setError("Selecciona qué equipo tienes en casa.");
+                setError("Indicaste que tienes equipo en casa. Por favor selecciona cuál o desmarca la opción.");
                 setIsLoading(false);
                 return;
             }
-            finalEquipment = [trainingLocation, ...homeEquipmentSelections];
-        } else {
-            finalEquipment = [trainingLocation];
+            finalEquipment = homeEquipmentSelections;
         }
         
         // 📌 NUEVA LÓGICA: Determinar si es modo edición
@@ -317,31 +395,64 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                     gender,
                     heightCm: parseInt(height),
                     initialWeight: parseFloat(weight),
-                    fitnessGoal: goal,
-                    experienceLevel,
-                    focusArea: focusArea || 'General',
+                    fitnessGoal: goal as FitnessGoal,
+                    experienceLevel: experienceLevel as ExpLevel,
+                    focusArea: (focusArea || 'General') as FocusAreaType,
                     injuriesOrLimitations: injuries || 'Ninguna',
                     trainingDaysPerWeek: trainingDaysCount,
                     preferredTrainingDays: preferredDaysList,
                     weeklyScheduleContext: weeklySchedule,
-                    availableEquipment: finalEquipment,
-                    location: trainingLocation,
+                    availableEquipment: finalEquipment, // ⚠️ Campo requerido por el backend
+                    hasHomeEquipment, // Boolean para saber si tiene equipo en casa
                     dateCompleted: new Date().toISOString()
                 }
             };
 
-            const res = await fetch(`${BACKEND_URL}/api/profile/save`, {
+            console.log('📤 Enviando payload al backend:', JSON.stringify(payload, null, 2));
+
+            const res = await authenticatedFetch(API_ENDPOINTS.USER_PROFILE_SAVE, idToken, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`
-                },
                 body: JSON.stringify(payload)
             });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Error al guardar perfil.");
+            
+            if (!res.ok) {
+                console.error('❌ Error del servidor:', data);
+                console.error('📊 Status:', res.status);
+                console.error('📦 Payload enviado (JSON):');
+                console.error(JSON.stringify(payload, null, 2));
+                console.error('📋 ProfileData específico:');
+                console.error(JSON.stringify(payload.profileData, null, 2));
+                
+                // Verificar campos específicos
+                console.error('🔍 Verificación de campos:');
+                console.error('- userId:', payload.userId);
+                console.error('- userEmail:', payload.userEmail);
+                console.error('- action:', payload.action);
+                console.error('- profileData existe:', !!payload.profileData);
+                if (payload.profileData) {
+                    console.error('  - name:', payload.profileData.name);
+                    console.error('  - age:', payload.profileData.age);
+                    console.error('  - gender:', payload.profileData.gender);
+                    console.error('  - heightCm:', payload.profileData.heightCm);
+                    console.error('  - initialWeight:', payload.profileData.initialWeight);
+                    console.error('  - fitnessGoal:', payload.profileData.fitnessGoal);
+                    console.error('  - experienceLevel:', payload.profileData.experienceLevel);
+                    console.error('  - focusArea:', payload.profileData.focusArea);
+                    console.error('  - injuriesOrLimitations:', payload.profileData.injuriesOrLimitations);
+                    console.error('  - trainingDaysPerWeek:', payload.profileData.trainingDaysPerWeek);
+                    console.error('  - preferredTrainingDays:', payload.profileData.preferredTrainingDays);
+                    console.error('  - weeklyScheduleContext:', payload.profileData.weeklyScheduleContext);
+                    console.error('  - availableEquipment:', payload.profileData.availableEquipment);
+                    console.error('  - hasHomeEquipment:', payload.profileData.hasHomeEquipment);
+                }
+                
+                throw new Error(data.error || "Error al guardar perfil.");
+            }
 
+            console.log('✅ Perfil guardado exitosamente:', data);
+            
             // Éxito: Recargar o redirigir (App.tsx detectará el cambio de estado/invalidez del plan)
             window.location.reload();
 
@@ -353,6 +464,14 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
         } finally {
             setIsLoading(false);
         }
+    };
+
+    // Helper para obtener clases de error
+    const getInputClasses = (fieldName: string, baseClasses: string) => {
+        if (validationErrors[fieldName]) {
+            return `${baseClasses} border-red-500 ring-2 ring-red-500/50`;
+        }
+        return baseClasses;
     };
 
     // Determinar si el botón debe estar deshabilitado
@@ -393,17 +512,57 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-xs font-medium text-zinc-400 mb-1">Nombre</label>
-                                    <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none" placeholder="Tu nombre" />
+                                    <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                        Nombre {validationErrors.name && <span className="text-red-400">*Requerido</span>}
+                                    </label>
+                                    <input 
+                                        id="field-name"
+                                        type="text" 
+                                        value={name} 
+                                        onChange={e => {
+                                            setName(e.target.value);
+                                            if (validationErrors.name) {
+                                                setValidationErrors(prev => ({ ...prev, name: false }));
+                                            }
+                                        }} 
+                                        className={getInputClasses('name', 'w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none')} 
+                                        placeholder="Tu nombre" 
+                                    />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-medium text-zinc-400 mb-1">Edad</label>
-                                        <input type="number" value={age} onChange={e => setAge(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none" placeholder="Años" />
+                                        <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                            Edad {validationErrors.age && <span className="text-red-400">*Requerido</span>}
+                                        </label>
+                                        <input 
+                                            id="field-age"
+                                            type="number" 
+                                            value={age} 
+                                            onChange={e => {
+                                                setAge(e.target.value);
+                                                if (validationErrors.age) {
+                                                    setValidationErrors(prev => ({ ...prev, age: false }));
+                                                }
+                                            }} 
+                                            className={getInputClasses('age', 'w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none')} 
+                                            placeholder="Años" 
+                                        />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-zinc-400 mb-1">Género</label>
-                                        <select value={gender} onChange={e => setGender(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none">
+                                        <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                            Género {validationErrors.gender && <span className="text-red-400">*Requerido</span>}
+                                        </label>
+                                        <select 
+                                            id="field-gender"
+                                            value={gender} 
+                                            onChange={e => {
+                                                setGender(e.target.value);
+                                                if (validationErrors.gender) {
+                                                    setValidationErrors(prev => ({ ...prev, gender: false }));
+                                                }
+                                            }} 
+                                            className={getInputClasses('gender', 'w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none')}
+                                        >
                                             <option value="">Seleccionar</option>
                                             {genderOptions.map(g => <option key={g} value={g}>{g}</option>)}
                                         </select>
@@ -412,16 +571,44 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-medium text-zinc-400 mb-1">Peso (kg)</label>
+                                    <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                        Peso (kg) {validationErrors.weight && <span className="text-red-400">*Requerido</span>}
+                                    </label>
                                     <div className="relative">
-                                        <input type="number" value={weight} onChange={e => setWeight(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none pl-10" placeholder="75.5" />
+                                        <input 
+                                            id="field-weight"
+                                            type="number" 
+                                            value={weight} 
+                                            onChange={e => {
+                                                setWeight(e.target.value);
+                                                if (validationErrors.weight) {
+                                                    setValidationErrors(prev => ({ ...prev, weight: false }));
+                                                }
+                                            }} 
+                                            className={getInputClasses('weight', 'w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none pl-10')} 
+                                            placeholder="75.5" 
+                                        />
                                         <Scale className="w-4 h-4 text-zinc-500 absolute left-3 top-3.5" />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-zinc-400 mb-1">Estatura (cm)</label>
+                                    <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                        Estatura (cm) {validationErrors.height && <span className="text-red-400">*Requerido</span>}
+                                    </label>
                                     <div className="relative">
-                                        <input type="number" value={height} onChange={e => setHeight(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none pl-10" placeholder="175" />
+                                        <input 
+                                            id="field-height"
+                                            type="number" 
+                                            value={height} 
+                                            onChange={e => {
+                                                setHeight(e.target.value);
+                                                if (validationErrors.height) {
+                                                    setValidationErrors(prev => ({ ...prev, height: false }));
+                                                }
+                                            }} 
+                                            className={getInputClasses('height', 'w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none pl-10')} 
+                                            placeholder="175" 
+                                        />
                                         <Activity className="w-4 h-4 text-zinc-500 absolute left-3 top-3.5" />
                                     </div>
                                 </div>
@@ -438,15 +625,39 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div>
-                                <label className="block text-xs font-medium text-zinc-400 mb-1">Objetivo Principal</label>
-                                <select value={goal} onChange={e => setGoal(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none">
+                                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                    Objetivo Principal {validationErrors.goal && <span className="text-red-400">*Requerido</span>}
+                                </label>
+                                <select 
+                                    id="field-goal"
+                                    value={goal} 
+                                    onChange={e => {
+                                        setGoal(e.target.value);
+                                        if (validationErrors.goal) {
+                                            setValidationErrors(prev => ({ ...prev, goal: false }));
+                                        }
+                                    }} 
+                                    className={getInputClasses('goal', 'w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none')}
+                                >
                                     <option value="">Selecciona tu meta</option>
-                                    {goals.map(g => <option key={g} value={g}>{g}</option>)}
+                                    {goals.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-zinc-400 mb-1">Nivel de Experiencia</label>
-                                <select value={experienceLevel} onChange={e => setExperienceLevel(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none">
+                                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                    Nivel de Experiencia {validationErrors.experienceLevel && <span className="text-red-400">*Requerido</span>}
+                                </label>
+                                <select 
+                                    id="field-experienceLevel"
+                                    value={experienceLevel} 
+                                    onChange={e => {
+                                        setExperienceLevel(e.target.value);
+                                        if (validationErrors.experienceLevel) {
+                                            setValidationErrors(prev => ({ ...prev, experienceLevel: false }));
+                                        }
+                                    }} 
+                                    className={getInputClasses('experienceLevel', 'w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none')}
+                                >
                                     <option value="">Selecciona tu nivel</option>
                                     {experienceLevels.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
                                 </select>
@@ -458,20 +669,27 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                             </div>
                         </div>
 
-                        <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-xs font-medium text-zinc-400 mb-1">Áreas de Enfoque (Opcional)</label>
-                                <input type="text" value={focusArea} onChange={e => setFocusArea(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none" placeholder="Ej: Glúteos, Hombros, Pectoral..." />
+                                <label className="block text-xs font-medium text-zinc-400 mb-1">Área de Enfoque</label>
+                                <select value={focusArea} onChange={e => setFocusArea(e.target.value as FocusAreaType)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-lime-500 focus:outline-none">
+                                    <option value="">Selecciona un enfoque</option>
+                                    {focusAreaOptions.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                                </select>
+                                <p className="text-xs text-zinc-500 mt-2 ml-1">Define qué área del cuerpo priorizar.</p>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-red-400 mb-1">Lesiones o Limitaciones</label>
-                                <textarea value={injuries} onChange={e => setInjuries(e.target.value)} rows={2} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-red-500 focus:outline-none" placeholder="Ej: Dolor en rodilla izquierda al saltar, no puedo hacer press militar..." />
+                                <select value={injuries} onChange={e => setInjuries(e.target.value as InjuryType)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:border-red-500 focus:outline-none">
+                                    {injuryOptions.map(inj => <option key={inj} value={inj}>{inj}</option>)}
+                                </select>
+                                <p className="text-xs text-zinc-500 mt-2 ml-1">El algoritmo evitará ejercicios que afecten esta zona.</p>
                             </div>
                         </div>
                     </section>
 
                     {/* 3. CONTEXTO SEMANAL (EL CEREBRO) - MODIFICADO */}
-                    <section className="border-t border-zinc-800 pt-8">
+                    <section id="weekly-schedule-section" className="border-t border-zinc-800 pt-8">
                         <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-2">
                             <Calendar className="w-5 h-5 text-lime-500" /> 
                             Planificación Inteligente
@@ -517,20 +735,18 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                                         <label className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 mb-1">Carga Externa</label>
                                         <select 
                                             value={dayCtx.externalLoad}
-                                            onChange={(e) => updateDayContext(dayCtx.day, 'externalLoad', e.target.value)}
+                                            onChange={(e) => updateDayContext(dayCtx.day, 'externalLoad', e.target.value as ExternalLoad)}
                                             className={`text-xs p-2 rounded-lg border focus:outline-none cursor-pointer w-full sm:w-auto ${
                                                 dayCtx.externalLoad === 'none' ? 'bg-zinc-800 border-zinc-700 text-zinc-400' :
-                                                dayCtx.externalLoad === 'low' ? 'bg-blue-900/30 border-blue-800 text-blue-300' :
-                                                dayCtx.externalLoad === 'medium' ? 'bg-yellow-900/30 border-yellow-800 text-yellow-300' :
-                                                dayCtx.externalLoad === 'high' ? 'bg-orange-900/30 border-orange-800 text-orange-300' :
-                                                'bg-red-900/30 border-red-800 text-red-300 font-bold'
+                                                dayCtx.externalLoad === 'light' ? 'bg-blue-900/30 border-blue-800 text-blue-300' :
+                                                dayCtx.externalLoad === 'moderate' ? 'bg-yellow-900/30 border-yellow-800 text-yellow-300' :
+                                                'bg-orange-900/30 border-orange-800 text-orange-300'
                                             }`}
                                         >
-                                            <option value="none">Baja (Oficina/Casa)</option>
-                                            <option value="low">Leve (Caminatas)</option>
-                                            <option value="medium">Media (Trabajo de pie)</option>
-                                            <option value="high">Alta (Trabajo físico)</option>
-                                            <option value="extreme">Extrema (Partido/Competición)</option>
+                                            <option value="none">Sin carga (Oficina/Casa)</option>
+                                            <option value="light">Ligera (Caminatas, yoga)</option>
+                                            <option value="moderate">Moderada (Deportes recreativos)</option>
+                                            <option value="heavy">Alta (Partido, trabajo físico)</option>
                                         </select>
                                     </div>
                                 </div>
@@ -538,34 +754,41 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                         </div>
                     </section>
 
-                    {/* 4. EQUIPAMIENTO (Sin Modificación) */}
+                    {/* 4. EQUIPAMIENTO EN CASA (OPCIONAL) */}
                     <section className="border-t border-zinc-800 pt-8">
-                        <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-6">
+                        <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-2">
                             <Scale className="w-5 h-5 text-lime-500" /> 
-                            Lugar y Equipo
+                            Equipo Adicional en Casa
                         </h3>
+                        <p className="text-sm text-zinc-400 mb-6">
+                            Puedes decidir dónde entrenar antes de cada sesión. Si tienes equipo en casa, especifícalo aquí para tener más opciones.
+                        </p>
                         
                         <div className="mb-6">
-                            <label className="block text-xs font-medium text-zinc-400 mb-2">¿Dónde entrenarás?</label>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                {trainingLocationOptions.map(opt => (
-                                    <button
-                                        key={opt}
-                                        type="button"
-                                        onClick={() => setTrainingLocation(opt)}
-                                        className={`p-3 rounded-lg border text-sm font-medium transition-all text-left ${trainingLocation === opt ? 'bg-lime-500/10 border-lime-500 text-white' : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700'}`}
-                                    >
-                                        {opt}
-                                    </button>
-                                ))}
-                            </div>
+                            <label className="flex items-center gap-3 p-4 bg-zinc-800/50 border border-zinc-700 rounded-lg cursor-pointer hover:bg-zinc-800 transition-all">
+                                <input 
+                                    type="checkbox"
+                                    checked={hasHomeEquipment}
+                                    onChange={(e) => {
+                                        setHasHomeEquipment(e.target.checked);
+                                        if (!e.target.checked) {
+                                            setHomeEquipmentSelections([]);
+                                        }
+                                    }}
+                                    className="w-5 h-5 rounded bg-zinc-700 border-zinc-600 text-lime-500 focus:ring-lime-500"
+                                />
+                                <div>
+                                    <p className="text-white font-medium">Tengo equipo de entrenamiento en casa</p>
+                                    <p className="text-xs text-zinc-500">Marca si cuentas con mancuernas, bandas, barras, etc.</p>
+                                </div>
+                            </label>
                         </div>
 
-                        {trainingLocation === 'En Casa (Con Equipo Limitado)' && (
-                            <div className="bg-zinc-800/30 p-6 rounded-xl border border-zinc-700/50">
+                        {hasHomeEquipment && (
+                            <div className="bg-zinc-800/30 p-6 rounded-xl border border-zinc-700/50 animate-in slide-in-from-top-4">
                                 <h4 className="text-white font-bold mb-4 flex items-center gap-2">
                                     <CheckCircle2 className="w-4 h-4 text-lime-500" /> 
-                                    Inventario Detallado
+                                    Inventario Detallado de Tu Equipo
                                 </h4>
                                 <p className="text-xs text-zinc-400 mb-4">Marca exactamente lo que tienes. Si tienes mancuernas, selecciona los pesos para que la IA te diga "Usa las de 10kg".</p>
                                 
