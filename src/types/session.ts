@@ -108,6 +108,7 @@ export interface ReadinessData {
 // El backend los obtiene del perfil del usuario (preferredTrainingLocation, availableEquipment)
 export interface GenerateSessionRequest {
   userId: string; // El backend espera 'userId', no 'firebaseUid'
+  timezone?: string; // IANA timezone (ej: 'Europe/Madrid') para que el backend calcule el día en TZ del usuario
   
   // Índices de sesión y microciclo
   sessionIndex?: number;

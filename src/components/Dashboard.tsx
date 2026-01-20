@@ -352,8 +352,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             // Payload según lo que espera el backend
             // NOTA: location, availableEquipment y homeWeights ya NO se envían
             // El backend los obtiene del perfil del usuario (preferredTrainingLocation, availableEquipment, homeWeights)
+            // Incluir zona horaria local para que el backend pueda determinar correctamente el día del usuario
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
             const payload = {
                 userId: user.uid, // El backend espera 'userId'
+                timezone,
                 
                 // Índices opcionales
                 microcycleIndex: dashboardState?.currentWeek ? dashboardState.currentWeek - 1 : undefined,
@@ -366,7 +369,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                 stressLevel: feedback.stressLevel,
                 externalFatigue: feedback.externalFatigue,
                 availableTime: feedback.availableTime,
-            };
+            }; 
 
             console.log('📤 Enviando payload V2 al backend:', JSON.stringify(payload, null, 2));
             console.log('🔗 Endpoint:', API_ENDPOINTS.SESSION_GENERATE_V2);
