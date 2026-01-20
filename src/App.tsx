@@ -129,9 +129,10 @@ const App: FC = () => {
                     return;
                 }
                 const rawData = docSnapshot.data() as DocumentData;
+                // Keep profileData nested to avoid accidental flattening of fields into the top-level doc
                 const profileData: UserProfile = {
                     ...rawData,
-                    ...(rawData.profileData || {}),
+                    profileData: rawData.profileData || {},
                     status: rawData.status as UserStatus || 'pending_onboarding'
                 };
 

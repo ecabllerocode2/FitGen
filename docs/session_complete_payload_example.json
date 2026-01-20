@@ -1,0 +1,51 @@
+{
+  "sessionFeedback": {
+    "rpe": 7,
+    "energyLevel": 4,
+    "sorenessLevel": 2,
+    "notes": "Sentado bastante pesado en prensa, buena técnica en todas las series"
+  },
+  "mainBlock": [
+    {
+      "ejercicios": [
+        {
+          "id": "ex_01",
+          "nombre": "Sentadilla",
+          "equipmentUsed": ["Barra Olímpica"],
+          "performedSets": [
+            { "weight": 80, "reps": 5, "rir": null },
+            { "weight": 80, "reps": 5, "rir": null },
+            { "weight": 80, "reps": 4, "rir": 2 }
+          ]
+        },
+        {
+          "id": "ex_02",
+          "nombre": "Dominadas (con lastre)",
+          "equipmentUsed": ["Peso Corporal", "Disco 8kg"],
+          "performedSets": [
+            { "weight": 8, "reps": 6, "rir": null },
+            { "weight": 8, "reps": 6, "rir": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "ejercicios": [
+        {
+          "id": "ex_03",
+          "nombre": "Plancha (peso corporal)",
+          "equipmentUsed": ["Peso Corporal"],
+          "performedSets": [
+            { "weight": null, "reps": 60, "rir": null }
+          ]
+        }
+      ]
+    }
+  ],
+  "totalReps": 27,
+  "sessionEnvironment": "home",
+  "equipmentSnapshot": {
+    "availableEquipment": ["Peso Corporal","Mancuernas"],
+    "homeWeights": { "dumbbells": [5,10,15], "barbell": null }
+  }
+}

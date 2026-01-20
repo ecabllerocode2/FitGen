@@ -1,18 +1,6 @@
 import React, { useState } from 'react';
-import { BatteryCharging, Scale, ChevronDown } from 'lucide-react';
-
-// Tipos
-export type EnergyLevel = 1 | 2 | 3 | 4 | 5;
-export type SorenessLevel = 1 | 2 | 3 | 4 | 5;
-export type SleepQuality = 1 | 2 | 3 | 4 | 5;
-export type StressLevel = 1 | 2 | 3 | 4 | 5;
-
-export interface ReadinessData {
-    energyLevel: EnergyLevel;
-    sorenessLevel: SorenessLevel;
-    sleepQuality: SleepQuality;
-    stressLevel: StressLevel;
-}
+import { BatteryCharging, Moon, Brain, Activity, ChevronDown } from 'lucide-react';
+import type { ReadinessData, EnergyLevel, SorenessLevel, SleepQuality, StressLevel, ExternalFatigue } from '../types/session';
 
 interface ReadinessFormProps {
     onSubmit: (data: ReadinessData) => void;
@@ -20,37 +8,45 @@ interface ReadinessFormProps {
     isLoading?: boolean;
 }
 
-// Opciones para los selectores
+// Opciones para los selectores (escalas 1-5)
 const energyOptions = [
-    { value: 5, label: '🔥 Óptimo - Excelente, listo para rendir' },
-    { value: 4, label: '😊 Bueno - Buena energía, motivado' },
-    { value: 3, label: '😐 Normal - Energía normal' },
-    { value: 2, label: '😓 Bajo - Cansado, poca motivación' },
-    { value: 1, label: '😴 Agotado - Sin energía' },
+    { value: 5, label: '🔥 5 - Óptimo: Excelente energía, listo para rendir' },
+    { value: 4, label: '😊 4 - Bueno: Buena energía, motivado' },
+    { value: 3, label: '😐 3 - Normal: Energía normal' },
+    { value: 2, label: '😓 2 - Bajo: Cansado, poca motivación' },
+    { value: 1, label: '😴 1 - Agotado: Sin energía' },
 ];
 
 const sorenessOptions = [
-    { value: 1, label: '✅ Sin dolor - Músculos recuperados' },
-    { value: 2, label: '🟢 Leve - Ligera tensión muscular' },
-    { value: 3, label: '🟡 Moderado - DOMS perceptible' },
-    { value: 4, label: '🟠 Alto - Dolor que limita' },
-    { value: 5, label: '🔴 Severo - Dolor intenso' },
+    { value: 1, label: '✅ 1 - Sin dolor: Músculos recuperados' },
+    { value: 2, label: '🟢 2 - Leve: Ligera tensión muscular' },
+    { value: 3, label: '🟡 3 - Moderado: DOMS perceptible' },
+    { value: 4, label: '🟠 4 - Alto: Dolor que limita' },
+    { value: 5, label: '🔴 5 - Severo: Dolor intenso' },
 ];
 
 const sleepOptions = [
-    { value: 5, label: '😴💤 Excelente - 8+ horas, sueño reparador' },
-    { value: 4, label: '😊 Bien - 7-8 horas, buena calidad' },
-    { value: 3, label: '😐 Normal - 6-7 horas, aceptable' },
-    { value: 2, label: '😞 Mal - 4-5 horas o mala calidad' },
-    { value: 1, label: '😵 Muy mal - < 4 horas o fragmentado' },
+    { value: 5, label: '😴💤 5 - Excelente: 8+ horas, sueño reparador' },
+    { value: 4, label: '😊 4 - Bien: 7-8 horas, buena calidad' },
+    { value: 3, label: '😐 3 - Normal: 6-7 horas, aceptable' },
+    { value: 2, label: '😞 2 - Mal: 4-5 horas o mala calidad' },
+    { value: 1, label: '😵 1 - Muy mal: < 4 horas o fragmentado' },
 ];
 
 const stressOptions = [
-    { value: 1, label: '🧘 Muy relajado - Sin estrés' },
-    { value: 2, label: '😌 Relajado - Bajo estrés' },
-    { value: 3, label: '😐 Normal - Estrés cotidiano' },
-    { value: 4, label: '😰 Estresado - Estrés alto' },
-    { value: 5, label: '🤯 Muy estresado - Abrumado' },
+    { value: 1, label: '🧘 1 - Muy relajado: Sin estrés' },
+    { value: 2, label: '😌 2 - Relajado: Bajo estrés' },
+    { value: 3, label: '😐 3 - Normal: Estrés cotidiano' },
+    { value: 4, label: '😰 4 - Estresado: Estrés alto' },
+    { value: 5, label: '🤯 5 - Muy estresado: Abrumado' },
+];
+
+const externalFatigueOptions = [
+    { value: 'none', label: '✅ Ninguna', desc: 'Día sedentario normal' },
+    { value: 'low', label: '🟢 Baja', desc: 'Caminata ligera, trabajo de oficina' },
+    { value: 'moderate', label: '🟡 Moderada', desc: 'Trabajo activo, estar de pie mucho tiempo' },
+    { value: 'high', label: '🟠 Alta', desc: 'Trabajo físico intenso, deporte recreativo' },
+    { value: 'extreme', label: '🔴 Extrema', desc: 'Mudanza, maratón, evento deportivo intenso' },
 ];
 
 const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoading = false }) => {
@@ -58,10 +54,25 @@ const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoadi
     const [sorenessLevel, setSorenessLevel] = useState<SorenessLevel>(2);
     const [sleepQuality, setSleepQuality] = useState<SleepQuality>(3);
     const [stressLevel, setStressLevel] = useState<StressLevel>(3);
+    const [externalFatigue, setExternalFatigue] = useState<ExternalFatigue>('none');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSubmit({ energyLevel, sorenessLevel, sleepQuality, stressLevel });
+        
+        // Solo enviar externalFatigue si es diferente de 'none'
+        const data: ReadinessData = {
+            energyLevel,
+            sorenessLevel,
+            sleepQuality,
+            stressLevel
+        };
+        
+        // Agregar externalFatigue solo si no es 'none'
+        if (externalFatigue !== 'none') {
+            data.externalFatigue = externalFatigue;
+        }
+        
+        onSubmit(data);
     };
 
     return (
@@ -89,7 +100,7 @@ const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoadi
             {/* Dolor Muscular */}
             <div>
                 <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
-                    <Scale className="w-4 h-4 text-lime-500" /> 🦵 Dolor Muscular (DOMS)
+                    <Activity className="w-4 h-4 text-lime-500" /> 🦵 Dolor Muscular (DOMS)
                 </label>
                 <div className="relative">
                     <select
@@ -109,7 +120,7 @@ const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoadi
             {/* Calidad del Sueño */}
             <div>
                 <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
-                    😴 Calidad del Sueño
+                    <Moon className="w-4 h-4 text-lime-500" /> 😴 Calidad del Sueño
                 </label>
                 <div className="relative">
                     <select
@@ -129,7 +140,7 @@ const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoadi
             {/* Nivel de Estrés */}
             <div>
                 <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
-                    🧠 Nivel de Estrés
+                    <Brain className="w-4 h-4 text-lime-500" /> 🧠 Nivel de Estrés
                 </label>
                 <div className="relative">
                     <select
@@ -143,6 +154,34 @@ const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoadi
                         ))}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+                </div>
+            </div>
+
+            {/* Fatiga Externa */}
+            <div>
+                <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-lime-500" /> 🏃 Fatiga Externa
+                    <span className="text-xs text-zinc-500 font-normal ml-1">(opcional)</span>
+                </label>
+                <p className="text-xs text-zinc-400 mb-2">
+                    ¿Tuviste alguna actividad física intensa fuera del gym? Déjalo en "Ninguna" si fue un día normal.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                    {externalFatigueOptions.map(option => (
+                        <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setExternalFatigue(option.value as ExternalFatigue)}
+                            className={`p-3 rounded-lg border-2 transition-all text-left ${
+                                externalFatigue === option.value
+                                    ? 'bg-lime-500/20 border-lime-500 text-lime-400'
+                                    : 'bg-zinc-700/50 border-zinc-600 text-zinc-300 hover:border-zinc-500'
+                            }`}
+                        >
+                            <div className="font-semibold text-sm">{option.label}</div>
+                            <div className="text-xs text-zinc-400 mt-1">{option.desc}</div>
+                        </button>
+                    ))}
                 </div>
             </div>
 

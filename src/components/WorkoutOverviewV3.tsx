@@ -60,6 +60,17 @@ interface FlexibleExercise {
     tecnicaEspecial?: string;
     tipo?: string;
     notaUnilateral?: string;
+    pesoSugerido?: number | string;
+    explicacion?: string;
+  };
+  // NUEVO: Indicadores de progresión (API V2)
+  indicadores?: {
+    pesoAnterior?: string;
+    repsAnterior?: number;
+    rirAnterior?: string;
+    e1RMEstimado?: string;
+    porcentajeObjetivo?: string;
+    esMeseta?: boolean;
   };
   notas?: string;
   duracion?: string;
@@ -304,6 +315,60 @@ const MainExerciseRow = ({
             </span>
           )}
         </div>
+
+        {/* NUEVO: Indicadores de Progresión (API V2) */}
+        {exercise.indicadores && (
+          <div className="mt-2 space-y-1.5">
+            {/* Progresión de Peso */}
+            {exercise.indicadores.pesoAnterior && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-zinc-500">Anterior:</span>
+                <span className="text-zinc-400">{exercise.indicadores.pesoAnterior}</span>
+                {weight && weight !== exercise.indicadores.pesoAnterior && (
+                  <span className="text-green-400 flex items-center gap-1">
+                    <span>→</span>
+                    <span className="font-semibold">{weight}</span>
+                    <span className="text-green-500">↗</span>
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* e1RM Estimado */}
+            {exercise.indicadores.e1RMEstimado && (
+              <div className="flex items-center gap-2 text-xs bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20">
+                <span className="text-blue-400">e1RM:</span>
+                <span className="text-blue-300 font-semibold">{exercise.indicadores.e1RMEstimado}</span>
+                {exercise.indicadores.porcentajeObjetivo && (
+                  <span className="text-blue-400">({exercise.indicadores.porcentajeObjetivo})</span>
+                )}
+              </div>
+            )}
+
+            {/* Alerta de Meseta */}
+            {exercise.indicadores.esMeseta && (
+              <div className="flex items-center gap-2 text-xs bg-amber-500/10 px-2 py-1 rounded border border-amber-500/30">
+                <AlertCircle className="w-3 h-3 text-amber-400" />
+                <span className="text-amber-400">Posible meseta detectada - Ajuste aplicado</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* NUEVO: Peso Exploratorio (Semana 1) */}
+        {(exercise.prescripcion?.pesoSugerido === 'Exploratorio' || weight === 'Exploratorio') && exercise.prescripcion?.explicacion && (
+          <div className="mt-2 bg-indigo-500/10 p-2 rounded-lg border border-indigo-500/30">
+            <div className="flex items-start gap-2">
+              <Info className="w-3 h-3 text-indigo-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-indigo-300 mb-0.5">🔍 Peso Exploratorio</p>
+                <p className="text-xs text-indigo-200 leading-relaxed">
+                  {exercise.prescripcion.explicacion}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Botón swap */}

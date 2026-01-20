@@ -67,34 +67,64 @@ export interface ProfileData {
   trainingDaysPerWeek: number;
   preferredTrainingDays: DayOfWeek[];
   weeklyScheduleContext: DayContext[];
+  // Lugar de entrenamiento elegido para TODO el mesociclo
+  preferredTrainingLocation?: Location;
   
   // Equipamiento y limitaciones
   hasHomeEquipment: boolean;
   homeEquipment?: Equipment[];
+  availableEquipment?: string[]; // Lista de equipamiento disponible
+  homeWeights?: {
+    dumbbells?: number[];
+    barbell?: number;
+    kettlebells?: number[];
+  };
   injuriesOrLimitations: InjuryType | string;
   
   // Metadatos
-  dateCompleted: string;
+  dateCompleted: string; 
 }
 
 // ==================== PRE-SESSION REQUEST ====================
 
+// Escalas 1-5 según espera el backend
 export type EnergyLevel = 1 | 2 | 3 | 4 | 5;
 export type SorenessLevel = 1 | 2 | 3 | 4 | 5;
 export type SleepQuality = 1 | 2 | 3 | 4 | 5;
 export type StressLevel = 1 | 2 | 3 | 4 | 5;
+export type ExternalFatigue = 'none' | 'low' | 'moderate' | 'high' | 'extreme';
 
+// INTERFAZ para datos de readiness que se preguntan pre-sesión
+export interface ReadinessData {
+  energyLevel: EnergyLevel;           // 1-5: Nivel de energía
+  sorenessLevel: SorenessLevel;       // 1-5: Nivel de dolor muscular (DOMS)
+  sleepQuality: SleepQuality;         // 1-5: Calidad de sueño
+  stressLevel: StressLevel;           // 1-5: Nivel de estrés
+  externalFatigue?: ExternalFatigue;  // Fatiga externa (trabajo físico, etc.)
+  availableTime?: number;             // Minutos disponibles
+}
+
+// Nota: location y availableEquipment ya NO se envían en el request
+// El backend los obtiene del perfil del usuario (preferredTrainingLocation, availableEquipment)
 export interface GenerateSessionRequest {
-  userId: string;
+  userId: string; // El backend espera 'userId', no 'firebaseUid'
+  
+  // Índices de sesión y microciclo
+  sessionIndex?: number;
+  microcycleIndex?: number;
+  
+  // Datos de autoregulación (escalas 1-5)
   energyLevel: EnergyLevel;
   sorenessLevel: SorenessLevel;
   sleepQuality: SleepQuality;
   stressLevel: StressLevel;
-  location?: Location;
+  externalFatigue?: ExternalFatigue;
   availableTime?: number;
-  microcycleIndex?: number;
-  sessionIndex?: number;
-  equipmentOverride?: string[];
+  
+  // Nota: location, availableEquipment y homeWeights ya NO se envían aquí
+  // El backend los obtiene del perfil del usuario en Firestore
+  
+  // Opcionales
   saveToFirestore?: boolean;
 }
 
@@ -215,6 +245,15 @@ export interface MainExercise {
   videoUrl?: string;
   
   prescripcion: ExercisePrescription;
+  // NUEVO: Indicadores de progresión (API V2)
+  indicadores?: {
+    pesoAnterior?: string;
+    repsAnterior?: number;
+    rirAnterior?: string;
+    e1RMEstimado?: string;
+    porcentajeObjetivo?: string;
+    esMeseta?: boolean;
+  };
   notas?: string;
 }
 
@@ -222,12 +261,17 @@ export interface ExercisePrescription {
   series: number;
   reps: number | string;
   peso?: string;
+  pesoSugerido?: number | string; // Puede ser número o "Exploratorio"
   rpeObjetivo: number;
   rirObjetivo: number;
   descanso: number;
+  descansoEnSegundos?: number;
   tempo?: string;
   tecnicaEspecial?: string;
   notaUnilateral?: string;
+  explicacion?: string; // Explicación del peso (ej: para peso exploratorio)
+  measureType?: 'reps' | 'time';
+  repsObjetivo?: number | string;
 }
 
 // ==================== CORE BLOCK ====================
@@ -340,4 +384,28 @@ export interface SessionSummary {
 export interface ErrorResponse {
   error: string;
   code?: 'MISSING_USER_ID' | 'NO_ACTIVE_MESOCYCLE' | 'SESSION_NOT_FOUND' | 'CONTEXT_ERROR' | 'INTERNAL_ERROR';
+}
+
+// ==================== SESSION COMPLETE REQUEST ====================
+
+export interface SessionCompleteRequest {
+  firebaseUid: string;
+  sessionId: string;
+  performanceData: {
+    completedAt: string;
+    readinessPreSession: EnergyLevel; // Usar EnergyLevel (1-5)
+    painAreas: string[];
+    exercises: {
+      exerciseId: string;
+      exerciseName: string;
+      sets: {
+        setNumber: number;
+        reps: number;
+        load: number | null; // null para peso corporal
+        rir: number;
+        rpe: number;
+        completed: boolean;
+      }[];
+    }[];
+  };
 }

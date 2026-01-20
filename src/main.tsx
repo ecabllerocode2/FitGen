@@ -2,6 +2,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import AppLoader from './components/AppLoader'
 
@@ -16,7 +17,47 @@ window.addEventListener('beforeinstallprompt', (e) => {
   window.deferredPrompt = e;
   console.log("Evento PWA capturado globalmente en main.tsx 🚀");
 });
-// --- FIN CÓDIGO NUEVO ---
+
+// --- REGISTRO AUTOMÁTICO DEL SERVICE WORKER ---
+// - Comprueba actualizaciones periódicamente
+// - Aplica la actualización automáticamente y recarga cuando el nuevo SW toma control
+// - Basado en `virtual:pwa-register` de vite-plugin-pwa
+const updateSW = registerSW({
+  onRegistered(registration: any) {
+    if (!registration) return;
+    // Forzamos comprobaciones periódicas cada 30 minutos
+    const periodic = setInterval(() => {
+      try { registration.update(); } catch (err) { console.warn('SW update fallo', err); }
+    }, 30 * 60 * 1000);
+    window.addEventListener('beforeunload', () => clearInterval(periodic));
+  },
+  onNeedRefresh() {
+    // Aplicamos la actualización inmediatamente y recargamos cuando esté lista
+    updateSW?.(true);
+  },
+  onOfflineReady() {
+    console.log('[PWA] Offline ready');
+  }
+});
+
+// Recarga la página una sola vez cuando el nuevo Service Worker toma control
+if ('serviceWorker' in navigator) {
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+}
+
+// Cuando el usuario vuelve a la pestaña, comprobamos si hay nueva versión y la aplicamos
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    try { updateSW?.(); } catch (err) { console.warn('Error al forzar check SW', err); }
+  }
+});
+
+// --- FIN REGISTRO AUTOMÁTICO ---
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

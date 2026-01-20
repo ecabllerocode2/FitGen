@@ -6,7 +6,7 @@ export type Location = 'gym' | 'home';
 export interface EquipmentData {
     location: Location;
     availableEquipment: string[];
-    homeWeights?: {
+    specificWeights?: { // Frontend lo llama specificWeights para consistencia
         dumbbells?: number[];
         barbell?: number;
         kettlebells?: number[];
@@ -108,22 +108,22 @@ const LocationEquipmentForm: React.FC<LocationEquipmentFormProps> = ({ onNext, i
             };
 
             // Agregar pesos específicos si los hay
-            const homeWeights: NonNullable<EquipmentData['homeWeights']> = {};
+            const specificWeights: NonNullable<EquipmentData['specificWeights']> = {};
 
             if (selectedEquipment.includes('dumbbells') && selectedDumbbellWeights.length > 0) {
-                homeWeights.dumbbells = selectedDumbbellWeights;
+                specificWeights.dumbbells = selectedDumbbellWeights;
             }
 
             if (selectedEquipment.includes('barbell') && selectedBarbellWeight) {
-                homeWeights.barbell = selectedBarbellWeight;
+                specificWeights.barbell = selectedBarbellWeight;
             }
 
             if (selectedEquipment.includes('kettlebell') && selectedKettlebellWeights.length > 0) {
-                homeWeights.kettlebells = selectedKettlebellWeights;
+                specificWeights.kettlebells = selectedKettlebellWeights;
             }
 
-            if (Object.keys(homeWeights).length > 0) {
-                data.homeWeights = homeWeights;
+            if (Object.keys(specificWeights).length > 0) {
+                data.specificWeights = specificWeights;
             }
 
             onNext(data);

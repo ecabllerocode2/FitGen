@@ -19,7 +19,8 @@ import type {
   ExperienceLevel as ExpLevel,
   FocusArea as FocusAreaType,
   InjuryType,
-  DayOfWeek
+  DayOfWeek,
+  Location
 } from '../types/session';
 
 // --- TIPOS Y CONSTANTES (Sin Modificación) ---
@@ -189,11 +190,11 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
     const [injuries, setInjuries] = useState<InjuryType>('Ninguna'); 
 
     // Logística
-    const [hasHomeEquipment, setHasHomeEquipment] = useState(false); // Si tiene equipo en casa
+    const [trainingLocation, setTrainingLocation] = useState<Location>('gym'); // 'gym' or 'home' - commitment for the mesocycle
     const [homeEquipmentSelections, setHomeEquipmentSelections] = useState<string[]>([]);
     const [weeklySchedule, setWeeklySchedule] = useState<DayContextLocal[]>(
         // Inicializar 'externalLoad' en 'none' como valor por defecto
-        DAYS_ORDER.map(d => ({ day: d, canTrain: false, externalLoad: 'none' as ExternalLoad })) 
+        DAYS_ORDER.map(d => ({ day: d, canTrain: false, externalLoad: 'none' as ExternalLoad }))
     );
 
     // UI
@@ -221,10 +222,18 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
         if (profile.focusArea) setFocusArea(profile.focusArea as FocusAreaType);
         if (profile.injuriesOrLimitations) setInjuries(profile.injuriesOrLimitations as InjuryType);
 
-        // 3. Cargar Equipo en Casa
-        if (profile.homeEquipment && profile.homeEquipment.length > 0) {
-            setHasHomeEquipment(true);
-            setHomeEquipmentSelections(profile.homeEquipment);
+        // 3. Cargar Equipo en Casa (aceptamos `homeEquipment` o `availableEquipment`)
+        const equipmentList = profile.homeEquipment || profile.availableEquipment || [];
+        if (Array.isArray(equipmentList) && equipmentList.length > 0) {
+            // If equipment exists, assume user trains at home
+            setTrainingLocation('home');
+            const selections = Array.from(new Set(['Peso Corporal', ...(equipmentList as string[])]));
+            setHomeEquipmentSelections(selections);
+        } else if (profile.hasHomeEquipment) {
+            // If only flag exists, default to home but keep selections empty (bodyweight will be added on submit)
+            setTrainingLocation('home');
+        } else {
+            setTrainingLocation('gym');
         }
         
         // 4. Cargar Contexto Semanal
@@ -255,23 +264,25 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
 
     const handleDetailedEquipmentChange = (equipmentName: string, weightVal?: number | null) => {
         const baseKey = equipmentName;
-        // Si es un peso específico: "Mancuernas (Dumbbells) (10kg)"
-        // Si es el item base: "Mancuernas (Dumbbells)"
         const keyToAdd = weightVal ? `${equipmentName} (${weightVal}kg)` : equipmentName;
-        
+
         setHomeEquipmentSelections(prev => {
+            // Never remove or toggle 'Peso Corporal' here (it's fixed)
+            if (keyToAdd === 'Peso Corporal') return prev;
+
             const exists = prev.includes(keyToAdd);
             if (exists) {
+                // remove only the specific key (weights) or the base key
                 return prev.filter(item => item !== keyToAdd);
             } else {
-                // Si selecciono un peso, aseguro que el padre también esté (opcional, pero bueno para lógica)
+                // If selecting a weight, ensure base key present as well
                 if (weightVal && !prev.includes(baseKey)) {
-                    return [...prev, baseKey, keyToAdd];
+                    return Array.from(new Set([...prev, baseKey, keyToAdd]));
                 }
-                return [...prev, keyToAdd];
+                return Array.from(new Set([...prev, keyToAdd]));
             }
         });
-    };
+    }; 
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -361,15 +372,54 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
             return;
         }
 
-        // Equipo en casa es opcional
+        // Equipo en casa según la selección de lugar
         let finalEquipment: string[] = [];
-        if (hasHomeEquipment) {
-            if (homeEquipmentSelections.length === 0) {
-                setError("Indicaste que tienes equipo en casa. Por favor selecciona cuál o desmarca la opción.");
-                setIsLoading(false);
-                return;
+        let homeWeights: {
+            dumbbells?: number[];
+            barbell?: number;
+            kettlebells?: number[];
+        } | undefined = undefined;
+        
+        if (trainingLocation === 'home') {
+            // Ensure bodyweight is always present
+            finalEquipment = Array.from(new Set(['Peso Corporal', ...homeEquipmentSelections]));
+            
+            // Parse equipment selections to extract weights
+            const dumbbellWeights: number[] = [];
+            const kettlebellWeights: number[] = [];
+            let barbellWeight: number | undefined = undefined;
+            
+            homeEquipmentSelections.forEach(selection => {
+                // Parse selections like "Mancuernas (Dumbbells) (10kg)"
+                const match = selection.match(/(.*?)\s*\((\d+(?:\.\d+)?)kg\)/);
+                if (match) {
+                    const equipmentName = match[1].trim().toLowerCase();
+                    const weight = parseFloat(match[2]);
+                    
+                    if (equipmentName.includes('mancuerna') || equipmentName.includes('dumbbell')) {
+                        dumbbellWeights.push(weight);
+                    } else if (equipmentName.includes('kettlebell') || equipmentName.includes('ketlebell') || equipmentName.includes('pesa rusa')) {
+                        kettlebellWeights.push(weight);
+                    } else if (equipmentName.includes('barra')) {
+                        // For barbell, take the maximum weight
+                        barbellWeight = Math.max(barbellWeight || 0, weight);
+                    }
+                }
+            });
+            
+            // Create homeWeights object if any weights were found
+            if (dumbbellWeights.length > 0 || kettlebellWeights.length > 0 || barbellWeight) {
+                homeWeights = {};
+                if (dumbbellWeights.length > 0) {
+                    homeWeights.dumbbells = dumbbellWeights.sort((a, b) => a - b);
+                }
+                if (kettlebellWeights.length > 0) {
+                    homeWeights.kettlebells = kettlebellWeights.sort((a, b) => a - b);
+                }
+                if (barbellWeight) {
+                    homeWeights.barbell = barbellWeight;
+                }
             }
-            finalEquipment = homeEquipmentSelections;
         }
         
         // 📌 NUEVA LÓGICA: Determinar si es modo edición
@@ -378,6 +428,8 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
         const actionType = isEditMode 
             ? 'profile_update_and_invalidate_plan' 
             : 'initial_onboarding_complete';
+
+
 
 
         try {
@@ -402,8 +454,11 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                     trainingDaysPerWeek: trainingDaysCount,
                     preferredTrainingDays: preferredDaysList,
                     weeklyScheduleContext: weeklySchedule,
+                    preferredTrainingLocation: trainingLocation,
                     availableEquipment: finalEquipment, // ⚠️ Campo requerido por el backend
-                    hasHomeEquipment, // Boolean para saber si tiene equipo en casa
+                    hasHomeEquipment: trainingLocation === 'home', // Boolean para saber si tiene equipo en casa
+                    homeEquipment: finalEquipment,
+                    homeWeights: homeWeights, // ⚠️ Pesos específicos para entrenamiento en casa
                     dateCompleted: new Date().toISOString()
                 }
             };
@@ -415,48 +470,31 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                 body: JSON.stringify(payload)
             });
 
-            const data = await res.json();
+            // Parse response safely (may be text or JSON)
+            const resText = await res.text();
+            let data: any = null;
+            try {
+                data = resText ? JSON.parse(resText) : null;
+            } catch (e) {
+                data = { message: resText };
+            }
             
             if (!res.ok) {
-                console.error('❌ Error del servidor:', data);
+                console.error('❌ Error del servidor:', data || res.statusText);
                 console.error('📊 Status:', res.status);
                 console.error('📦 Payload enviado (JSON):');
-                console.error(JSON.stringify(payload, null, 2));
-                console.error('📋 ProfileData específico:');
-                console.error(JSON.stringify(payload.profileData, null, 2));
-                
-                // Verificar campos específicos
-                console.error('🔍 Verificación de campos:');
-                console.error('- userId:', payload.userId);
-                console.error('- userEmail:', payload.userEmail);
-                console.error('- action:', payload.action);
-                console.error('- profileData existe:', !!payload.profileData);
-                if (payload.profileData) {
-                    console.error('  - name:', payload.profileData.name);
-                    console.error('  - age:', payload.profileData.age);
-                    console.error('  - gender:', payload.profileData.gender);
-                    console.error('  - heightCm:', payload.profileData.heightCm);
-                    console.error('  - initialWeight:', payload.profileData.initialWeight);
-                    console.error('  - fitnessGoal:', payload.profileData.fitnessGoal);
-                    console.error('  - experienceLevel:', payload.profileData.experienceLevel);
-                    console.error('  - focusArea:', payload.profileData.focusArea);
-                    console.error('  - injuriesOrLimitations:', payload.profileData.injuriesOrLimitations);
-                    console.error('  - trainingDaysPerWeek:', payload.profileData.trainingDaysPerWeek);
-                    console.error('  - preferredTrainingDays:', payload.profileData.preferredTrainingDays);
-                    console.error('  - weeklyScheduleContext:', payload.profileData.weeklyScheduleContext);
-                    console.error('  - availableEquipment:', payload.profileData.availableEquipment);
-                    console.error('  - hasHomeEquipment:', payload.profileData.hasHomeEquipment);
-                }
-                
-                throw new Error(data.error || "Error al guardar perfil.");
+                try { console.error(JSON.stringify(payload, null, 2)); } catch(e) { console.error('Payload not stringifyable'); }
+
+                // Show friendly error to user
+                const serverMessage = (data && (data.error || data.message)) ? (data.error || data.message) : `Error del servidor (status ${res.status})`;
+                throw new Error(serverMessage);
             }
 
             console.log('✅ Perfil guardado exitosamente:', data);
             
-            // Éxito: Recargar o redirigir (App.tsx detectará el cambio de estado/invalidez del plan)
-            window.location.reload();
-
+            // Éxito: redirigir a home. Evitamos reload completo para no provocar estados inconsistentes o pantallas en blanco.
             navigate('/', { replace: true });
+
 
         } catch (err) {
             console.error(err);
@@ -705,7 +743,7 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                         <div className={`p-3 rounded-lg mb-6 flex gap-2 items-start ${areAllLoadsSelected ? 'bg-lime-500/10 border border-lime-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
                              <AlertCircle className={`w-4 h-4 shrink-0 mt-0.5 ${areAllLoadsSelected ? 'text-lime-400' : 'text-red-400'}`} />
                             <p className={`text-xs font-medium ${areAllLoadsSelected ? 'text-lime-200' : 'text-red-200'}`}>
-                                **Atención:** Debes seleccionar una **Carga Externa** para **TODOS** los días (Lunes a Domingo), entrenes o no.
+                                Atención: Debes seleccionar la Carga Externa para TODOS los días (Lunes a Domingo), entrenes o no.
                             </p>
                         </div>
 
@@ -754,37 +792,33 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                         </div>
                     </section>
 
-                    {/* 4. EQUIPAMIENTO EN CASA (OPCIONAL) */}
+                    {/* 4. LUGAR DE ENTRENAMIENTO */}
                     <section className="border-t border-zinc-800 pt-8">
                         <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-2">
                             <Scale className="w-5 h-5 text-lime-500" /> 
-                            Equipo Adicional en Casa
+                            Lugar de Entrenamiento
                         </h3>
-                        <p className="text-sm text-zinc-400 mb-6">
-                            Puedes decidir dónde entrenar antes de cada sesión. Si tienes equipo en casa, especifícalo aquí para tener más opciones.
-                        </p>
                         
                         <div className="mb-6">
-                            <label className="flex items-center gap-3 p-4 bg-zinc-800/50 border border-zinc-700 rounded-lg cursor-pointer hover:bg-zinc-800 transition-all">
-                                <input 
-                                    type="checkbox"
-                                    checked={hasHomeEquipment}
-                                    onChange={(e) => {
-                                        setHasHomeEquipment(e.target.checked);
-                                        if (!e.target.checked) {
-                                            setHomeEquipmentSelections([]);
-                                        }
-                                    }}
-                                    className="w-5 h-5 rounded bg-zinc-700 border-zinc-600 text-lime-500 focus:ring-lime-500"
-                                />
-                                <div>
-                                    <p className="text-white font-medium">Tengo equipo de entrenamiento en casa</p>
-                                    <p className="text-xs text-zinc-500">Marca si cuentas con mancuernas, bandas, barras, etc.</p>
-                                </div>
-                            </label>
+                            <label className="block text-xs font-medium text-zinc-400 mb-2">¿Dónde entrenarás durante las próximas 4 semanas?</label>
+                            <div className="flex gap-4">
+                                <label className={`p-3 rounded-lg border cursor-pointer ${trainingLocation === 'gym' ? 'bg-zinc-800 border-lime-500' : 'bg-zinc-900 border-zinc-800'}`}>
+                                    <input type="radio" name="trainingLocation" value="gym" checked={trainingLocation === 'gym'} onChange={() => { setTrainingLocation('gym'); setHomeEquipmentSelections([]); }} className="sr-only" />
+                                    <div className="font-medium text-white">Gimnasio</div>
+                                    <div className="text-xs text-zinc-500">Entrenamientos optimizados para gimnasio.</div>
+                                </label>
+                                <label className={`p-3 rounded-lg border cursor-pointer ${trainingLocation === 'home' ? 'bg-zinc-800 border-lime-500' : 'bg-zinc-900 border-zinc-800'}`}>
+                                    <input type="radio" name="trainingLocation" value="home" checked={trainingLocation === 'home'} onChange={() => setTrainingLocation('home')} className="sr-only" />
+                                    <div className="font-medium text-white">En Casa</div>
+                                    <div className="text-xs text-zinc-500">Tu plan se optimizará para el equipo disponible en casa.</div>
+                                </label>
+                            </div>
+                            <div className="p-3 rounded-lg mt-4 bg-blue-500/10 border border-blue-500/20 text-sm text-blue-200">
+                                <strong>Para maximizar tus resultados</strong>: tu plan se optimizará para este equipo durante las próximas 4 semanas. La ciencia demuestra que la consistencia en las herramientas de entrenamiento acelera la ganancia de fuerza y músculo.
+                            </div>
                         </div>
 
-                        {hasHomeEquipment && (
+                        {trainingLocation === 'home' && (
                             <div className="bg-zinc-800/30 p-6 rounded-xl border border-zinc-700/50 animate-in slide-in-from-top-4">
                                 <h4 className="text-white font-bold mb-4 flex items-center gap-2">
                                     <CheckCircle2 className="w-4 h-4 text-lime-500" /> 
@@ -793,6 +827,20 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                                 <p className="text-xs text-zinc-400 mb-4">Marca exactamente lo que tienes. Si tienes mancuernas, selecciona los pesos para que la IA te diga "Usa las de 10kg".</p>
                                 
                                 <div className="space-y-3">
+                                    {/* Peso Corporal - fijo y no desmarcable */}
+                                    <div className="p-4 rounded-lg border bg-zinc-800 border-lime-500/30">
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-12 h-12 bg-zinc-950 rounded-lg shrink-0 overflow-hidden border border-zinc-700 flex items-center justify-center text-xs text-zinc-400">Peso</div>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-3 mb-1">
+                                                    <input type="checkbox" checked={true} disabled className="w-5 h-5 rounded bg-zinc-700 border-zinc-600 text-lime-500" />
+                                                    <span className={`font-medium text-white`}>Peso Corporal</span>
+                                                </div>
+                                                <p className="text-xs text-zinc-500 mb-3">El plan usará tu peso corporal como herramienta de carga mínima. No puede desmarcarse.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {homeEquipmentList.map((item) => {
                                         const isSelected = homeEquipmentSelections.some(s => s.startsWith(item.name));
                                         
@@ -854,7 +902,7 @@ const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({ user, initialData
                                     })}
                                 </div>
                             </div>
-                        )}
+                        )} 
                     </section>
 
                     {/* ERROR & SUBMIT */}

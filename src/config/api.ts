@@ -21,8 +21,8 @@ console.log('🔧 API Configuration:', {
  * Endpoints de la API centralizados
  */
 export const API_ENDPOINTS = {
-  // Sesiones - V2 es el nuevo endpoint principal
-  SESSION_GENERATE: `${API_BASE_URL}/api/session/generateV2`,
+  // Sesiones - V2 es el endpoint principal
+  SESSION_GENERATE: `${API_BASE_URL}/api/session/generateV2`, // Cambiado a V2 por defecto
   SESSION_GENERATE_V2: `${API_BASE_URL}/api/session/generateV2`,
   SESSION_COMPLETE: `${API_BASE_URL}/api/session/complete`,
   SESSION_SWAP_EXERCISE: `${API_BASE_URL}/api/session/swap-exercise`,
