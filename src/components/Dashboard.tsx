@@ -14,6 +14,7 @@ import {
     X,
     Trophy,
     Scale,
+    AlertCircle,
 } from 'lucide-react';
 
 import InstallPwaBanner from './InstallPwaBanner';
@@ -66,7 +67,7 @@ interface UserProfile {
         fitnessGoal?: string;
         [key: string]: unknown;
     };
-    plan?: 'free' | 'premium' | 'trial';
+    plan?: 'free';
     currentMesocycle?: CurrentMesocycleData;
     currentSession?: CurrentSessionData;
     name?: string;
@@ -100,8 +101,22 @@ interface LevelUpgradeData {
     };
 }
 
-// FRASES MOTIVADORAS PARA EL LOADING
-const MOTIVATIONAL_QUOTES = [
+// FRASES DE ENTRENADOR ELITE PARA LA GENERACIÓN DEL MESOCICLO
+const PLAN_GENERATION_QUOTES = [
+    "Analizando tu perfil metabólico y capacidad de recuperación...",
+    "Calculando volumen óptimo basado en tu nivel de entrenamiento...",
+    "Diseñando progresión de cargas con periodización ondulatoria...",
+    "Evaluando estrés sistémico y ventanas de adaptación...",
+    "Optimizando frecuencia de estímulo por grupo muscular...",
+    "Balanceando tensión mecánica y estrés metabólico...",
+    "Definiendo split arquitectónico según tu disponibilidad...",
+    "Ajustando RIR y RPE para maximizar hipertrofia funcional...",
+    "Programando deloads estratégicos para supercompensación...",
+    "Integrando principios de sobrecarga progresiva sostenible..."
+];
+
+// FRASES MOTIVADORAS PARA GENERACIÓN DE SESIONES
+const SESSION_GENERATION_QUOTES = [
     "Calibrando cargas...",
     "El dolor es temporal, la gloria es eterna.",
     "Construyendo tu mejor versión...",
@@ -110,6 +125,10 @@ const MOTIVATIONAL_QUOTES = [
     "Hoy es un buen día para superarte.",
     "Preparando la mejor rutina para ti..."
 ];
+
+// Constante de compatibilidad usada en el overlay de carga. Mantener como alias evita duplicación.
+const MOTIVATIONAL_QUOTES = SESSION_GENERATION_QUOTES; // alias por compatibilidad con versiones previas del componente
+
 
 // Mensajes variados para días de descanso. Cambian cada vez que el usuario entra a un día de descanso.
 const REST_MESSAGES = [
@@ -195,8 +214,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     
     // Estado para el modal de estadísticas
     const [showStatsModal, setShowStatsModal] = useState(false);
-
+    
+    // Estados para el modal de explicación del plan (NUEVO)
+    const [showPlanExplanationModal, setShowPlanExplanationModal] = useState(false);
+    const [planExplanationData, setPlanExplanationData] = useState<any>(null);    
+    
+    // Ref para el scroll del carrusel
+    const carouselRef = useRef<HTMLDivElement>(null);
+    
     const [quoteIndex, setQuoteIndex] = useState(0);
+    const [planQuoteIndex, setPlanQuoteIndex] = useState(0); // Nuevo índice para frases de plan
     const [restQuoteIndex, setRestQuoteIndex] = useState<number>(() => Math.floor(Math.random() * REST_MESSAGES.length));
     const prevHasSessionRef = useRef<boolean | null>(null);
 
@@ -220,16 +247,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
 
 
-    // Efecto para rotar frases (Lógica inalterada)
+    // Efecto para rotar frases de sesión
     useEffect(() => {
         let interval: any;
         if (generatingSession) {
             interval = setInterval(() => {
-                setQuoteIndex((prev) => (prev + 1) % MOTIVATIONAL_QUOTES.length);
+                setQuoteIndex((prev) => (prev + 1) % SESSION_GENERATION_QUOTES.length);
             }, 2500);
         }
         return () => clearInterval(interval);
     }, [generatingSession]);
+    
+    // Efecto para rotar frases de plan (más lento para dar sensación de análisis profundo)
+    useEffect(() => {
+        let interval: any;
+        if (creatingPlan) {
+            interval = setInterval(() => {
+                setPlanQuoteIndex((prev) => (prev + 1) % PLAN_GENERATION_QUOTES.length);
+            }, 3000);
+        }
+        return () => clearInterval(interval);
+    }, [creatingPlan]);
 
     // B. Lógica de Tiempo y Estado (ACTUALIZADA con isEvaluationPending)
     const dashboardState = useMemo(() => {
@@ -296,9 +334,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             isPlannedRest,
             mesocycleGoal: mesocycle.mesocyclePlan.mesocycleGoal,
             isSessionReady,
-            isEvaluationPending // <--- AÑADIDO
+            isEvaluationPending, // <--- AÑADIDO
+            allMicrocycles: mesocycle.mesocyclePlan.microcycles // <--- AÑADIDO para vista de mesociclo completo
         };
     }, [userProfile]);
+
+    // Scroll automático a la semana actual en el carrusel
+    useEffect(() => {
+        if (carouselRef.current && dashboardState?.currentWeek) {
+            const weekIndex = dashboardState.currentWeek - 1;
+            const weekCards = carouselRef.current.children;
+            if (weekCards[weekIndex]) {
+                setTimeout(() => {
+                    weekCards[weekIndex].scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+                }, 100);
+            }
+        }
+    }, [dashboardState?.currentWeek]);
 
     // Rotar mensaje de descanso cuando la vista pase a un día de descanso
     useEffect(() => {
@@ -326,13 +378,31 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
     const handleCreatePlan = async () => {
         setCreatingPlan(true);
+        setPlanQuoteIndex(0); // Reiniciar índice
+        
         try {
             const token = await user.getIdToken();
-            const res = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, token, {
-                method: 'POST',
-            });
+            
+            // Delay artificial para mejor UX (8 segundos para mostrar ~3 frases completas)
+            const [res] = await Promise.all([
+                authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, token, {
+                    method: 'POST',
+                }),
+                new Promise(resolve => setTimeout(resolve, 8000))
+            ]);
+            
             const data = await res.json();
             if (!data.success) throw new Error(data.error || "Error desconocido");
+            
+            // Extraer explicaciones del plan generado
+            if (data.plan && data.plan.metadata && data.plan.metadata.planRationale) {
+                setPlanExplanationData(data.plan.metadata.planRationale);
+                // Esperar un frame para que el estado del mesociclo se actualice en Firestore
+                setTimeout(() => {
+                    setShowPlanExplanationModal(true);
+                }, 300);
+            }
+            
         } catch (error) {
             alert("Error: " + (error as Error).message);
         } finally {
@@ -458,6 +528,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             </div>
         );
     }
+    
+    // Overlay de carga para generación de plan (con frases profesionales)
+    if (creatingPlan) {
+        return (
+            <div className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center text-white px-4">
+                <div className="bg-zinc-800 p-8 rounded-2xl border border-lime-500/30 max-w-md w-full text-center shadow-2xl">
+                    <div className="w-20 h-20 bg-lime-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Activity className="w-10 h-10 text-lime-500 animate-spin" />
+                    </div>
+                    <h2 className="text-xl font-bold text-white mb-3">Diseñando tu Mesociclo</h2>
+                    <p className="text-lime-400 text-sm font-medium mb-2 min-h-12 flex items-center justify-center animate-pulse">
+                        {PLAN_GENERATION_QUOTES[planQuoteIndex]}
+                    </p>
+                    <p className="text-zinc-500 text-xs">Tu plan personalizado estará listo en un momento...</p>
+                </div>
+            </div>
+        );
+    }
 
     // DASHBOARD VACÍO (SIN PLAN) - Lógica inalterada
     if (!dashboardState) {
@@ -547,7 +635,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             </header>
 
             <main className="px-5 space-y-8">
-                {/* CARD PRINCIPAL (Lógica de Evaluación o Sesión) */}
+                {/* CARD PRINCIPAL DEL DÍA DE HOY - SIEMPRE VISIBLE */}
                 <section>
                     <div className="flex items-center gap-2 mb-4">
                         <Calendar className="w-5 h-5 text-lime-400" />
@@ -592,7 +680,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                                         </div>
                                         <h3 className="text-xl font-bold text-white mb-2">Diseñando Sesión...</h3>
                                         <p key={quoteIndex} className="text-zinc-400 text-sm min-h-10 animate-in slide-in-from-bottom-2 duration-500">
-                                            "{MOTIVATIONAL_QUOTES[quoteIndex]}"
+                                            "{MOTIVATIONAL_QUOTES?.[quoteIndex] ?? 'Diseñando sesión...'}"
                                         </p>
                                     </div>
                                 )}
@@ -633,24 +721,238 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     )}
                 </section>
 
-                {/* LISTA SEMANAL - Lógica inalterada */}
+                {/* VISTA DE CALENDARIO COMPLETO (MOBILE-FIRST) */}
                 <section>
-                    <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4 px-1">Esta Semana</h3>
-                    <div className="grid grid-cols-1 gap-3">
-                        {currentMicrocycle?.sessions.map((session, idx) => {
-                            const isToday = session.dayOfWeek.toLowerCase() === todayName.toLowerCase();
-                            return (
-                                <div key={idx} className={`p-4 rounded-xl flex justify-between items-center border ${isToday ? 'bg-lime-500/5 border-lime-500/40' : 'bg-zinc-800 border-zinc-700/50'}`}>
-                                    <div className="flex flex-col">
-                                        <span className={`text-xs font-bold uppercase mb-1 ${isToday ? 'text-lime-400' : 'text-zinc-500'}`}>{session.dayOfWeek}</span>
-                                        <span className="text-sm font-medium text-zinc-200">{session.sessionFocus}</span>
+                        {/* MOBILE: CARRUSEL HORIZONTAL */}
+                        <div 
+                            ref={carouselRef}
+                            className="md:hidden flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 -mx-5 px-5"
+                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                        >
+                            {dashboardState.allMicrocycles?.map((microcycle: any, weekIdx: number) => {
+                                const isCurrentWeek = weekIdx + 1 === currentWeek;
+                                
+                                // Crear array de 7 días (Lunes a Domingo)
+                                const weekDays = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+                                const weekGrid = weekDays.map(day => {
+                                    const session = microcycle.sessions.find(
+                                        (s: any) => s.dayOfWeek.toLowerCase() === day
+                                    );
+                                    return { day, session };
+                                });
+
+                                return (
+                                    <div 
+                                        key={weekIdx} 
+                                        className={`snap-center shrink-0 w-[85vw] rounded-2xl overflow-hidden border ${
+                                            isCurrentWeek 
+                                                ? 'border-lime-500/50 bg-lime-500/5' 
+                                                : 'border-zinc-700 bg-zinc-800'
+                                        }`}
+                                    >
+                                        {/* HEADER DE SEMANA */}
+                                        <div className={`px-4 py-3 ${
+                                            isCurrentWeek ? 'bg-lime-500/10' : 'bg-zinc-900/50'
+                                        }`}>
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className={`text-base font-bold ${
+                                                    isCurrentWeek ? 'text-lime-400' : 'text-zinc-300'
+                                                }`}>
+                                                    Semana {weekIdx + 1}
+                                                </span>
+                                                {isCurrentWeek && (
+                                                    <span className="bg-lime-500 text-zinc-900 text-xs font-bold px-2 py-1 rounded">
+                                                        Activa
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-zinc-400">{microcycle.focus}</p>
+                                        </div>
+
+                                        {/* LISTA DE SESIONES */}
+                                        <div className="p-3 space-y-2">
+                                            {weekGrid.map(({ day, session }, dayIdx) => {
+                                                const isToday = isCurrentWeek && day === todayName.toLowerCase();
+                                                const isRestDay = !session;
+                                                const dayName = day.charAt(0).toUpperCase() + day.slice(1, 3);
+                                                
+                                                return (
+                                                    <div 
+                                                        key={dayIdx}
+                                                        className={`p-3 rounded-xl border ${
+                                                            isToday 
+                                                                ? 'bg-lime-500/10 border-lime-500/50' 
+                                                                : isRestDay
+                                                                ? 'bg-zinc-900/30 border-zinc-700/30'
+                                                                : 'bg-zinc-900/50 border-zinc-700/50'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-3 flex-1">
+                                                                <span className={`text-xs font-bold uppercase min-w-8 ${
+                                                                    isToday ? 'text-lime-400' : 'text-zinc-400'
+                                                                }`}>
+                                                                    {dayName}
+                                                                </span>
+                                                                {session ? (
+                                                                    <span className={`text-sm font-medium ${
+                                                                        isToday ? 'text-lime-300' : 'text-zinc-200'
+                                                                    }`}>
+                                                                        {session.sessionFocus}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-sm text-zinc-500">Descanso</span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                {session?.generated && (
+                                                                    <CheckCircle2 className="w-4 h-4 text-lime-500" />
+                                                                )}
+                                                                {isToday && (
+                                                                    <span className="h-2 w-2 rounded-full bg-lime-500 animate-pulse"></span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* NOTA DE ADAPTACIÓN */}
+                                        {microcycle.notes && (
+                                            <div className="px-3 pb-3">
+                                                <div className="bg-zinc-900/60 p-3 rounded-lg border-l-2 border-lime-500/50">
+                                                    <p className="text-xs text-zinc-400 italic leading-relaxed">
+                                                        {microcycle.notes}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    {isToday && <div className="h-2 w-2 rounded-full bg-lime-500 shadow-[0_0_8px_rgba(132,204,22,0.8)]"></div>}
+                                );
+                            })}
+                        </div>
+
+                        {/* DESKTOP: LAYOUT POR SEMANAS CON GRID */}
+                        <div className="hidden md:block space-y-6">
+                        {dashboardState.allMicrocycles?.map((microcycle: any, weekIdx: number) => {
+                            const isCurrentWeek = weekIdx + 1 === currentWeek;
+                            
+                            // Crear array de 7 días (Lunes a Domingo)
+                            const weekDays = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+                            const weekGrid = weekDays.map(day => {
+                                const session = microcycle.sessions.find(
+                                    (s: any) => s.dayOfWeek.toLowerCase() === day
+                                );
+                                return { day, session };
+                            });
+
+                            return (
+                                <div key={weekIdx} className={`rounded-2xl overflow-hidden border ${
+                                    isCurrentWeek 
+                                        ? 'border-lime-500/50 bg-lime-500/5' 
+                                        : 'border-zinc-700 bg-zinc-800'
+                                }`}>
+                                    {/* HEADER DE SEMANA */}
+                                    <div className={`px-4 py-3 flex items-center justify-between ${
+                                        isCurrentWeek ? 'bg-lime-500/10' : 'bg-zinc-900/50'
+                                    }`}>
+                                        <div className="flex items-center gap-3">
+                                            <span className={`text-base font-bold ${
+                                                isCurrentWeek ? 'text-lime-400' : 'text-zinc-300'
+                                            }`}>
+                                                Semana {weekIdx + 1}
+                                            </span>
+                                            <span className="text-xs text-zinc-500">{microcycle.focus}</span>
+                                        </div>
+                                        {isCurrentWeek && (
+                                            <span className="bg-lime-500 text-zinc-900 text-xs font-bold px-2 py-1 rounded">
+                                                Activa
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* HEADER DE DÍAS (solo desktop) */}
+                                    <div className="grid grid-cols-7 bg-zinc-900/80 border-b border-zinc-700">
+                                        {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((day, idx) => (
+                                            <div key={idx} className="p-2 text-center">
+                                                <span className="text-xs font-bold text-zinc-400 uppercase">{day}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* GRID DE DÍAS */}
+                                    <div className="grid grid-cols-7">
+                                        {weekGrid.map(({ day, session }, dayIdx) => {
+                                            const isToday = isCurrentWeek && day === todayName.toLowerCase();
+                                            const isRestDay = !session;
+                                            
+                                            return (
+                                                <div 
+                                                    key={dayIdx}
+                                                    className={`min-h-28 p-3 border-r border-zinc-700/50 last:border-r-0 ${
+                                                        isToday 
+                                                            ? 'bg-lime-500/10 ring-2 ring-inset ring-lime-500/50' 
+                                                            : isRestDay
+                                                            ? 'bg-zinc-900/30'
+                                                            : 'bg-zinc-800/50 hover:bg-zinc-800 transition-colors'
+                                                    }`}
+                                                >
+                                                    {session ? (
+                                                        <div className="h-full flex flex-col justify-between">
+                                                            <div>
+                                                                <div className="flex items-center gap-1 mb-2">
+                                                                    {session.generated && (
+                                                                        <CheckCircle2 className="w-3 h-3 text-lime-500" />
+                                                                    )}
+                                                                    {isToday && (
+                                                                        <span className="h-1.5 w-1.5 rounded-full bg-lime-500 animate-pulse"></span>
+                                                                    )}
+                                                                </div>
+                                                                <h4 className={`text-xs font-semibold leading-tight ${
+                                                                    isToday ? 'text-lime-400' : 'text-zinc-200'
+                                                                }`}>
+                                                                    {session.sessionFocus}
+                                                                </h4>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="h-full flex items-center justify-center">
+                                                            <span className="text-zinc-600 text-xs">Descanso</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* NOTA DE ADAPTACIÓN */}
+                                    {microcycle.notes && (
+                                        <div className="px-4 pb-4 pt-2">
+                                            <div className="bg-zinc-900/60 p-3 rounded-lg border-l-2 border-lime-500/50">
+                                                <p className="text-xs text-zinc-400 italic leading-relaxed">
+                                                    {microcycle.notes}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
-                    </div>
-                </section>
+                        </div>
+                        
+                        {/* LEYENDA */}
+                        <div className="flex items-center gap-4 mt-2 text-xs text-zinc-400 justify-center">
+                            <div className="flex items-center gap-2">
+                                <span className="h-2 w-2 rounded-full bg-lime-500 animate-pulse"></span>
+                                <span>Hoy</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="w-3 h-3 text-lime-500" />
+                                <span>Lista</span>
+                            </div>
+                        </div>
+                    </section>
             </main>
 
             {/* 👇 AÑADIDO: Banner de instalación PWA al final */}
@@ -689,6 +991,146 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     }}
                     onClose={() => setShowStatsModal(false)}
                 />
+            )}
+            
+            {/* 📋 Modal de Explicación del Plan (NUEVO) */}
+            {showPlanExplanationModal && planExplanationData && (
+                <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-zinc-800 rounded-2xl max-w-2xl w-full border border-lime-500/30 shadow-2xl animate-in zoom-in-95 duration-300 my-8">
+                        
+                        {/* Header optimizado */}
+                        <div className="bg-gradient-to-r from-lime-500/10 to-emerald-500/10 p-6 border-b border-zinc-700">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h2 className="text-3xl font-black text-white mb-2">¡Tu Plan Maestro Está Listo!</h2>
+                                    <p className="text-zinc-300 text-sm">Diseñado con ciencia deportiva de élite para maximizar tus resultados</p>
+                                </div>
+                                <button 
+                                    onClick={() => setShowPlanExplanationModal(false)}
+                                    className="text-zinc-400 hover:text-white p-2 rounded-lg hover:bg-zinc-700/50 transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="p-6 space-y-5 max-h-[65vh] overflow-y-auto">
+                            
+                            {/* Quick Summary Cards */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-lime-500/10 border border-lime-500/30 p-3 rounded-lg">
+                                    <div className="text-lime-400 text-xs font-bold uppercase tracking-wider mb-1">Split</div>
+                                    <div className="text-white font-bold text-lg">{planExplanationData.splitType}</div>
+                                </div>
+                                <div className="bg-blue-500/10 border border-blue-500/30 p-3 rounded-lg">
+                                    <div className="text-blue-400 text-xs font-bold uppercase tracking-wider mb-1">Objetivo</div>
+                                    <div className="text-white font-bold text-lg">{planExplanationData.phaseGoal}</div>
+                                </div>
+                            </div>
+                            
+                            {/* Arquitectura del Split (más visual) */}
+                            <div className="bg-zinc-900/70 p-5 rounded-xl border border-zinc-700/50 hover:border-lime-500/30 transition-colors">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 bg-lime-500/20 rounded-xl flex items-center justify-center shrink-0">
+                                        <Calendar className="w-5 h-5 text-lime-400" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-white">Tu Estrategia de Entrenamiento</h3>
+                                </div>
+                                <p className="text-zinc-300 text-sm leading-relaxed pl-13">{planExplanationData.splitRationale}</p>
+                            </div>
+                            
+                            {/* Objetivo de Fase (destacado) */}
+                            <div className="bg-zinc-900/70 p-5 rounded-xl border border-zinc-700/50 hover:border-blue-500/30 transition-colors">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center shrink-0">
+                                        <Activity className="w-5 h-5 text-blue-400" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-white">Qué Esperar en Cada Sesión</h3>
+                                </div>
+                                <p className="text-zinc-300 text-sm leading-relaxed pl-13">{planExplanationData.goalRationale}</p>
+                            </div>
+                            
+                            {/* Volumen (simplificado) */}
+                            <div className="bg-zinc-900/70 p-5 rounded-xl border border-zinc-700/50 hover:border-orange-500/30 transition-colors">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center shrink-0">
+                                        <Dumbbell className="w-5 h-5 text-orange-400" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-white">Tu Volumen: {planExplanationData.baseVolume} series/semana</h3>
+                                    </div>
+                                </div>
+                                <p className="text-zinc-300 text-sm leading-relaxed pl-13">{planExplanationData.volumeRationale}</p>
+                            </div>
+                            
+                            {/* Hoja de Ruta (mejorada visualmente) */}
+                            {planExplanationData.progressionRationale && (
+                                <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 p-5 rounded-xl">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center shrink-0">
+                                            <Activity className="w-5 h-5 text-purple-400" />
+                                        </div>
+                                        <h3 className="text-lg font-bold text-white">Tu Hoja de Ruta (4 Semanas)</h3>
+                                    </div>
+                                    <div className="space-y-2 pl-13">
+                                        <div className="flex items-start gap-3 text-sm">
+                                            <div className="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                                                <span className="text-purple-300 font-bold text-xs">1</span>
+                                            </div>
+                                            <p className="text-zinc-300"><strong className="text-white">Ajuste técnico:</strong> No llegues al fallo, domina cada movimiento.</p>
+                                        </div>
+                                        <div className="flex items-start gap-3 text-sm">
+                                            <div className="w-6 h-6 bg-purple-500/30 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                                                <span className="text-purple-300 font-bold text-xs">2</span>
+                                            </div>
+                                            <p className="text-zinc-300"><strong className="text-white">Intensificamos:</strong> Aquí empiezas a sentir el verdadero trabajo.</p>
+                                        </div>
+                                        <div className="flex items-start gap-3 text-sm">
+                                            <div className="w-6 h-6 bg-purple-500/40 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                                                <span className="text-purple-200 font-bold text-xs">3</span>
+                                            </div>
+                                            <p className="text-zinc-300"><strong className="text-white">Pico de esfuerzo:</strong> Das todo. Aquí ocurre la magia del crecimiento.</p>
+                                        </div>
+                                        <div className="flex items-start gap-3 text-sm">
+                                            <div className="w-6 h-6 bg-lime-500/30 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                                                <span className="text-lime-300 font-bold text-xs">4</span>
+                                            </div>
+                                            <p className="text-zinc-300"><strong className="text-white">Recarga de baterías:</strong> Tu cuerpo se repara y vuelves más fuerte (efecto rebote).</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Consideraciones Especiales (si existen) */}
+                            {planExplanationData.specialConsiderations && planExplanationData.specialConsiderations.length > 0 && (
+                                <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl">
+                                    <h3 className="text-sm font-bold text-yellow-300 mb-2 flex items-center gap-2">
+                                        <AlertCircle className="w-4 h-4" />
+                                        Notas Importantes
+                                    </h3>
+                                    <ul className="space-y-1.5">
+                                        {planExplanationData.specialConsiderations.map((note: string, idx: number) => (
+                                            <li key={idx} className="text-yellow-100 text-xs flex items-start gap-2">
+                                                <span className="text-yellow-400 shrink-0 mt-0.5">▸</span>
+                                                <span>{note}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Footer con CTA potente */}
+                        <div className="p-6 border-t border-zinc-700 bg-zinc-900/50">
+                            <button
+                                onClick={() => setShowPlanExplanationModal(false)}
+                                className="w-full bg-gradient-to-r from-lime-500 to-emerald-500 hover:from-lime-400 hover:to-emerald-400 text-zinc-900 font-black text-lg py-4 rounded-xl transition-all shadow-lg hover:shadow-lime-500/50"
+                            >
+                                Entendido, ¡Vamos a Entrenar!
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -29,7 +29,7 @@ export interface UserProfile extends DocumentData {
     onboardingData?: any;
     name?: string;
     fitnessGoal?: string;
-    plan?: 'free' | 'premium';
+    plan?: 'free';
     currentSession?: any;
     currentMesocycle?: any; // Añadido para evitar errores de tipo en el guard de ruta
     profileData?: {
@@ -39,16 +39,10 @@ export interface UserProfile extends DocumentData {
         heightCm: number;
         initialWeight: number;
         fitnessGoal: string;
-        experienceLevel: string;
         focusArea: string;
-        injuriesOrLimitations: string;
+        trainingAgeMonths?: number;
+        injuriesOrLimitations?: string[] | string;
         trainingDaysPerWeek: number;
-        preferredTrainingDays: string[];
-        weeklyScheduleContext: any[];
-        availableEquipment: string[];
-        homeEquipment: string[];
-        hasHomeEquipment: boolean;
-        externalLoad?: string;
         [key: string]: any;
     };
 }
@@ -136,15 +130,37 @@ const App: FC = () => {
                     status: rawData.status as UserStatus || 'pending_onboarding'
                 };
 
+                // Normalizar mesociclo (v3 plano → formato Dashboard)
+                try {
+                    const { normalizeMesocycleForUI } = await import('./utils/mesocycleNormalizer');
+                    if (rawData.currentMesocycle) {
+                        profileData.currentMesocycle = normalizeMesocycleForUI(rawData.currentMesocycle);
+                    }
+                } catch (e) {
+                    profileData.currentMesocycle = rawData.currentMesocycle;
+                }
+
+                // Normalizar la sesión actual (puede venir en distintas formas desde Firestore)
+                try {
+                    // Import dinámico para evitar errores en tiempo de carga en tests/entornos sin modules
+                    const { normalizeSession } = await import('./utils/sessionNormalizer');
+                    profileData.currentSession = normalizeSession(rawData.currentSession) || rawData.currentSession;
+                } catch (e) {
+                    // Si falla la normalización, dejar el original (fallará de forma visible en UI)
+                    profileData.currentSession = rawData.currentSession;
+                }
+
                 if (profileData.status) {
                     setUserProfile(profileData);
+                } else if (profileData.profileData?.name) {
+                    setUserProfile({ ...profileData, status: 'approved' as UserStatus });
                 } else {
                     setUserProfile({ status: 'pending_onboarding' as UserStatus });
                 }
 
                 try {
                     const tokenResult = await user.getIdTokenResult();
-                    if (tokenResult.claims.role === 'approved') {
+                    if (tokenResult.claims.role === 'approved' || rawData.status === 'approved') {
                         setUserProfile(prev => ({ ...(prev as UserProfile || {}), status: 'approved' as UserStatus }));
                     }
                 } catch (e) { console.error(e); }

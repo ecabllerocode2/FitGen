@@ -10,43 +10,43 @@ interface ReadinessFormProps {
 
 // Opciones para los selectores (escalas 1-5)
 const energyOptions = [
-    { value: 5, label: '🔥 5 - Óptimo: Excelente energía, listo para rendir' },
-    { value: 4, label: '😊 4 - Bueno: Buena energía, motivado' },
-    { value: 3, label: '😐 3 - Normal: Energía normal' },
-    { value: 2, label: '😓 2 - Bajo: Cansado, poca motivación' },
-    { value: 1, label: '😴 1 - Agotado: Sin energía' },
+    { value: 5, label: '5 - Óptimo: Excelente energía, listo para rendir' },
+    { value: 4, label: '4 - Bueno: Buena energía, motivado' },
+    { value: 3, label: '3 - Normal: Energía normal' },
+    { value: 2, label: '2 - Bajo: Cansado, poca motivación' },
+    { value: 1, label: '1 - Agotado: Sin energía' },
 ];
 
 const sorenessOptions = [
-    { value: 1, label: '✅ 1 - Sin dolor: Músculos recuperados' },
-    { value: 2, label: '🟢 2 - Leve: Ligera tensión muscular' },
-    { value: 3, label: '🟡 3 - Moderado: DOMS perceptible' },
-    { value: 4, label: '🟠 4 - Alto: Dolor que limita' },
-    { value: 5, label: '🔴 5 - Severo: Dolor intenso' },
+    { value: 1, label: '1 - Sin dolor: Músculos recuperados' },
+    { value: 2, label: '2 - Leve: Ligera tensión muscular' },
+    { value: 3, label: '3 - Moderado: DOMS perceptible' },
+    { value: 4, label: '4 - Alto: Dolor que limita' },
+    { value: 5, label: '5 - Severo: Dolor intenso' },
 ];
 
 const sleepOptions = [
-    { value: 5, label: '😴💤 5 - Excelente: 8+ horas, sueño reparador' },
-    { value: 4, label: '😊 4 - Bien: 7-8 horas, buena calidad' },
-    { value: 3, label: '😐 3 - Normal: 6-7 horas, aceptable' },
-    { value: 2, label: '😞 2 - Mal: 4-5 horas o mala calidad' },
-    { value: 1, label: '😵 1 - Muy mal: < 4 horas o fragmentado' },
+    { value: 5, label: '5 - Excelente: 8+ horas, sueño reparador' },
+    { value: 4, label: '4 - Bien: 7-8 horas, buena calidad' },
+    { value: 3, label: '3 - Normal: 6-7 horas, aceptable' },
+    { value: 2, label: '2 - Mal: 4-5 horas o mala calidad' },
+    { value: 1, label: '1 - Muy mal: < 4 horas o fragmentado' },
 ];
 
 const stressOptions = [
-    { value: 1, label: '🧘 1 - Muy relajado: Sin estrés' },
-    { value: 2, label: '😌 2 - Relajado: Bajo estrés' },
-    { value: 3, label: '😐 3 - Normal: Estrés cotidiano' },
-    { value: 4, label: '😰 4 - Estresado: Estrés alto' },
-    { value: 5, label: '🤯 5 - Muy estresado: Abrumado' },
+    { value: 1, label: '1 - Muy relajado: Sin estrés' },
+    { value: 2, label: '2 - Relajado: Bajo estrés' },
+    { value: 3, label: '3 - Normal: Estrés cotidiano' },
+    { value: 4, label: '4 - Estresado: Estrés alto' },
+    { value: 5, label: '5 - Muy estresado: Abrumado' },
 ];
 
 const externalFatigueOptions = [
-    { value: 'none', label: '✅ Ninguna', desc: 'Día sedentario normal' },
-    { value: 'low', label: '🟢 Baja', desc: 'Caminata ligera, trabajo de oficina' },
-    { value: 'moderate', label: '🟡 Moderada', desc: 'Trabajo activo, estar de pie mucho tiempo' },
-    { value: 'high', label: '🟠 Alta', desc: 'Trabajo físico intenso, deporte recreativo' },
-    { value: 'extreme', label: '🔴 Extrema', desc: 'Mudanza, maratón, evento deportivo intenso' },
+    { value: 'none', label: 'Ninguna', desc: 'Día sedentario normal' },
+    { value: 'low', label: 'Baja', desc: 'Caminata ligera, trabajo de oficina' },
+    { value: 'moderate', label: 'Moderada', desc: 'Trabajo activo, estar de pie mucho tiempo' },
+    { value: 'high', label: 'Alta', desc: 'Trabajo físico intenso, deporte recreativo' },
+    { value: 'extreme', label: 'Extrema', desc: 'Mudanza, maratón, evento deportivo intenso' },
 ];
 
 const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoading = false }) => {
@@ -80,7 +80,7 @@ const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoadi
             {/* Nivel de Energía */}
             <div>
                 <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
-                    <BatteryCharging className="w-4 h-4 text-lime-500" /> 💪 Nivel de Energía
+                    <BatteryCharging className="w-4 h-4 text-lime-500" /> Nivel de Energía
                 </label>
                 <div className="relative">
                     <select
@@ -100,7 +100,7 @@ const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoadi
             {/* Dolor Muscular */}
             <div>
                 <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-lime-500" /> 🦵 Dolor Muscular (DOMS)
+                    <Activity className="w-4 h-4 text-lime-500" /> Dolor Muscular (DOMS)
                 </label>
                 <div className="relative">
                     <select
@@ -120,7 +120,7 @@ const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoadi
             {/* Calidad del Sueño */}
             <div>
                 <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
-                    <Moon className="w-4 h-4 text-lime-500" /> 😴 Calidad del Sueño
+                    <Moon className="w-4 h-4 text-lime-500" /> Calidad del Sueño
                 </label>
                 <div className="relative">
                     <select
@@ -140,7 +140,7 @@ const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoadi
             {/* Nivel de Estrés */}
             <div>
                 <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
-                    <Brain className="w-4 h-4 text-lime-500" /> 🧠 Nivel de Estrés
+                    <Brain className="w-4 h-4 text-lime-500" /> Nivel de Estrés
                 </label>
                 <div className="relative">
                     <select
@@ -160,7 +160,7 @@ const ReadinessForm: React.FC<ReadinessFormProps> = ({ onSubmit, onBack, isLoadi
             {/* Fatiga Externa */}
             <div>
                 <label className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-lime-500" /> 🏃 Fatiga Externa
+                    <Activity className="w-4 h-4 text-lime-500" /> Fatiga Externa
                     <span className="text-xs text-zinc-500 font-normal ml-1">(opcional)</span>
                 </label>
                 <p className="text-xs text-zinc-400 mb-2">

@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+/* ==================== DESIGN TOKENS ==================== */
+@theme {
+  /* App shell */
+  --color-app: var(--color-zinc-900);
+  --color-card: var(--color-zinc-800);
+  --color-card-hover: var(--color-zinc-700);
+  --color-accent: var(--color-lime-500);
+  --color-accent-hover: var(--color-lime-400);
+  --color-accent-text: var(--color-zinc-900);
+  --color-border-default: var(--color-zinc-700);
+  --color-border-subtle: var(--color-zinc-800);
+
+  /* Landing */
+  --color-landing: var(--color-slate-950);
+  --color-landing-card: var(--color-slate-900);
+  --color-landing-muted: var(--color-slate-400);
+
+  /* PWA theme */
+  --color-pwa-theme: #18181B;
+}
+
 /* ==================== WORKOUT PLAYER ANIMATIONS ==================== */
 
 /* Animación sutil de pulso para imágenes */
@@ -161,4 +182,9 @@
 
 .safe-area-top {
   padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Hide scrollbar for carousel */
+.snap-x::-webkit-scrollbar {
+  display: none;
 }

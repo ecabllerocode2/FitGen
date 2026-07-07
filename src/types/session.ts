@@ -9,7 +9,7 @@ export type Gender = 'Masculino' | 'Femenino' | 'Otro';
 
 export type ExperienceLevel = 'Principiante' | 'Intermedio' | 'Avanzado';
 
-export type FitnessGoal = 'Fuerza' | 'Hipertrofia' | 'Resistencia' | 'Perdida_Grasa';
+export type FitnessGoal = 'Hipertrofia' | 'Fuerza';
 
 export type FocusArea = 'General' | 'Tren_Superior' | 'Tren_Inferior' | 'Core';
 
@@ -28,22 +28,6 @@ export type InjuryType =
   | 'Tobillo'
   | 'Codo';
 
-export type Equipment = 
-  | 'mancuernas'
-  | 'barra_olimpica'
-  | 'kettlebell'
-  | 'bandas_elasticas'
-  | 'banco_ajustable'
-  | 'rack_sentadillas'
-  | 'polea'
-  | 'barra_dominadas'
-  | 'step_plataforma'
-  | 'pelota_suiza'
-  | 'rueda_abdominal'
-  | 'TRX';
-
-export type Location = 'gym' | 'home' | 'outdoor';
-
 export interface DayContext {
   day: DayOfWeek;
   canTrain: boolean;
@@ -58,31 +42,21 @@ export interface ProfileData {
   heightCm: number;
   initialWeight: number;
   
-  // Experiencia y objetivos
-  experienceLevel: ExperienceLevel;
+  // Experiencia y objetivos (DDS v1.0)
+  trainingAgeMonths: number;
+  experienceLevel: ExperienceLevel; // calculado por el sistema
   fitnessGoal: FitnessGoal;
-  focusArea: FocusArea;
+  focusArea?: FocusArea;
   
   // Configuración de entrenamiento
   trainingDaysPerWeek: number;
   preferredTrainingDays: DayOfWeek[];
   weeklyScheduleContext: DayContext[];
-  // Lugar de entrenamiento elegido para TODO el mesociclo
-  preferredTrainingLocation?: Location;
-  
-  // Equipamiento y limitaciones
-  hasHomeEquipment: boolean;
-  homeEquipment?: Equipment[];
-  availableEquipment?: string[]; // Lista de equipamiento disponible
-  homeWeights?: {
-    dumbbells?: number[];
-    barbell?: number;
-    kettlebells?: number[];
-  };
-  injuriesOrLimitations: InjuryType | string;
+  injuriesOrLimitations: InjuryType[] | string;
+  timezone?: string;
   
   // Metadatos
-  dateCompleted: string; 
+  dateCompleted?: string; 
 }
 
 // ==================== PRE-SESSION REQUEST ====================
@@ -104,8 +78,7 @@ export interface ReadinessData {
   availableTime?: number;             // Minutos disponibles
 }
 
-// Nota: location y availableEquipment ya NO se envían en el request
-// El backend los obtiene del perfil del usuario (preferredTrainingLocation, availableEquipment)
+// Nota: el backend asume gimnasio comercial completo (DDS v1.0)
 export interface GenerateSessionRequest {
   userId: string; // El backend espera 'userId', no 'firebaseUid'
   timezone?: string; // IANA timezone (ej: 'Europe/Madrid') para que el backend calcule el día en TZ del usuario
@@ -122,10 +95,7 @@ export interface GenerateSessionRequest {
   externalFatigue?: ExternalFatigue;
   availableTime?: number;
   
-  // Nota: location, availableEquipment y homeWeights ya NO se envían aquí
-  // El backend los obtiene del perfil del usuario en Firestore
-  
-  // Opcionales
+  // Metadatos
   saveToFirestore?: boolean;
 }
 
@@ -190,7 +160,7 @@ export interface TrainingParameters {
     isolation: { min: number; max: number };
     betweenExercises: number;
   };
-  ambiente: 'gym' | 'home_equipped' | 'home_minimal' | 'bodyweight';
+  ambiente: 'gym';
   readinessCategory: 'suboptimal' | 'reduced' | 'normal' | 'enhanced' | 'optimal';
   adjustmentsApplied: string[];
 }

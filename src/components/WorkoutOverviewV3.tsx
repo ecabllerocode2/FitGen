@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import type { GeneratedSession } from '../types/session';
+import { normalizeSession } from '../utils/sessionNormalizer';
 
 // ==================== TIPOS FLEXIBLES ====================
 // Los datos pueden venir con diferentes estructuras, así que usamos tipos flexibles
@@ -129,6 +130,36 @@ const getYoutubeThumbnailUrl = (url?: string | null) => {
   const videoId = (match && match[2].length === 11) ? match[2] : null;
   if (!videoId) return null;
   return `https://img.youtube.com/vi/${videoId}/default.jpg`; 
+};
+
+// Helpers: sanear notas y formatear timestamps (para depuración de zonas horarias)
+const sanitizeNotes = (s?: string | null) : string | null => {
+  if (!s) return null;
+  return s.replace(/\*/g, '').trim();
+};
+
+const formatSessionTimestamp = (session: any): string | null => {
+  const ts = session?.generatedAt || session?.meta?.generatedAt || session?.meta?.date || session?.meta?.createdAt;
+  if (!ts) return null;
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return String(ts);
+
+  try {
+    // Preferir formato moderno si el entorno lo soporta
+    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZoneName: 'short' } as any);
+  } catch (err) {
+    try {
+      // Fallback a Intl.DateTimeFormat con opciones básicas (más compatibles)
+      return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' } as any).format(d);
+    } catch (err2) {
+      // Último recurso: toLocaleString sin opciones
+      try {
+        return d.toLocaleString();
+      } catch (err3) {
+        return d.toUTCString();
+      }
+    }
+  }
 };
 
 // ==================== COMPONENTES UI ====================
@@ -363,7 +394,7 @@ const MainExerciseRow = ({
               <div>
                 <p className="text-xs font-semibold text-indigo-300 mb-0.5">🔍 Peso Exploratorio</p>
                 <p className="text-xs text-indigo-200 leading-relaxed">
-                  {exercise.prescripcion.explicacion}
+                  {sanitizeNotes(exercise.prescripcion.explicacion)}
                 </p>
               </div>
             </div>
@@ -422,11 +453,11 @@ const CoreExerciseRow = ({ exercise }: { exercise: FlexibleExercise }) => {
             <span className="font-bold">{repsOrTime}</span>
           </div>
           {exercise.prescripcion?.notaUnilateral && (
-            <span className="text-xs text-zinc-500">{exercise.prescripcion.notaUnilateral}</span>
+            <span className="text-xs text-zinc-500">{sanitizeNotes(exercise.prescripcion.notaUnilateral)}</span>
           )}
         </div>
-        {exercise.notas && (
-          <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{exercise.notas}</p>
+        {sanitizeNotes(exercise.notas) && (
+          <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{sanitizeNotes(exercise.notas)}</p>
         )}
       </div>
     </div>
@@ -470,7 +501,9 @@ interface WorkoutOverviewProps {
 
 const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSession }) => {
   const navigate = useNavigate();
-  const [currentSession, setCurrentSession] = useState<GeneratedSession>(initialSession);
+  // Aceptar distintas formas de session que puedan llegar desde Firestore
+  const normalized = normalizeSession(initialSession) || initialSession;
+  const [currentSession, setCurrentSession] = useState<GeneratedSession>(normalized as GeneratedSession);
   const [swappingId, setSwappingId] = useState<string | null>(null);
 
   const handleStartSession = () => {
@@ -502,11 +535,12 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
     }
     
     // Recolectar todos los IDs de ejercicios actuales para excluirlos
+    const mainBlocksForIds = currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones || [];
     const allIds = [
-      ...(currentSession.warmup?.map(e => e.id) || []),
-      ...(currentSession.mainBlock?.bloques?.flatMap((s: any) => s.ejercicios?.map((e: any) => e.id) || []) || []),
-      ...(currentSession.coreBlock?.ejercicios?.map(e => e.id) || []),
-      ...(currentSession.cooldown?.fases?.flatMap(f => f.contenido?.ejercicios?.map(e => e.id) || []) || [])
+      ...(currentSession.warmup?.map((e:any) => e.id) || []),
+      ...((mainBlocksForIds as any).flatMap((s: any) => s.ejercicios?.map((e: any) => e.id) || []) || []),
+      ...(currentSession.coreBlock?.ejercicios?.map((e:any) => e.id) || []),
+      ...(currentSession.cooldown?.fases?.flatMap((f: any) => f.contenido?.ejercicios?.map((e: any) => e.id) || []) || [])
     ];
 
     try {
@@ -528,9 +562,27 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
       const data = await response.json();
       if (response.ok && data.success && data.newExercise) {
         setCurrentSession(prevSession => {
-          const newSession = JSON.parse(JSON.stringify(prevSession)) as GeneratedSession;
-          (newSession.mainBlock as any).bloques[stationIndex].ejercicios[exerciseIndex] = data.newExercise;
-          return newSession;
+          const newSession = JSON.parse(JSON.stringify(prevSession)) as any;
+
+          const blocks = newSession.mainBlock?.bloques || newSession.mainBlock?.estaciones || [];
+          if (blocks && blocks[stationIndex]) {
+            blocks[stationIndex].ejercicios = blocks[stationIndex].ejercicios || [];
+            blocks[stationIndex].ejercicios[exerciseIndex] = data.newExercise;
+          } else {
+            // Fallback: intentar colocar en first block si no existe índice solicitado
+            if (blocks && blocks[0] && blocks[0].ejercicios) {
+              blocks[0].ejercicios[exerciseIndex] = data.newExercise;
+            }
+          }
+
+          // Asegurar que ambos nombres (bloques/estaciones) estén actualizados
+          if (!newSession.mainBlock.bloques && newSession.mainBlock.estaciones) {
+            newSession.mainBlock.bloques = newSession.mainBlock.estaciones;
+          } else if (!newSession.mainBlock.estaciones && newSession.mainBlock.bloques) {
+            newSession.mainBlock.estaciones = newSession.mainBlock.bloques;
+          }
+
+          return newSession as GeneratedSession;
         });
       } else {
         alert(data.error || "No se encontró una alternativa adecuada.");
@@ -544,7 +596,8 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
   };
 
   // Calcular totales para los badges
-  const mainBlockExercises = currentSession.mainBlock?.bloques?.flatMap((s: any) => s.ejercicios || []) || [];
+  const mainBlocksForTotals = currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones || [];
+  const mainBlockExercises = (mainBlocksForTotals as any).flatMap((s: any) => s.ejercicios || []) || [];
   const totalMainExercises = mainBlockExercises.length;
   const totalMainSets = mainBlockExercises.reduce((acc: number, ex: any) => acc + (ex.sets || ex.prescripcion?.series || 1), 0);
 
@@ -562,6 +615,24 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
               {currentSession.sessionFocus}
             </h1>
             <p className="text-xs text-zinc-400 mt-1">{currentSession.phase}</p>
+            {formatSessionTimestamp(currentSession) && (
+              <p className="text-xs text-zinc-500 mt-1">Generado: {formatSessionTimestamp(currentSession)}</p>
+            )}
+            {/* Debug: comparar día calculado por servidor vs día en el cliente (por zona horaria) */}
+            {(() => {
+              const cs: any = currentSession as any;
+              const ts = currentSession.generatedAt || cs.meta?.generatedAt || cs.meta?.date || null;
+              if (!ts) return null;
+              const localWeekday = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(new Date(ts));
+              const serverDay = (currentSession.dayOfWeek || '').toLowerCase();
+              const localDay = (localWeekday || '').toLowerCase();
+              if (serverDay && localDay && serverDay !== localDay) {
+                return (
+                  <p className="text-xs text-amber-400 mt-1">Nota: día del servidor: <span className="font-semibold text-zinc-100">{currentSession.dayOfWeek}</span> • día local detectado: <span className="font-semibold text-zinc-100 capitalize">{localWeekday}</span>. Posible desalineación por zona horaria.</p>
+                );
+              }
+              return null;
+            })()}
           </div>
           <div className="bg-lime-500/10 p-3 rounded-xl border border-lime-500/20">
             <Dumbbell className="w-6 h-6 text-lime-500" />
@@ -612,13 +683,13 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           >
             <div className="space-y-3">
               <p className="text-sm text-zinc-300 leading-relaxed">
-                {currentSession.education.objetivoDelDia}
+                {sanitizeNotes(currentSession.education.objetivoDelDia)}
               </p>
-              {currentSession.education.consejoTecnico && (
+              {sanitizeNotes(currentSession.education.consejoTecnico) && (
                 <div className="bg-lime-500/5 border border-lime-500/20 rounded-lg p-3 flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 text-lime-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-lime-300">
-                    {currentSession.education.consejoTecnico}
+                    {sanitizeNotes(currentSession.education.consejoTecnico)}
                   </p>
                 </div>
               )}
@@ -644,7 +715,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         )}
 
         {/* BLOQUE PRINCIPAL */}
-        {currentSession.mainBlock?.bloques && currentSession.mainBlock.bloques.length > 0 && (
+        {((currentSession.mainBlock?.bloques && currentSession.mainBlock.bloques.length > 0) || ((currentSession.mainBlock as any)?.estaciones && (currentSession.mainBlock as any).estaciones.length > 0)) && (
           <AccordionSection 
             title="Bloque Principal" 
             icon={Dumbbell} 
@@ -652,7 +723,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
             colorClass="text-lime-400"
             badge={`${totalMainSets} series`}
           >
-            {(currentSession.mainBlock.bloques as FlexibleStation[]).map((station, stationIdx) => (
+            {((currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones) as FlexibleStation[]).map((station, stationIdx) => (
               <div key={stationIdx} className="mb-5 last:mb-0">
                 {/* Header de estación */}
                 <div className="flex items-center gap-2 mb-3">

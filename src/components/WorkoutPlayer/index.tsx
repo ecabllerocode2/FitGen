@@ -1373,7 +1373,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
   // Get main block data safely
   const getMainBlocks = useCallback(() => {
     const mainBlock = session.mainBlock as any;
-    return mainBlock?.bloques || [];
+    return mainBlock?.bloques || mainBlock?.estaciones || [];
   }, [session]);
 
   // Get next exercise info

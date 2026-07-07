@@ -5,7 +5,6 @@ import {
   BatteryCharging, 
   Layers, 
   Smartphone, 
-  CheckCircle,
   Sliders
 } from 'lucide-react';
 
@@ -21,7 +20,6 @@ const LandingPage = () => {
         <div className="hidden md:flex gap-8 text-sm font-medium text-slate-400">
           <a href="#features" className="hover:text-white transition">El Motor</a>
           <a href="#adaptability" className="hover:text-white transition">Tu Estilo de Vida</a>
-          <a href="#pricing" className="hover:text-white transition">Planes</a>
         </div>
         <Link 
           to="/login" 
@@ -49,7 +47,7 @@ const LandingPage = () => {
         </h1>
         
         <p className="text-slate-400 text-lg md:text-xl mb-10 max-w-2xl mx-auto leading-relaxed">
-          Olvídate de las rutinas estáticas. <strong>FitGen</strong> utiliza un Motor de Periodización que ajusta tu entrenamiento día a día según tu fatiga, tu equipo disponible y tus otras actividades.
+          Olvídate de las rutinas estáticas. <strong>FitGen</strong> utiliza un Motor de Periodización que ajusta tu entrenamiento día a día según tu fatiga y tus actividades fuera del gimnasio.
         </p>
         
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -60,7 +58,7 @@ const LandingPage = () => {
             Comenzar mi Plan
           </Link>
           <p className="text-xs text-slate-500 font-medium mt-2 sm:mt-0">
-            Prueba Premium de 7 Días incluida
+            Beta gratuita — regístrate y empieza hoy
           </p>
         </div>
       </header>
@@ -164,63 +162,10 @@ const LandingPage = () => {
             <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center mb-6 group-hover:bg-purple-500/20 transition">
               <Sliders className="text-purple-400" />
             </div>
-            <h3 className="text-xl font-bold mb-3 text-white">Flexibilidad de Equipo</h3>
+            <h3 className="text-xl font-bold mb-3 text-white">Enfoque Gimnasio</h3>
             <p className="text-slate-400 text-sm">
-              ¿Hoy entrenas en casa? ¿El gym está lleno? Cambia tu entorno en un clic y recalculamos la sesión para mantener el estímulo exacto.
+              Entrenamientos optimizados para gimnasio comercial con equipo completo. Periodización basada en ciencia del deporte.
             </p>
-          </div>
-        </div>
-      </section>
-
-      {/* --- PRICING SECTION --- */}
-      <section id="pricing" className="px-6 py-20 bg-slate-900 relative border-t border-slate-800">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Personalización Profesional Accesible</h2>
-          <p className="text-slate-400 mb-12">Mucho más que una app, mucho más accesible que un entrenador personal.</p>
-          
-          <div className="grid md:grid-cols-2 gap-8 items-stretch">
-            {/* Plan Mensual */}
-            <div className="p-8 rounded-2xl border border-slate-700 bg-slate-950/30 flex flex-col">
-              <h3 className="text-xl font-semibold text-slate-300">Mensual Flexible</h3>
-              <div className="my-6">
-                <span className="text-4xl font-bold text-white">$149</span>
-                <span className="text-slate-500"> / mes</span>
-              </div>
-              <ul className="text-left space-y-3 mb-8 text-sm text-slate-400 grow">
-                <li className="flex gap-2"><CheckCircle size={16} className="text-slate-500"/> Acceso total al Motor</li>
-                <li className="flex gap-2"><CheckCircle size={16} className="text-slate-500"/> Ajuste por fatiga diaria</li>
-                <li className="flex gap-2"><CheckCircle size={16} className="text-slate-500"/> Cancela cuando quieras</li>
-              </ul>
-              <Link to="/register" className="block w-full py-3 rounded-lg border border-slate-600 text-white font-semibold hover:bg-slate-800 transition">
-                Seleccionar Mensual
-              </Link>
-            </div>
-
-            {/* Plan Anual (Best Value) */}
-            <div className="p-8 rounded-2xl border-2 border-lime-500 bg-slate-900/80 relative shadow-2xl shadow-lime-900/20 flex flex-col">
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-lime-500 text-slate-900 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                Recomendado
-              </div>
-              <h3 className="text-xl font-semibold text-white">Plan Anual</h3>
-              <div className="my-6">
-                <span className="text-5xl font-bold text-white">$99</span>
-                <span className="text-slate-500"> / mes</span>
-              </div>
-              <p className="text-lime-400/90 text-sm mb-6 font-medium bg-lime-400/10 py-1 px-2 rounded w-fit mx-auto">
-                Facturado como $1,188 anuales
-              </p>
-              
-              <ul className="text-left space-y-3 mb-8 text-sm text-slate-300 grow">
-                <li className="flex gap-2"><CheckCircle size={16} className="text-lime-400"/> <strong>Ahorras un 33%</strong></li>
-                <li className="flex gap-2"><CheckCircle size={16} className="text-lime-400"/> Compromiso con tus resultados</li>
-                <li className="flex gap-2"><CheckCircle size={16} className="text-lime-400"/> Todas las actualizaciones futuras</li>
-              </ul>
-
-              <Link to="/register" className="block w-full py-3 rounded-lg bg-lime-500 text-slate-900 font-bold hover:bg-lime-400 transition shadow-lg shadow-lime-500/20">
-                Empezar Prueba Gratis
-              </Link>
-              <p className="text-xs text-slate-500 mt-4">7 días gratis sin cargo automático.</p>
-            </div>
           </div>
         </div>
       </section>

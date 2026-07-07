@@ -43,9 +43,19 @@
     }
   ],
   "totalReps": 27,
-  "sessionEnvironment": "home",
+  "sessionEnvironment": "gym",
   "equipmentSnapshot": {
-    "availableEquipment": ["Peso Corporal","Mancuernas"],
-    "homeWeights": { "dumbbells": [5,10,15], "barbell": null }
+    "availableEquipment": [
+      "Peso Corporal",
+      "Mancuernas",
+      "Barra Olímpica",
+      "Discos",
+      "Poleas",
+      "Máquinas",
+      "Banco Ajustable",
+      "Rack de Potencia",
+      "Barra de Dominadas"
+    ],
+    "homeWeights": null
   }
 }
