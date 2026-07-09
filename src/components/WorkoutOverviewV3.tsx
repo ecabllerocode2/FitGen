@@ -534,17 +534,8 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
       return alert("No se pudo obtener el token de usuario. Inténtalo de nuevo.");
     }
     
-    // Recolectar todos los IDs de ejercicios actuales para excluirlos
-    const mainBlocksForIds = currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones || [];
-    const allIds = [
-      ...(currentSession.warmup?.map((e:any) => e.id) || []),
-      ...((mainBlocksForIds as any).flatMap((s: any) => s.ejercicios?.map((e: any) => e.id) || []) || []),
-      ...(currentSession.coreBlock?.ejercicios?.map((e:any) => e.id) || []),
-      ...(currentSession.cooldown?.fases?.flatMap((f: any) => f.contenido?.ejercicios?.map((e: any) => e.id) || []) || [])
-    ];
-
     try {
-      const response = await authenticatedFetch(API_ENDPOINTS.SESSION_SWAP_EXERCISE, userToken, { 
+      const response = await authenticatedFetch(API_ENDPOINTS.SESSION_SWAP_EXERCISE, userToken, {
         method: 'POST',
         body: JSON.stringify({
           exerciseIdToReplace: oldExercise.id,

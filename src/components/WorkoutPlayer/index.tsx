@@ -205,6 +205,7 @@ interface FlexibleExercise {
     descanso?: number;
     rirObjetivo?: number;
     rpeObjetivo?: number;
+    pesoSugerido?: number | null;
     tempo?: string;
     tipo?: string;
   };
