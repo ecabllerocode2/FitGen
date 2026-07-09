@@ -47,10 +47,11 @@ interface ExerciseLogs {
 }
 
 interface SessionFeedback {
-  rpe: number;
-  energyLevel: number;
-  sorenessLevel: number;
-  notes: string;
+  pumpQuality: number;
+  sorenessTiming: 'no llegó a doler' | 'sanó a tiempo' | 'aún dolía al entrenar de nuevo';
+  perceivedWorkload: number;
+  jointPain: boolean;
+  jointPainZone?: string;
 }
 
 // ==================== AUDIO UTILITIES ====================
@@ -487,78 +488,41 @@ interface SessionFeedbackFormProps {
 }
 
 const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({ onSubmit, isSubmitting }) => {
-  const [rpe, setRpe] = useState(5);
-  const [energy, setEnergy] = useState(3);
-  const [soreness, setSoreness] = useState(3);
-  const [notes, setNotes] = useState('');
+  const [pumpQuality, setPumpQuality] = useState(3);
+  const [sorenessTiming, setSorenessTiming] = useState<SessionFeedback['sorenessTiming']>('sanó a tiempo');
+  const [perceivedWorkload, setPerceivedWorkload] = useState(3);
+  const [jointPain, setJointPain] = useState(false);
+  const [jointPainZone, setJointPainZone] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
-      rpe,
-      energyLevel: energy,
-      sorenessLevel: soreness,
-      notes
+      pumpQuality,
+      sorenessTiming,
+      perceivedWorkload,
+      jointPain,
+      jointPainZone: jointPain ? jointPainZone : undefined,
     });
   };
 
   return (
     <div className="flex flex-col items-center justify-center p-6 w-full max-w-md mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <h2 className="text-2xl font-bold text-white mb-6">Resumen de la Sesión</h2>
+      <h2 className="text-2xl font-bold text-white mb-2">Feedback de la sesión</h2>
+      <p className="text-sm text-zinc-400 mb-6 text-center">3 preguntas estilo RP para ajustar tu volumen de la próxima semana</p>
       
       <form onSubmit={handleSubmit} className="w-full space-y-6">
         <div>
           <label className="block text-sm font-medium text-zinc-400 mb-2">
-            RPE de la Sesión (1-10)
-          </label>
-          <div className="flex items-center gap-4">
-            <input 
-              type="range" 
-              min="1" 
-              max="10" 
-              value={rpe}
-              onChange={(e) => setRpe(parseInt(e.target.value))}
-              className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-lime-500"
-            />
-            <span className="text-xl font-bold text-lime-500 w-8 text-center">{rpe}</span>
-          </div>
-          <p className="text-xs text-zinc-500 mt-1">
-            {rpe < 4 ? 'Muy suave' : rpe < 7 ? 'Moderado' : rpe < 9 ? 'Intenso' : 'Máximo esfuerzo'}
-          </p>
-        </div>
-
-        <div>
-           <label className="block text-sm font-medium text-zinc-400 mb-2">
-            Nivel de Energía (1-5)
+            ¿Qué tan bombeado quedó el músculo? (1-5)
           </label>
           <div className="flex justify-between px-2">
             {[1, 2, 3, 4, 5].map((v) => (
               <button
                 key={v}
                 type="button"
-                onClick={() => setEnergy(v)}
+                onClick={() => setPumpQuality(v)}
                 className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
-                  energy === v ? 'bg-blue-500 text-white scale-110' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                }`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-           <label className="block text-sm font-medium text-zinc-400 mb-2">
-            Nivel de Dolor Muscular (1-5)
-          </label>
-          <div className="flex justify-between px-2">
-            {[1, 2, 3, 4, 5].map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setSoreness(v)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
-                  soreness === v ? 'bg-red-500 text-white scale-110' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                  pumpQuality === v ? 'bg-lime-500 text-zinc-900 scale-110' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                 }`}
               >
                 {v}
@@ -569,14 +533,70 @@ const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({ onSubmit, isS
 
         <div>
           <label className="block text-sm font-medium text-zinc-400 mb-2">
-            Notas adicionales
+            ¿Cómo se sintió el dolor muscular entre sesiones?
           </label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-lime-500 resize-none h-24"
-            placeholder="¿Algo que destacar?"
-          />
+          <div className="space-y-2">
+            {([
+              ['no llegó a doler', 'No llegó a doler'],
+              ['sanó a tiempo', 'Sanó a tiempo'],
+              ['aún dolía al entrenar de nuevo', 'Aún dolía al entrenar de nuevo'],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setSorenessTiming(value)}
+                className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
+                  sorenessTiming === value
+                    ? 'bg-lime-500/20 border-lime-500 text-lime-300'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-2">
+            Dificultad percibida de la sesión (1-5)
+          </label>
+          <div className="flex justify-between px-2">
+            {[1, 2, 3, 4, 5].map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setPerceivedWorkload(v)}
+                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
+                  perceivedWorkload === v ? 'bg-orange-500 text-white scale-110' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-zinc-500 mt-1">1 = muy fácil · 5 = al límite</p>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              checked={jointPain}
+              onChange={(e) => setJointPain(e.target.checked)}
+              className="rounded border-zinc-600"
+            />
+            Tuve dolor articular durante la sesión
+          </label>
+          {jointPain && (
+            <input
+              type="text"
+              value={jointPainZone}
+              onChange={(e) => setJointPainZone(e.target.value)}
+              placeholder="Zona (ej. hombro, rodilla)"
+              className="mt-2 w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white text-sm"
+            />
+          )}
         </div>
 
         <button
@@ -709,6 +729,7 @@ interface RestScreenProps {
   pendingLogContext: {
     isBodyweight: boolean;
     isLastSet: boolean;
+    requiresRir?: boolean;
     isTimed?: boolean;
     exerciseName: string;
     defaultReps: number;
@@ -766,9 +787,9 @@ const RestScreen: React.FC<RestScreenProps> = ({
      }
 
      let rirNum: number | undefined = undefined;
-     if (pendingLogContext.isLastSet) {
+     if (pendingLogContext.requiresRir || pendingLogContext.isLastSet) {
         if (!rir && rir !== '0') {
-            alert('Por favor indica el RIR de la última serie.');
+            alert('Por favor indica el RIR de la serie.');
             return false;
         }
         rirNum = parseInt(rir);
@@ -847,7 +868,7 @@ const RestScreen: React.FC<RestScreenProps> = ({
                </div>
             </div>
 
-            {pendingLogContext.isLastSet && (
+            {(pendingLogContext.requiresRir || pendingLogContext.isLastSet) && (
                <div className="mb-3">
                    <div className="flex items-center justify-between mb-2">
                      <label className="text-[10px] text-zinc-400 uppercase font-bold">RIR (Reservas)</label>
@@ -1007,6 +1028,18 @@ interface ExerciseScreenProps {
   onToggleSound: () => void;
   alarmActive: boolean;
   onDismissAlarm: () => void;
+  isBodyweight?: boolean;
+  prescribedWeightKg?: number | null;
+  onPrescribedWeightChange?: (kg: number | null) => void;
+}
+
+function parsePrescribedKg(ex: FlexibleExercise): number | null {
+  const fromField = (ex as any).prescribedLoadKg ?? (ex as any).suggestedLoadKg ?? ex.prescripcion?.pesoSugerido;
+  if (typeof fromField === 'number' && !Number.isNaN(fromField)) return fromField;
+  const peso = ex.peso;
+  if (!peso || peso === 'Exploratorio') return null;
+  const match = String(peso).match(/[\d.]+/);
+  return match ? parseFloat(match[0]) : null;
 }
 
 const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
@@ -1024,19 +1057,30 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   soundEnabled,
   onToggleSound,
   alarmActive,
-  onDismissAlarm
+  onDismissAlarm,
+  isBodyweight = false,
+  prescribedWeightKg = null,
+  onPrescribedWeightChange,
 }) => {
   const [showDescription, setShowDescription] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<'tempo' | 'rir' | 'peso' | null>(null);
+  const [localWeight, setLocalWeight] = useState('');
   
   const name = getExerciseName(exercise);
   const corrections = getExerciseCorrections(exercise);
   const description = getExerciseDescription(exercise);
   const reps = getExerciseReps(exercise);
-  const weight = exercise.peso;
+  const parsedWeight = parsePrescribedKg(exercise);
+  const weight = exercise.peso ?? (parsedWeight != null ? `${parsedWeight} kg` : undefined);
+  const isExploratory = weight === 'Exploratorio' || (exercise as any).loadMode === 'exploratory';
   const tempo = exercise.tempo || exercise.prescripcion?.tempo;
   const rir = exercise.rirTarget ?? exercise.prescripcion?.rirObjetivo;
   const duracion = exercise.duracion || exercise.tiempo;
+
+  useEffect(() => {
+    const initial = prescribedWeightKg ?? parsedWeight;
+    setLocalWeight(initial != null ? String(initial) : '');
+  }, [exercise.id, prescribedWeightKg, parsedWeight]);
 
   const getTypeColor = () => {
     switch (type) {
@@ -1136,7 +1180,29 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
               </div>
             )}
             
-            {weight && (
+            {type === 'main' && !isTimedExercise && !isBodyweight ? (
+              <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 px-3 py-1.5 rounded-lg">
+                <Dumbbell className="w-4 h-4 text-blue-400 shrink-0" />
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.5"
+                  min="0"
+                  value={localWeight}
+                  onChange={(e) => {
+                    setLocalWeight(e.target.value);
+                    const n = parseFloat(e.target.value);
+                    onPrescribedWeightChange?.(Number.isNaN(n) ? null : n);
+                  }}
+                  placeholder={isExploratory ? 'kg objetivo' : 'kg'}
+                  className="w-20 bg-zinc-900/60 border border-zinc-600 rounded-lg px-2 py-1 text-sm font-bold text-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-xs text-blue-400/80">kg</span>
+                <button type="button" onClick={() => setActiveTooltip('peso')} className="p-1">
+                  <Info className="w-3.5 h-3.5 text-blue-400" />
+                </button>
+              </div>
+            ) : weight ? (
               <button
                 onClick={() => setActiveTooltip('peso')}
                 className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 px-3 py-1.5 rounded-lg hover:bg-blue-500/20 transition-colors"
@@ -1149,7 +1215,7 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
                   </div>
                 )}
               </button>
-            )}
+            ) : null}
             
             {tempo && (
               <button
@@ -1326,6 +1392,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
 
   // Logging state
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLogs>({});
+  const [weightOverrides, setWeightOverrides] = useState<Record<string, number>>({});
   const [pendingLogContext, setPendingLogContext] = useState<RestScreenProps['pendingLogContext']>(null);
   const [isSubmittingSession, setIsSubmittingSession] = useState(false);
   
@@ -1754,6 +1821,17 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
     });
   }, [currentExercise]);
 
+  const handleWeightOverride = useCallback((exerciseId: string, kg: number | null) => {
+    setWeightOverrides((prev) => {
+      if (kg == null) {
+        const next = { ...prev };
+        delete next[exerciseId];
+        return next;
+      }
+      return { ...prev, [exerciseId]: kg };
+    });
+  }, []);
+
   const handleCompleteExercise = useCallback(() => {
     if (!currentExercise) return;
     
@@ -1773,13 +1851,19 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
       const duration = getExerciseDurationInSeconds(ex);
       const isTimed = !!(duration && duration > 0);
 
+      const overrideKg = ex.id ? weightOverrides[ex.id] : undefined;
+      const placeholderWeight = overrideKg != null
+        ? String(overrideKg)
+        : ex.peso ?? (parsePrescribedKg(ex) != null ? String(parsePrescribedKg(ex)) : undefined);
+
       setPendingLogContext({
          exerciseName: getExerciseName(ex),
          isBodyweight: isBodyweightExercise(ex),
          isLastSet: isLastSet,
+         requiresRir: true,
          isTimed,
          defaultReps: isTimed ? (duration as number) : (parseInt(getExerciseReps(ex).toString()) || 0),
-         weightPlaceholder: ex.peso
+         weightPlaceholder: placeholderWeight
       });
 
       if (currentExercise.setNumber === totalSets) {
@@ -1795,7 +1879,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
     }
     
     startRest(restTime);
-  }, [currentExercise, startRest, getMainBlocks]);
+  }, [currentExercise, startRest, getMainBlocks, weightOverrides]);
 
   const handleDismissAlarm = useCallback(() => {
     stopAlarmSound();
@@ -1831,41 +1915,43 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
        
        const token = await user.getIdToken();
        
-       const mainBlocks = (session.mainBlock as any)?.bloques || [];
-       
-       // Construir el payload según la estructura API V2
-       const exercises = mainBlocks.flatMap((station: any) => {
-         const ejercicios = station.ejercicios || [];
-         return ejercicios.map((ex: FlexibleExercise) => {
-           const logs = exerciseLogs[ex.id] || [];
-           return {
-             exerciseId: ex.id,
-             exerciseName: getExerciseName(ex),
-             sets: logs.map((log, idx) => ({
-               setNumber: idx + 1,
-               reps: log.reps,
-               load: log.weight === undefined || log.weight === null ? null : log.weight,
-               rir: log.rir === undefined || log.rir === null ? 0 : log.rir,
-               rpe: log.rir !== undefined && log.rir !== null ? 10 - log.rir : 7, // RPE = 10 - RIR
-               completed: true
-             }))
-           };
-         }).filter((ex: any) => ex.sets.length > 0); // Solo ejercicios con sets registrados
+       const buildExercisePerformance = (ex: FlexibleExercise, logs: SetLog[]) => ({
+         exerciseId: ex.id,
+         exerciseName: getExerciseName(ex),
+         sets: logs.map((log, idx) => ({
+           setNumber: idx + 1,
+           reps: log.reps,
+           load: log.weight === undefined || log.weight === null ? null : log.weight,
+           rir: log.rir === undefined || log.rir === null ? 2 : log.rir,
+           rpe: log.rir !== undefined && log.rir !== null ? 10 - log.rir : 8,
+           completed: true
+         }))
        });
 
-       // Payload V2 para /session/complete
-       const payload = {
-         firebaseUid: user.uid,
-         sessionId: session.id,
-         performanceData: {
-           completedAt: new Date().toISOString(),
-           readinessPreSession: feedback.energyLevel || 7, // Usar del feedback si está disponible
-           painAreas: [], // Si tuviéramos esta info del feedback pre-sesión
-           exercises
-         }
-       };
+       let exercises: any[] = [];
 
-       console.log('📤 Enviando payload de sesión completada (V2):', JSON.stringify(payload, null, 2));
+       if (Array.isArray(session.mainBlock) && (session.mainBlock as any[])[0]?.exerciseId) {
+         exercises = (session.mainBlock as any[])
+           .map((ex: any) => {
+             const logs = exerciseLogs[ex.exerciseId] || [];
+             return logs.length ? buildExercisePerformance({ id: ex.exerciseId, nombre: ex.exerciseName } as FlexibleExercise, logs) : null;
+           })
+           .filter(Boolean);
+       } else {
+         const mainBlocks = (session.mainBlock as any)?.bloques || [];
+         exercises = mainBlocks.flatMap((station: any) => {
+           const ejercicios = station.ejercicios || [];
+           return ejercicios.map((ex: FlexibleExercise) => {
+             const logs = exerciseLogs[ex.id] || [];
+             return logs.length ? buildExercisePerformance(ex, logs) : null;
+           }).filter(Boolean);
+         });
+       }
+
+       const payload = {
+         sessionFeedback: feedback,
+         performanceData: { exercises }
+       };
 
        const response = await fetch(`${API_BASE_URL}/api/session/complete`, {
            method: 'POST',
@@ -1878,12 +1964,21 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
 
        if (!response.ok) {
          const errorData = await response.json();
-         console.error('❌ Error del servidor:', errorData);
          throw new Error(errorData.error || 'Failed to save session');
        }
        
        const result = await response.json();
-       console.log('✅ Sesión guardada exitosamente:', result);
+
+       if (result.weeklyAdjustment && Object.keys(result.weeklyAdjustment).length > 0) {
+         const msgs = Object.entries(result.weeklyAdjustment)
+           .map(([m, a]: [string, any]) => `${m}: ${a.message}`)
+           .join('\n');
+         alert(`Ajuste semanal aplicado:\n${msgs}`);
+       }
+
+       if (result.requiresEvaluation) {
+         alert('Tu mesociclo terminó. Completa la evaluación en el inicio.');
+       }
        
        if (onComplete) onComplete();
        else navigate('/');
@@ -1948,6 +2043,17 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
           onToggleSound={() => setSoundEnabled(!soundEnabled)}
           alarmActive={alarmActive}
           onDismissAlarm={handleDismissAlarm}
+          isBodyweight={isBodyweightExercise(currentExercise.exercise)}
+          prescribedWeightKg={
+            currentExercise.exercise.id
+              ? weightOverrides[currentExercise.exercise.id] ?? parsePrescribedKg(currentExercise.exercise)
+              : null
+          }
+          onPrescribedWeightChange={(kg) => {
+            if (currentExercise.exercise.id) {
+              handleWeightOverride(currentExercise.exercise.id, kg);
+            }
+          }}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center">

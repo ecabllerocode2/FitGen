@@ -47,11 +47,21 @@ export function normalizeSession(raw: any): GeneratedSession | null {
         nombre: ex.exerciseName ?? ex.nombre,
         parteCuerpo: ex.muscleGroup ?? ex.parteCuerpo,
         patronMovimiento: ex.movementPattern ?? ex.patronMovimiento,
+        loadMode: ex.loadMode,
+        prescribedLoadKg: ex.prescribedLoadKg,
+        suggestedLoadKg: ex.suggestedLoadKg,
+        peso: ex.prescribedLoadKg != null
+          ? `${ex.prescribedLoadKg} kg`
+          : ex.suggestedLoadKg != null
+            ? `~${ex.suggestedLoadKg} kg`
+            : ex.loadMode === 'exploratory'
+              ? 'Exploratorio'
+              : undefined,
         prescripcion: {
           series: ex.sets,
           reps: ex.repRange,
           rirObjetivo: ex.rirTarget,
-          pesoSugerido: ex.prescribedLoadKg,
+          pesoSugerido: ex.prescribedLoadKg ?? ex.suggestedLoadKg,
           descanso: ex.restSeconds,
           tempo: ex.tempo,
         },

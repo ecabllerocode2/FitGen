@@ -547,11 +547,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
       const response = await authenticatedFetch(API_ENDPOINTS.SESSION_SWAP_EXERCISE, userToken, { 
         method: 'POST',
         body: JSON.stringify({
-          blockType: 'main',
-          blockIndex: stationIndex,
-          exerciseIndex,
-          targetId: oldExercise.id, 
-          excludedIds: allIds,
+          exerciseIdToReplace: oldExercise.id,
         })
       });
 
@@ -560,7 +556,9 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
       }
       
       const data = await response.json();
-      if (response.ok && data.success && data.newExercise) {
+      if (response.ok && data.success && data.session) {
+        setCurrentSession(data.session as GeneratedSession);
+      } else if (response.ok && data.success && data.newExercise) {
         setCurrentSession(prevSession => {
           const newSession = JSON.parse(JSON.stringify(prevSession)) as any;
 

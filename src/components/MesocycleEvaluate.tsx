@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User } from 'firebase/auth'; 
-import { Scale, Loader2, CheckCircle2, AlertTriangle, ChevronLeft } from 'lucide-react';
+import { Scale, Loader2, CheckCircle2, AlertTriangle, ChevronLeft, RefreshCw } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 
 // ====================================================================
@@ -179,7 +179,25 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user }) => {
     // ... (El resto del componente JSX queda sin cambios)
     // --- UI DE ESTADO (Carga y Éxito) ---
     if (isBusy || status === 'success') {
-        // ... (JSX de Carga/Éxito)
+        return (
+            <div className="min-h-screen bg-zinc-900 text-white flex flex-col items-center justify-center p-6">
+                {status === 'success' ? (
+                    <>
+                        <CheckCircle2 className="w-16 h-16 text-lime-400 mb-4" />
+                        <h2 className="text-2xl font-bold mb-2">¡Nuevo mesociclo listo!</h2>
+                        <p className="text-zinc-400 text-center mb-6">Tu próximo bloque ya está generado con los ajustes de volumen.</p>
+                        <button onClick={() => navigate('/')} className="bg-lime-500 text-zinc-900 font-bold px-6 py-3 rounded-xl">
+                            Ir al Dashboard
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <RefreshCw className="w-12 h-12 text-lime-400 animate-spin mb-4" />
+                        <p className="text-zinc-300">{status === 'evaluating' ? 'Evaluando mesociclo...' : 'Generando nuevo plan...'}</p>
+                    </>
+                )}
+            </div>
+        );
     }
     
     // --- UI PRINCIPAL (Formulario) ---
