@@ -4,16 +4,19 @@ interface StepProgressProps {
 }
 
 export default function StepProgress({ current, total }: StepProgressProps) {
+  const value = total > 0 ? ((current + 1) / total) * 100 : 0;
+
   return (
-    <div className="flex items-center gap-2">
-      {Array.from({ length: total }, (_, i) => (
+    <div>
+      <div className="h-px bg-zinc-800 rounded-full overflow-hidden">
         <div
-          key={i}
-          className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-            i < current ? 'bg-lime-500' : i === current ? 'bg-lime-500/60' : 'bg-zinc-800'
-          }`}
+          className="h-full bg-lime-500 transition-all duration-500 ease-out"
+          style={{ width: `${Math.min(100, value)}%` }}
         />
-      ))}
+      </div>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600 mt-2.5 tabular-nums">
+        Paso {current + 1} de {total}
+      </p>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { API_ENDPOINTS, authenticatedFetch } from '../../config/api';
 import type { FitnessGoal, FocusArea, DayOfWeek, ExternalLoad } from '../../types/session';
 import { TRAINING_AGE_OPTIONS, getExperienceLevelFromMonths } from '../../utils/experienceLevel';
 import { beginOnboardingCompletion } from '../../utils/onboardingCompletion';
+import { AppFixedFooter, AppPrimaryButton, AppShell } from '../ui/AppPrimitives';
 import StepProgress from './StepProgress';
 import OptionCard from './OptionCard';
 
@@ -291,35 +292,35 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
   ];
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col">
-      {/* Header */}
-      <div className="px-4 pt-6 pb-4">
-        <div className="flex items-center justify-between mb-4">
-          {step > 0 ? (
-            <button
-              type="button"
-              onClick={handleBack}
-              className="p-2 -ml-2 text-zinc-400 hover:text-white transition"
-              aria-label="Atrás"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-          ) : (
+    <AppShell>
+      <div className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4">
+        <div className="max-w-sm mx-auto">
+          <div className="flex items-center justify-between mb-5">
+            {step > 0 ? (
+              <button
+                type="button"
+                onClick={handleBack}
+                className="p-2 -ml-2 text-zinc-500 hover:text-zinc-200 transition"
+                aria-label="Atrás"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            ) : (
+              <div className="w-9" />
+            )}
+            <span className="text-[10px] text-zinc-600 tabular-nums">
+              {step + 1} / {TOTAL_STEPS}
+            </span>
             <div className="w-9" />
-          )}
-          <span className="text-xs text-zinc-500 font-medium">
-            {step + 1} / {TOTAL_STEPS}
-          </span>
-          <div className="w-9" />
+          </div>
+          <StepProgress current={step} total={TOTAL_STEPS} />
         </div>
-        <StepProgress current={step} total={TOTAL_STEPS} />
       </div>
 
-      {/* Content */}
-      <div className="flex-1 px-4 pb-4 overflow-y-auto">
-        <div className="max-w-md mx-auto" key={step}>
-          <h1 className="text-2xl font-bold text-white mb-1">{stepTitles[step]}</h1>
-          <p className="text-sm text-zinc-500 mb-6">{stepSubtitles[step]}</p>
+      <div className="flex-1 px-6 pb-32 overflow-y-auto">
+        <div className="max-w-sm mx-auto" key={step}>
+          <h1 className="text-2xl font-bold text-white mb-1 leading-tight">{stepTitles[step]}</h1>
+          <p className="text-sm text-zinc-500 mb-8">{stepSubtitles[step]}</p>
 
           {/* Step 0: Goal */}
           {step === 0 && (
@@ -543,20 +544,16 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
         </div>
       </div>
 
-      {/* Footer CTA */}
-      <div className="p-4 pb-8 border-t border-zinc-900 bg-zinc-950/90 backdrop-blur">
-        <div className="max-w-md mx-auto">
-          <button
-            type="button"
-            onClick={handleNext}
-            disabled={!canContinue() || submitting}
-            className="w-full bg-lime-500 hover:bg-lime-400 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-900 font-bold text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2"
-          >
-            {step === TOTAL_STEPS - 1 ? (isEditMode ? 'Guardar cambios' : 'Crear mi plan') : 'Continuar'}
-            {step < TOTAL_STEPS - 1 && <ArrowRight className="w-5 h-5" />}
-          </button>
+      <AppFixedFooter>
+        <div className="max-w-sm mx-auto">
+          <AppPrimaryButton onClick={handleNext} disabled={!canContinue() || submitting}>
+            <span className="flex items-center justify-center gap-2">
+              {step === TOTAL_STEPS - 1 ? (isEditMode ? 'Guardar cambios' : 'Crear mi plan') : 'Continuar'}
+              {step < TOTAL_STEPS - 1 && <ArrowRight className="w-5 h-5" />}
+            </span>
+          </AppPrimaryButton>
         </div>
-      </div>
-    </div>
+      </AppFixedFooter>
+    </AppShell>
   );
 }

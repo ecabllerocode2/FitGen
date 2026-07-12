@@ -1,357 +1,304 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { User } from 'firebase/auth'; 
-import { Scale, Loader2, CheckCircle2, AlertTriangle, ChevronLeft } from 'lucide-react';
+import type { User } from 'firebase/auth';
+import { AlertTriangle } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import MesocycleGenerationLoader from './MesocycleGenerationLoader';
 import type { MesocycleGenerationProfile } from '../utils/splitGenerationContext';
-
-// ====================================================================
-// TIPOS ESTRUCTURALES
-// ====================================================================
+import {
+  AppBackButton,
+  AppEyebrow,
+  AppFixedFooter,
+  AppHero,
+  AppOptionButton,
+  AppPrimaryButton,
+  AppProgress,
+  AppScaleRow,
+  AppShell,
+} from './ui/AppPrimitives';
 
 interface Option {
-    value: string | number;
-    label: string;
-}
-// ... (Otros tipos y constantes de opciones, omitidos para brevedad) ...
-
-interface DifficultyOption extends Option {
-    value: number;
+  value: string | number;
+  label: string;
 }
 
 interface PainOption extends Option {
-    value: string;
+  value: string;
 }
 
 interface MesocycleEvaluateProps {
-    user: User;
-    profileData?: Record<string, unknown>;
+  user: User;
+  profileData?: Record<string, unknown>;
 }
 
-// ====================================================================
-// CONFIGURACIÓN DE LAS PREGUNTAS ESTRUCTURADAS (Resto de constantes sin cambios)
-// ====================================================================
-const DIFFICULTY_OPTIONS: DifficultyOption[] = [
-    { value: 1, label: 'Muy fácil (Pude hacer más)' },
-    { value: 2, label: 'Fácil (Cómodo)' },
-    { value: 3, label: 'Justo (El punto ideal)' },
-    { value: 4, label: 'Difícil (Muy cerca del fallo)' },
-    { value: 5, label: 'Extremo (Demasiado, me agoté)' },
-];
+const DIFFICULTY_LABELS: Record<number, string> = {
+  1: 'Muy fácil — pude hacer más',
+  2: 'Fácil — cómodo',
+  3: 'Justo — el punto ideal',
+  4: 'Difícil — cerca del fallo',
+  5: 'Extremo — demasiado, me agoté',
+};
 
 const PAIN_OPTIONS: PainOption[] = [
-    { value: 'none', label: 'Ninguna' },
-    { value: 'knees', label: 'Rodillas' },
-    { value: 'shoulders', label: 'Hombros' },
-    { value: 'lower_back', label: 'Espalda Baja' },
-    { value: 'elbows', label: 'Codos' },
+  { value: 'none', label: 'Ninguna' },
+  { value: 'knees', label: 'Rodillas' },
+  { value: 'shoulders', label: 'Hombros' },
+  { value: 'lower_back', label: 'Espalda baja' },
+  { value: 'elbows', label: 'Codos' },
 ];
 
 const NEXT_GOAL_OPTIONS: Option[] = [
-    { value: 'Ganancia Muscular', label: 'Ganancia Muscular (Mantener)' },
-    { value: 'Pérdida de Grasa', label: 'Pérdida de Grasa' },
-    { value: 'Fuerza Máxima', label: 'Fuerza Máxima' },
-    { value: 'Resistencia', label: 'Resistencia / Fitness General' },
+  { value: 'Ganancia Muscular', label: 'Ganancia muscular' },
+  { value: 'Pérdida de Grasa', label: 'Pérdida de grasa' },
+  { value: 'Fuerza Máxima', label: 'Fuerza máxima' },
+  { value: 'Resistencia', label: 'Resistencia / fitness general' },
 ];
 
-// --- CORRECCIÓN APLICADA AQUÍ: Se recibe y usa 'user' de props ---
-const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user, profileData }) => {
-    const navigate = useNavigate();
-    // ... (Estados sin cambios)
-    const [difficultyScore, setDifficultyScore] = useState<number | null>(null);
-    const [painAreas, setPainAreas] = useState<string[]>(['none']);
-    const [nextGoalPreference, setNextGoalPreference] = useState<string>('');
-    const [notes, setNotes] = useState<string>('');
-    const [status, setStatus] = useState<'idle' | 'evaluating' | 'generating' | 'success' | 'error'>('idle');
-    const [error, setError] = useState<string | null>(null);
-    const [generateApiDone, setGenerateApiDone] = useState(false);
-    const [loaderSequenceDone, setLoaderSequenceDone] = useState(false);
-    
-    // ... (isBusy y isFormIncomplete sin cambios)
-    const isBusy = useMemo(() => 
-        status === 'evaluating' || status === 'generating', 
-        [status]
-    );
+const STEPS = [
+  { eyebrow: 'Dificultad', title: '¿Cómo fue el bloque?', body: 'Promedio de las últimas 4 semanas.' },
+  { eyebrow: 'Molestias', title: '¿Alguna limitación?', body: 'Dolor que te obligó a cambiar ejercicios.' },
+  { eyebrow: 'Objetivo', title: '¿Cambiar enfoque?', body: 'Opcional — mantén el actual si quieres.' },
+  { eyebrow: 'Notas', title: 'Algo más que debamos saber?', body: 'Opcional.' },
+];
 
-    const isFormIncomplete = difficultyScore === null;
+export default function MesocycleEvaluate({ user, profileData }: MesocycleEvaluateProps) {
+  const navigate = useNavigate();
+  const [step, setStep] = useState(0);
+  const [difficultyScore, setDifficultyScore] = useState<number | null>(null);
+  const [painAreas, setPainAreas] = useState<string[]>(['none']);
+  const [nextGoalPreference, setNextGoalPreference] = useState('');
+  const [notes, setNotes] = useState('');
+  const [status, setStatus] = useState<'idle' | 'evaluating' | 'generating' | 'success' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [generateApiDone, setGenerateApiDone] = useState(false);
+  const [loaderSequenceDone, setLoaderSequenceDone] = useState(false);
 
-    useEffect(() => {
-        if (status !== 'generating' || !generateApiDone || !loaderSequenceDone) return;
-        setStatus('success');
-        const timer = setTimeout(() => navigate('/'), 1500);
-        return () => clearTimeout(timer);
-    }, [status, generateApiDone, loaderSequenceDone, navigate]);
-    // ... (handlePainSelect sin cambios)
-    const handlePainSelect = (value: string) => {
-        setPainAreas(prevAreas => {
-            if (value === 'none') {
-                return ['none'];
-            }
+  const isBusy = useMemo(() => status === 'evaluating' || status === 'generating', [status]);
+  const isLast = step === STEPS.length - 1;
+  const progress = ((step + 1) / STEPS.length) * 100;
 
-            const areasWithoutNone = prevAreas.filter(p => p !== 'none');
-            
-            if (areasWithoutNone.includes(value)) {
-                const newAreas = areasWithoutNone.filter(p => p !== value);
-                return newAreas.length === 0 ? ['none'] : newAreas;
-            } else {
-                return [...areasWithoutNone, value];
-            }
-        });
-    };
-    
-    // --- FUNCIÓN CENTRAL: LLAMA A EVALUAR Y LUEGO A GENERAR ---
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError(null);
-        if (isFormIncomplete) { 
-            setError('Por favor, selecciona una dificultad para continuar.');
-            return;
-        }
+  useEffect(() => {
+    if (status !== 'generating' || !generateApiDone || !loaderSequenceDone) return;
+    setStatus('success');
+    const timer = setTimeout(() => navigate('/'), 1500);
+    return () => clearTimeout(timer);
+  }, [status, generateApiDone, loaderSequenceDone, navigate]);
 
-        const painPayload = painAreas.includes('none') ? [] : painAreas;
-        const token = await user.getIdToken();
+  const handlePainSelect = (value: string) => {
+    setPainAreas((prevAreas) => {
+      if (value === 'none') return ['none'];
+      const areasWithoutNone = prevAreas.filter((p) => p !== 'none');
+      if (areasWithoutNone.includes(value)) {
+        const newAreas = areasWithoutNone.filter((p) => p !== value);
+        return newAreas.length === 0 ? ['none'] : newAreas;
+      }
+      return [...areasWithoutNone, value];
+    });
+  };
 
+  const handleSubmit = async () => {
+    setError(null);
+    if (difficultyScore === null) {
+      setError('Selecciona una dificultad para continuar.');
+      setStep(0);
+      return;
+    }
+
+    const painPayload = painAreas.includes('none') ? [] : painAreas;
+    const token = await user.getIdToken();
+
+    try {
+      setGenerateApiDone(false);
+      setLoaderSequenceDone(false);
+      setStatus('evaluating');
+
+      const evaluationResponse = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_EVALUATE, token, {
+        method: 'POST',
+        body: JSON.stringify({
+          difficultyScore,
+          painAreas: painPayload,
+          nextGoalPreference,
+          notes,
+        }),
+      });
+
+      if (!evaluationResponse.ok) {
+        let errorMessage = 'Fallo al procesar la evaluación.';
         try {
-            setGenerateApiDone(false);
-            setLoaderSequenceDone(false);
-            // ----------------------------------------------------
-            // 1. LLAMADA DE EVALUACIÓN (/api/mesocycle/evaluate)
-            // ----------------------------------------------------
-            setStatus('evaluating');
-            
-            const evaluationResponse = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_EVALUATE, token, {
-                method: 'POST',
-                body: JSON.stringify({
-                    difficultyScore,
-                    painAreas: painPayload,
-                    nextGoalPreference,
-                    notes
-                }),
-            });
-
-            // **********************************************
-            // MANEJO ROBUSTO DE ERRORES EN EVALUACIÓN
-            // **********************************************
-            if (!evaluationResponse.ok) {
-                let errorMessage = 'Fallo desconocido al procesar la evaluación.';
-                try {
-                    // Intenta leer el JSON si está presente
-                    const errorData = await evaluationResponse.json();
-                    errorMessage = errorData.error || errorData.message || errorMessage;
-                } catch {
-                    // Si el JSON falla (ej. cuerpo vacío, HTML de error), lee el texto crudo
-                    const text = await evaluationResponse.text();
-                    errorMessage = `Error de red. Respuesta no válida del servidor. Código: ${evaluationResponse.status}.`;
-                    console.error("Respuesta fallida cruda:", text.substring(0, 200));
-                }
-                throw new Error(errorMessage);
-            }
-            
-            // Leemos la respuesta JSON del endpoint /evaluate
-            await evaluationResponse.json(); 
-
-
-            // ----------------------------------------------------
-            // 2. LLAMADA DE GENERACIÓN (/api/mesocycle/generate)
-            // ----------------------------------------------------
-            setStatus('generating');
-            setLoaderSequenceDone(false);
-            const generationResponse = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, token, {
-                method: 'POST',
-            });
-            // El endpoint de generación usará la data de evaluación almacenada en Firestore
-
-            // **********************************************
-            // MANEJO ROBUSTO DE ERRORES EN GENERACIÓN
-            // **********************************************
-            if (!generationResponse.ok) {
-                let errorMessage = 'Fallo desconocido al generar el nuevo mesociclo.';
-                try {
-                    const errorData = await generationResponse.json();
-                    errorMessage = errorData.error || errorData.message || errorMessage;
-                } catch {
-                    const text = await generationResponse.text();
-                    errorMessage = `Error de red. Respuesta no válida del servidor durante la generación. Código: ${generationResponse.status}.`;
-                    console.error("Respuesta fallida cruda:", text.substring(0, 200));
-                }
-                throw new Error(errorMessage);
-            }
-            
-            setGenerateApiDone(true);
-
-        } catch (err) {
-            console.error(err);
-            setStatus('error');
-            setError((err as Error).message || 'Ocurrió un error inesperado. Intenta de nuevo.');
+          const errorData = await evaluationResponse.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch {
+          errorMessage = `Error del servidor. Código: ${evaluationResponse.status}.`;
         }
+        throw new Error(errorMessage);
+      }
+
+      await evaluationResponse.json();
+
+      setStatus('generating');
+      setLoaderSequenceDone(false);
+      const generationResponse = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, token, {
+        method: 'POST',
+      });
+
+      if (!generationResponse.ok) {
+        let errorMessage = 'Fallo al generar el nuevo mesociclo.';
+        try {
+          const errorData = await generationResponse.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch {
+          errorMessage = `Error del servidor. Código: ${generationResponse.status}.`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      setGenerateApiDone(true);
+    } catch (err) {
+      console.error(err);
+      setStatus('error');
+      setError((err as Error).message || 'Ocurrió un error inesperado.');
+    }
+  };
+
+  const handleNext = () => {
+    setError(null);
+    if (step === 0 && difficultyScore === null) {
+      setError('Selecciona una dificultad.');
+      return;
+    }
+    if (isLast) void handleSubmit();
+    else setStep((s) => s + 1);
+  };
+
+  if (isBusy) {
+    const loaderProfile: MesocycleGenerationProfile = {
+      fitnessGoal: (profileData?.fitnessGoal as string) ?? 'Hipertrofia',
+      trainingAgeMonths: profileData?.trainingAgeMonths as number | undefined,
+      experienceLevel: profileData?.experienceLevel as MesocycleGenerationProfile['experienceLevel'],
+      trainingDaysPerWeek: profileData?.trainingDaysPerWeek as number | undefined,
+      weeklyScheduleContext: profileData?.weeklyScheduleContext as MesocycleGenerationProfile['weeklyScheduleContext'],
+      injuriesOrLimitations: profileData?.injuriesOrLimitations as string[] | undefined,
     };
 
-    // ... (El resto del componente JSX queda sin cambios)
-    // --- UI DE ESTADO (Carga y Éxito) ---
-    if (isBusy) {
-        const loaderProfile: MesocycleGenerationProfile = {
-            fitnessGoal: (profileData?.fitnessGoal as string) ?? 'Hipertrofia',
-            trainingAgeMonths: profileData?.trainingAgeMonths as number | undefined,
-            experienceLevel: profileData?.experienceLevel as MesocycleGenerationProfile['experienceLevel'],
-            trainingDaysPerWeek: profileData?.trainingDaysPerWeek as number | undefined,
-            weeklyScheduleContext: profileData?.weeklyScheduleContext as MesocycleGenerationProfile['weeklyScheduleContext'],
-            injuriesOrLimitations: profileData?.injuriesOrLimitations as string[] | undefined,
-        };
-
-        return (
-            <MesocycleGenerationLoader
-                title={status === 'evaluating' ? 'Evaluando tu mesociclo' : 'Generando tu próximo bloque'}
-                subtitle={
-                    status === 'evaluating'
-                        ? 'Analizando dificultad, molestias y progreso del ciclo anterior…'
-                        : 'Aplicando los ajustes de volumen a tu nuevo mesociclo…'
-                }
-                profile={loaderProfile}
-                phase={status === 'evaluating' ? 'saving' : 'generating'}
-                evaluationMode={status === 'generating'}
-                onSequenceComplete={() => setLoaderSequenceDone(true)}
-            />
-        );
-    }
-
-    if (status === 'success') {
-        return (
-            <div className="min-h-screen bg-zinc-900 text-white flex flex-col items-center justify-center p-6">
-                <CheckCircle2 className="w-16 h-16 text-lime-400 mb-4" />
-                <h2 className="text-2xl font-bold mb-2">¡Nuevo mesociclo listo!</h2>
-                <p className="text-zinc-400 text-center mb-6">Tu próximo bloque ya está generado con los ajustes de volumen.</p>
-                <button onClick={() => navigate('/')} className="bg-lime-500 text-zinc-900 font-bold px-6 py-3 rounded-xl">
-                    Ir al Dashboard
-                </button>
-            </div>
-        );
-    }
-    
-    // --- UI PRINCIPAL (Formulario) ---
     return (
-        <div className="min-h-screen bg-zinc-900 text-white p-5">
-            <header className="mb-8">
-                <button type="button" onClick={() => navigate('/')} className="text-zinc-400 hover:text-white flex items-center mb-4">
-                    <ChevronLeft className="w-5 h-5" />
-                    Volver al Dashboard
-                </button>
-                <h1 className="text-3xl font-bold text-lime-400 flex items-center gap-2">
-                    <Scale className="w-7 h-7" />
-                    Evaluación de Mesociclo
-                </h1>
-                <p className="text-zinc-400 mt-2">Tu feedback es vital. Úsalo para mejorar la calidad y personalización de tu próximo plan.</p>
-            </header>
-
-            {error && (
-                <div className="bg-red-900/50 border border-red-500/50 p-3 rounded-xl flex items-center gap-3 mb-6">
-                    <AlertTriangle className="w-5 h-5 text-red-400" />
-                    <p className="text-sm text-red-200">{error}</p>
-                </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-8">
-                {/* PREGUNTA 1: DIFICULTAD GLOBAL */}
-                <section>
-                    <h2 className="text-xl font-semibold mb-4">1. Dificultad del Mesociclo</h2>
-                    <p className="text-zinc-400 mb-3">En promedio, ¿cómo sentiste la dificultad y el volumen de las últimas 4 semanas?</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {DIFFICULTY_OPTIONS.map((option: DifficultyOption) => (
-                            <button
-                                key={option.value}
-                                type="button" 
-                                onClick={() => setDifficultyScore(option.value)}
-                                className={`p-4 rounded-xl text-left transition-all ${
-                                    difficultyScore === option.value 
-                                    ? 'bg-lime-500 text-zinc-900 shadow-lg shadow-lime-500/20' 
-                                    : 'bg-zinc-800 border border-zinc-700/50 hover:bg-zinc-700'
-                                }`}
-                            >
-                                <span className="font-bold text-lg">{option.value} / 5</span>
-                                <p className="text-sm">{option.label}</p>
-                            </button>
-                        ))}
-                    </div>
-                </section>
-
-                {/* PREGUNTA 2: ÁREAS DE DOLOR/MOLESTIA */}
-                <section>
-                    <h2 className="text-xl font-semibold mb-4">2. Molestias y Limitaciones</h2>
-                    <p className="text-zinc-400 mb-3">¿Experimentaste dolor persistente o molestias que te obligaron a cambiar ejercicios?</p>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {PAIN_OPTIONS.map((option: PainOption) => (
-                            <button
-                                key={option.value}
-                                type="button" 
-                                onClick={() => handlePainSelect(option.value)}
-                                className={`p-3 rounded-xl text-center transition-all ${
-                                    painAreas.includes(option.value) 
-                                    ? 'bg-red-500 text-white' 
-                                    : 'bg-zinc-800 border border-zinc-700/50 hover:bg-zinc-700 text-zinc-300'
-                                }`}
-                            >
-                                {option.label}
-                            </button>
-                        ))}
-                    </div>
-                </section>
-
-                {/* PREGUNTA 3: OBJETIVO FUTURO */}
-                <section>
-                    <h2 className="text-xl font-semibold mb-4">3. ¿Cambiar tu Enfoque?</h2>
-                    <p className="text-zinc-400 mb-3">Selecciona el objetivo si deseas cambiarlo del que tenías.</p>
-                    <select
-                        value={nextGoalPreference}
-                        onChange={(e) => setNextGoalPreference(e.target.value)}
-                        className="w-full bg-zinc-800 border border-zinc-700/50 text-white p-3 rounded-xl focus:ring-lime-500 focus:border-lime-500"
-                    >
-                        <option value="">Mantener mi objetivo actual...</option>
-                        {NEXT_GOAL_OPTIONS.map((option: Option) => (
-                            <option key={option.value} value={String(option.value)}>{option.label}</option>
-                        ))}
-                    </select>
-                </section>
-                
-                {/* PREGUNTA 4: NOTAS LIBRES */}
-                <section>
-                    <h2 className="text-xl font-semibold mb-4">4. Notas (Opcional)</h2>
-                    <p className="text-zinc-400 mb-3">Cualquier observación adicional.</p>
-                    <textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        rows={4}
-                        className="w-full bg-zinc-800 border border-zinc-700/50 text-white p-3 rounded-xl resize-none focus:ring-lime-500 focus:border-lime-500"
-                        placeholder="Escribe aquí..."
-                    />
-                </section>
-
-                {/* BOTÓN DE ENVÍO */}
-                <button
-                    type="submit"
-                    disabled={isFormIncomplete || isBusy} 
-                    className={`w-full font-bold py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-3 ${
-                        isFormIncomplete
-                        ? 'bg-zinc-600 text-zinc-400 cursor-not-allowed'
-                        : 'bg-lime-500 hover:bg-lime-400 text-zinc-900 shadow-lime-500/20 active:scale-98'
-                    }`}
-                >
-                    {isBusy ? (
-                        <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            {status === 'evaluating' ? 'Evaluando...' : 'Generando...'}
-                        </>
-                    ) : (
-                        <>
-                            <CheckCircle2 className="w-6 h-6" />
-                            Finalizar Evaluación y Generar Nuevo Plan
-                        </>
-                    )}
-                </button>
-            </form>
-
-            <div className="h-10"></div>
-        </div>
+      <MesocycleGenerationLoader
+        title={status === 'evaluating' ? 'Evaluando tu mesociclo' : 'Generando tu próximo bloque'}
+        subtitle={
+          status === 'evaluating'
+            ? 'Analizando dificultad, molestias y progreso del ciclo anterior…'
+            : 'Aplicando los ajustes de volumen a tu nuevo mesociclo…'
+        }
+        profile={loaderProfile}
+        phase={status === 'evaluating' ? 'saving' : 'generating'}
+        evaluationMode={status === 'generating'}
+        onSequenceComplete={() => setLoaderSequenceDone(true)}
+      />
     );
-};
+  }
 
-export default MesocycleEvaluate;
+  if (status === 'success') {
+    return (
+      <AppShell>
+        <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+          <AppHero
+            eyebrow="Mesociclo"
+            title="¡Nuevo bloque listo!"
+            body="Tu plan ya incluye los ajustes de volumen según tu feedback."
+          />
+        </div>
+        <AppFixedFooter>
+          <AppPrimaryButton onClick={() => navigate('/')}>Ir al dashboard</AppPrimaryButton>
+        </AppFixedFooter>
+      </AppShell>
+    );
+  }
+
+  const current = STEPS[step];
+
+  return (
+    <AppShell>
+      <div className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4">
+        <div className="max-w-sm mx-auto">
+          <div className="flex items-center justify-between mb-6">
+            <AppBackButton onClick={() => (step > 0 ? setStep((s) => s - 1) : navigate('/'))} />
+            <span className="text-[10px] text-zinc-600 tabular-nums">
+              {step + 1} / {STEPS.length}
+            </span>
+          </div>
+          <AppProgress value={progress} label="Evaluación" />
+        </div>
+      </div>
+
+      <div className="flex-1 px-6 overflow-y-auto pb-32">
+        <div className="max-w-sm mx-auto">
+          <AppEyebrow>{current.eyebrow}</AppEyebrow>
+          <h1 className="text-2xl font-bold text-white mt-4 mb-2 leading-tight">{current.title}</h1>
+          <p className="text-[15px] text-zinc-500 mb-8">{current.body}</p>
+
+          {error ? (
+            <div className="mb-6 flex items-start gap-2 text-sm text-red-400">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          ) : null}
+
+          {step === 0 && (
+            <AppScaleRow
+              value={difficultyScore ?? 0}
+              onChange={(v) => setDifficultyScore(v)}
+              labels={DIFFICULTY_LABELS}
+            />
+          )}
+
+          {step === 1 && (
+            <div className="grid grid-cols-2 gap-2">
+              {PAIN_OPTIONS.map((option) => (
+                <AppOptionButton
+                  key={option.value}
+                  selected={painAreas.includes(option.value)}
+                  onClick={() => handlePainSelect(option.value)}
+                  compact
+                >
+                  <span className="text-sm font-medium">{option.label}</span>
+                </AppOptionButton>
+              ))}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="flex flex-col gap-2">
+              <AppOptionButton selected={nextGoalPreference === ''} onClick={() => setNextGoalPreference('')}>
+                <span className="text-sm">Mantener mi objetivo actual</span>
+              </AppOptionButton>
+              {NEXT_GOAL_OPTIONS.map((option) => (
+                <AppOptionButton
+                  key={option.value}
+                  selected={nextGoalPreference === String(option.value)}
+                  onClick={() => setNextGoalPreference(String(option.value))}
+                >
+                  <span className="text-sm">{option.label}</span>
+                </AppOptionButton>
+              ))}
+            </div>
+          )}
+
+          {step === 3 && (
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={5}
+              className="w-full bg-zinc-950 border border-zinc-800 text-white p-4 rounded-xl resize-none focus:border-lime-500/50 focus:outline-none text-[15px] leading-relaxed"
+              placeholder="Observaciones, sensaciones, cambios de vida…"
+            />
+          )}
+        </div>
+      </div>
+
+      <AppFixedFooter>
+        <AppPrimaryButton onClick={handleNext}>
+          {isLast ? 'Finalizar y generar plan' : 'Continuar'}
+        </AppPrimaryButton>
+      </AppFixedFooter>
+    </AppShell>
+  );
+}

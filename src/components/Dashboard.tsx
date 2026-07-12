@@ -162,15 +162,13 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, onSubmit
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-                <div className="max-w-sm mx-auto pt-4">
-                    <DashboardEyebrow>Pre-sesión</DashboardEyebrow>
-                    <h3 className="text-2xl font-bold text-white mt-4 mb-2">¿Cómo te sientes?</h3>
-                    <p className="text-[15px] text-zinc-400 leading-relaxed mb-8">
+                <div className="max-w-sm mx-auto pt-2">
+                    <p className="text-[15px] text-zinc-500 leading-relaxed mb-6 text-center">
                         {isRecovery
                             ? 'Tu respuesta define una sesión de recuperación óptima.'
-                            : 'Ajustamos volumen e intensidad en tiempo real según tu estado.'}
+                            : 'Ajustamos volumen e intensidad según tu estado.'}
                     </p>
-                    <ReadinessForm onSubmit={onSubmit} isLoading={isLoading} />
+                    <ReadinessForm onSubmit={onSubmit} onBack={onClose} isLoading={isLoading} />
                 </div>
             </div>
         </div>

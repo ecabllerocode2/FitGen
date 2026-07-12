@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../../config/api';
 import { getMesocyclePreviewSessions, normalizeMesocycleForUI } from '../../utils/mesocycleNormalizer';
 import {
@@ -15,6 +14,13 @@ import {
   MIN_SAVING_DISPLAY_MS,
 } from '../../utils/splitGenerationContext';
 import MesocycleGenerationLoader from '../MesocycleGenerationLoader';
+import {
+  AppEyebrow,
+  AppFixedFooter,
+  AppHero,
+  AppPrimaryButton,
+  AppShell,
+} from '../ui/AppPrimitives';
 
 interface OnboardingCompletionFlowProps {
   user: User;
@@ -117,19 +123,19 @@ export default function OnboardingCompletionFlow({ user }: OnboardingCompletionF
 
   if (completion.error) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6 text-center">
-        <p className="text-red-400 mb-4">{completion.error}</p>
-        <button
-          type="button"
-          onClick={() => {
-            finishOnboardingCompletion();
-            window.location.reload();
-          }}
-          className="bg-lime-500 text-zinc-900 font-bold px-6 py-3 rounded-xl"
-        >
-          Reintentar
-        </button>
-      </div>
+      <AppShell>
+        <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+          <p className="text-red-400 mb-6 text-sm">{completion.error}</p>
+          <AppPrimaryButton
+            onClick={() => {
+              finishOnboardingCompletion();
+              window.location.reload();
+            }}
+          >
+            Reintentar
+          </AppPrimaryButton>
+        </div>
+      </AppShell>
     );
   }
 
@@ -143,23 +149,23 @@ export default function OnboardingCompletionFlow({ user }: OnboardingCompletionF
     const profile = completion.generationProfile;
 
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-lime-500/20 flex items-center justify-center mb-5">
-            <Sparkles className="w-8 h-8 text-lime-400" />
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-2">¡Tu plan está listo!</h1>
-          <p className="text-zinc-400 text-sm mb-8 max-w-xs">
-            Mesociclo de {duration} semanas · {profile.experienceLevel} · {profile.fitnessGoal}
-          </p>
+      <AppShell>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+          <AppHero
+            eyebrow="Tu plan"
+            title="¡Listo para empezar!"
+            body={`${duration} semanas · ${profile.experienceLevel} · ${profile.fitnessGoal}`}
+            align="center"
+          />
 
-          <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 text-left mb-6">
-            <p className="text-xs font-bold text-lime-400 uppercase tracking-wider mb-3">
-              Split: {split}
-            </p>
-            <ul className="space-y-2">
+          <div className="w-full max-w-sm mt-10">
+            <AppEyebrow>Split · {split}</AppEyebrow>
+            <ul className="mt-4 space-y-0">
               {sessions.map((line) => (
-                <li key={line} className="text-sm text-zinc-300 flex items-center gap-2">
+                <li
+                  key={line}
+                  className="flex items-center gap-4 py-3 border-b border-zinc-800/90 last:border-0 text-sm text-zinc-300"
+                >
                   <span className="w-1.5 h-1.5 rounded-full bg-lime-500 shrink-0" />
                   {line}
                 </li>
@@ -168,16 +174,10 @@ export default function OnboardingCompletionFlow({ user }: OnboardingCompletionF
           </div>
         </div>
 
-        <div className="p-4 pb-8 safe-area-bottom">
-          <button
-            type="button"
-            onClick={() => void handleStart()}
-            className="w-full max-w-sm mx-auto block bg-lime-500 text-zinc-900 font-bold py-4 rounded-xl hover:bg-lime-400 transition"
-          >
-            Empezar entrenamiento
-          </button>
-        </div>
-      </div>
+        <AppFixedFooter>
+          <AppPrimaryButton onClick={() => void handleStart()}>Empezar entrenamiento</AppPrimaryButton>
+        </AppFixedFooter>
+      </AppShell>
     );
   }
 

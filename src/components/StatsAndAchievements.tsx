@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Trophy,
   Target,
@@ -10,12 +10,12 @@ import {
   Dumbbell,
   CheckCircle2,
   ArrowLeft,
-  Zap,
   Crown,
   Medal,
 } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { AppEyebrow } from './ui/AppPrimitives';
 
 interface HistorySession {
   feedback?: {
@@ -294,189 +294,146 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-emerald-500/20">
-        {/* Header */}
-        <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 p-6">
+    <div className="fixed inset-0 bg-zinc-950/95 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[92dvh] overflow-hidden">
+        <div className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] pb-5 border-b border-zinc-800/90">
           <button
+            type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+            className="mb-5 p-2 -ml-2 text-zinc-500 hover:text-zinc-200 transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 text-white" />
+            <ArrowLeft className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-white/10 rounded-xl">
-              <Trophy className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">
-                Tus Estadísticas y Logros
-              </h2>
-              <p className="text-emerald-100 text-sm">
-                {userProfile.profileData?.name || 'Atleta'}, sigue así 🎯
-              </p>
-            </div>
-          </div>
+          <AppEyebrow>Progreso</AppEyebrow>
+          <h2 className="text-2xl font-bold text-white mt-3">Estadísticas y logros</h2>
+          <p className="text-sm text-zinc-500 mt-1">
+            {userProfile.profileData?.name || 'Atleta'}
+          </p>
         </div>
 
-        {/* Content */}
-        <div className="overflow-y-auto max-h-[calc(90vh-120px)] p-6 space-y-6">
-          {/* Stats Overview */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 border border-blue-500/30 rounded-xl p-4">
+        <div className="overflow-y-auto max-h-[calc(92dvh-8rem)] px-6 py-6 space-y-8">
+          <div className="grid grid-cols-2 gap-px bg-zinc-800 rounded-xl overflow-hidden">
+            <div className="bg-zinc-950 p-4">
               <div className="flex items-center justify-between mb-2">
-                <Dumbbell className="w-5 h-5 text-blue-400" />
-                <span className="text-2xl font-bold text-white">{stats.totalSessions}</span>
+                <Dumbbell className="w-4 h-4 text-lime-500/70" />
+                <span className="text-2xl font-bold text-white tabular-nums">{stats.totalSessions}</span>
               </div>
-              <p className="text-xs text-blue-200">Sesiones Totales</p>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Sesiones</p>
             </div>
 
-            <div className="bg-gradient-to-br from-orange-600/20 to-orange-800/20 border border-orange-500/30 rounded-xl p-4">
+            <div className="bg-zinc-950 p-4">
               <div className="flex items-center justify-between mb-2">
-                <Flame className="w-5 h-5 text-orange-400" />
-                <span className="text-2xl font-bold text-white">{stats.currentStreak}</span>
+                <Flame className="w-4 h-4 text-lime-500/70" />
+                <span className="text-2xl font-bold text-white tabular-nums">{stats.currentStreak}</span>
               </div>
-              <p className="text-xs text-orange-200">Racha Actual</p>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Racha</p>
             </div>
 
-            <div className="bg-gradient-to-br from-purple-600/20 to-purple-800/20 border border-purple-500/30 rounded-xl p-4">
+            <div className="bg-zinc-950 p-4">
               <div className="flex items-center justify-between mb-2">
-                <Calendar className="w-5 h-5 text-purple-400" />
-                <span className="text-2xl font-bold text-white">{stats.weeksCompleted}</span>
+                <Calendar className="w-4 h-4 text-lime-500/70" />
+                <span className="text-2xl font-bold text-white tabular-nums">{stats.weeksCompleted}</span>
               </div>
-              <p className="text-xs text-purple-200">Semanas Completas</p>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Semanas</p>
             </div>
 
-            <div className="bg-gradient-to-br from-emerald-600/20 to-emerald-800/20 border border-emerald-500/30 rounded-xl p-4">
+            <div className="bg-zinc-950 p-4">
               <div className="flex items-center justify-between mb-2">
-                <TrendingUp className="w-5 h-5 text-emerald-400" />
-                <span className="text-2xl font-bold text-white">{stats.daysSinceJoined}</span>
+                <TrendingUp className="w-4 h-4 text-lime-500/70" />
+                <span className="text-2xl font-bold text-white tabular-nums">{stats.daysSinceJoined}</span>
               </div>
-              <p className="text-xs text-emerald-200">Días desde que Empezaste</p>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Días activo</p>
             </div>
           </div>
 
-          {/* Motivational Message */}
-          <div className="bg-gradient-to-r from-emerald-600/20 to-teal-600/20 border border-emerald-500/30 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <Zap className="w-6 h-6 text-emerald-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-lg font-semibold text-white mb-1">Mensaje del Día</p>
-                <p className="text-emerald-100">{randomMessage}</p>
-              </div>
-            </div>
+          <div className="py-4 border-y border-zinc-800/90">
+            <p className="text-sm text-zinc-400 leading-relaxed">{randomMessage}</p>
           </div>
-          {/* Current Week Progress Warning */}
           {stats.currentWeekMessage && (
-            <div className="bg-gradient-to-r from-amber-600/20 to-orange-600/20 border border-amber-500/30 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <Target className="w-6 h-6 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-lg font-semibold text-amber-200 mb-1">Mensaje de Motivación</p>
-                  <p className="text-amber-100">{stats.currentWeekMessage}</p>
-                </div>
-              </div>
+            <div className="py-4 border-b border-zinc-800/90">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-2">Esta semana</p>
+              <p className="text-sm text-zinc-400">{stats.currentWeekMessage}</p>
             </div>
           )}
-          {/* Next Goal */}
           {nextGoal && (
-            <div className="bg-gradient-to-br from-amber-600/20 to-orange-600/20 border border-amber-500/30 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <Target className="w-6 h-6 text-amber-400 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-amber-200 mb-1">PRÓXIMO OBJETIVO</p>
-                  <p className="text-lg font-bold text-white mb-1">{nextGoal.title}</p>
-                  <p className="text-sm text-amber-100 mb-3">{nextGoal.description}</p>
-                  {nextGoal.progress !== undefined && nextGoal.target && (
-                    <div>
-                      <div className="flex justify-between text-xs text-amber-200 mb-1">
-                        <span>Progreso</span>
-                        <span>{nextGoal.progress}/{nextGoal.target}</span>
-                      </div>
-                      <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
-                        <div
-                          className="bg-gradient-to-r from-amber-500 to-orange-500 h-full transition-all duration-500"
-                          style={{ width: `${(nextGoal.progress / nextGoal.target) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
+            <div className="py-4 border-b border-zinc-800/90">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-2">Próximo logro</p>
+              <p className="text-base font-semibold text-white mb-1">{nextGoal.title}</p>
+              <p className="text-sm text-zinc-500 mb-3">{nextGoal.description}</p>
+              {nextGoal.progress !== undefined && nextGoal.target && (
+                <div>
+                  <div className="h-px bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-lime-500 transition-all duration-500"
+                      style={{ width: `${(nextGoal.progress / nextGoal.target) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-zinc-600 mt-2 tabular-nums">
+                    {nextGoal.progress} / {nextGoal.target}
+                  </p>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
-          {/* Unlocked Achievements */}
           {unlockedAchievements.length > 0 && (
             <div>
-              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                <Award className="w-6 h-6 text-emerald-400" />
-                Logros Desbloqueados ({unlockedAchievements.length})
+              <h3 className="text-sm font-semibold text-zinc-300 mb-4 flex items-center gap-2">
+                <Award className="w-4 h-4 text-lime-500/70" />
+                Desbloqueados ({unlockedAchievements.length})
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-0">
                 {unlockedAchievements.map((achievement) => (
                   <div
                     key={achievement.id}
-                    className="bg-gradient-to-br from-emerald-600/20 to-teal-600/20 border-2 border-emerald-500/50 rounded-xl p-4 relative overflow-hidden"
+                    className="flex items-start gap-4 py-4 border-b border-zinc-800/90 last:border-0"
                   >
-                    <div className="absolute top-2 right-2">
-                      <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                    <div className="text-lime-500/80 shrink-0">{achievement.icon}</div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-white text-sm">{achievement.title}</h4>
+                      <p className="text-sm text-zinc-500 mt-0.5">{achievement.description}</p>
+                      {achievement.unlockedDate && (
+                        <p className="text-[10px] text-zinc-600 mt-2">
+                          {format(parseISO(achievement.unlockedDate), "d MMM yyyy", { locale: es })}
+                        </p>
+                      )}
                     </div>
-                    <div className="flex items-start gap-3">
-                      <div className="p-3 bg-emerald-500/20 rounded-xl text-emerald-400">
-                        {achievement.icon}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-bold text-white mb-1">{achievement.title}</h4>
-                        <p className="text-sm text-emerald-100">{achievement.description}</p>
-                        {achievement.unlockedDate && (
-                          <p className="text-xs text-emerald-300 mt-2">
-                            Desbloqueado: {format(parseISO(achievement.unlockedDate), "d 'de' MMMM, yyyy", { locale: es })}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                    <CheckCircle2 className="w-4 h-4 text-lime-500 shrink-0 mt-0.5" />
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Locked Achievements */}
           {lockedAchievements.length > 0 && (
             <div>
-              <h3 className="text-xl font-bold text-slate-300 mb-4 flex items-center gap-2">
-                <Target className="w-6 h-6 text-slate-400" />
-                Por Desbloquear ({lockedAchievements.length})
+              <h3 className="text-sm font-semibold text-zinc-500 mb-4 flex items-center gap-2">
+                <Target className="w-4 h-4" />
+                Por desbloquear ({lockedAchievements.length})
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-0">
                 {lockedAchievements.map((achievement) => (
                   <div
                     key={achievement.id}
-                    className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 relative overflow-hidden opacity-70"
+                    className="flex items-start gap-4 py-4 border-b border-zinc-800/90 last:border-0 opacity-70"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="p-3 bg-slate-700/50 rounded-xl text-slate-500">
-                        {achievement.icon}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-bold text-slate-300 mb-1">{achievement.title}</h4>
-                        <p className="text-sm text-slate-400 mb-3">{achievement.description}</p>
-                        {achievement.progress !== undefined && achievement.target && (
-                          <div>
-                            <div className="flex justify-between text-xs text-slate-400 mb-1">
-                              <span>Progreso</span>
-                              <span>{achievement.progress}/{achievement.target}</span>
-                            </div>
-                            <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
-                              <div
-                                className="bg-gradient-to-r from-slate-600 to-slate-500 h-full transition-all duration-500"
-                                style={{ width: `${(achievement.progress / achievement.target) * 100}%` }}
-                              />
-                            </div>
+                    <div className="text-zinc-600 shrink-0">{achievement.icon}</div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-zinc-400 text-sm">{achievement.title}</h4>
+                      <p className="text-sm text-zinc-600 mt-0.5 mb-2">{achievement.description}</p>
+                      {achievement.progress !== undefined && achievement.target && (
+                        <div>
+                          <div className="h-px bg-zinc-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-zinc-600 transition-all duration-500"
+                              style={{ width: `${(achievement.progress / achievement.target) * 100}%` }}
+                            />
                           </div>
-                        )}
-                      </div>
+                          <p className="text-[10px] text-zinc-600 mt-1.5 tabular-nums">
+                            {achievement.progress} / {achievement.target}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -484,18 +441,11 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
             </div>
           )}
 
-          {/* Empty State */}
           {stats.totalSessions === 0 && (
-            <div className="text-center py-12">
-              <div className="inline-block p-4 bg-slate-800 rounded-full mb-4">
-                <Dumbbell className="w-12 h-12 text-slate-500" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-2">
-                ¡Comienza tu Viaje!
-              </h3>
-              <p className="text-slate-400">
-                Completa tu primera sesión para comenzar a desbloquear logros
-              </p>
+            <div className="text-center py-10">
+              <Dumbbell className="w-10 h-10 text-zinc-700 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-white mb-2">Tu viaje empieza hoy</h3>
+              <p className="text-sm text-zinc-500">Completa tu primera sesión para desbloquear logros</p>
             </div>
           )}
         </div>

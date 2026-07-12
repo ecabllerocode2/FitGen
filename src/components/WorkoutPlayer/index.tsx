@@ -22,10 +22,18 @@ import {
   Layers3,
   RotateCcw,
   Info,
-  BookOpen,
-  Sparkles
+  BookOpen
 } from 'lucide-react';
 import type { GeneratedSession } from '../../types/session';
+import {
+  AppEyebrow,
+  AppFixedFooter,
+  AppHero,
+  AppOptionButton,
+  AppPrimaryButton,
+  AppProgress,
+  AppShell,
+} from '../ui/AppPrimitives';
 
 // ==================== AUDIO UTILITIES ====================
 
@@ -489,14 +497,18 @@ interface SessionFeedbackFormProps {
 }
 
 const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({ onSubmit, isSubmitting }) => {
+  const [step, setStep] = useState(0);
   const [pumpQuality, setPumpQuality] = useState(3);
   const [sorenessTiming, setSorenessTiming] = useState<SessionFeedback['sorenessTiming']>('sanó a tiempo');
   const [perceivedWorkload, setPerceivedWorkload] = useState(3);
   const [jointPain, setJointPain] = useState(false);
   const [jointPainZone, setJointPainZone] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const steps = ['Pump', 'Recuperación', 'Carga'];
+  const isLast = step === steps.length - 1;
+  const progress = ((step + 1) / (steps.length + (jointPain ? 1 : 0) + 1)) * 100;
+
+  const handleSubmit = () => {
     onSubmit({
       pumpQuality,
       sorenessTiming,
@@ -506,116 +518,109 @@ const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({ onSubmit, isS
     });
   };
 
+  const handleNext = () => {
+    if (step < 2) setStep((s) => s + 1);
+    else handleSubmit();
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center p-6 w-full max-w-md mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <h2 className="text-2xl font-bold text-white mb-2">Feedback de la sesión</h2>
-      <p className="text-sm text-zinc-400 mb-6 text-center">3 preguntas estilo RP para ajustar tu volumen de la próxima semana</p>
-      
-      <form onSubmit={handleSubmit} className="w-full space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-zinc-400 mb-2">
-            ¿Qué tan bombeado quedó el músculo? (1-5)
-          </label>
-          <div className="flex justify-between px-2">
-            {[1, 2, 3, 4, 5].map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setPumpQuality(v)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
-                  pumpQuality === v ? 'bg-lime-500 text-zinc-900 scale-110' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                }`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
+    <AppShell>
+      <div className="px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4">
+        <div className="max-w-sm mx-auto">
+          <AppProgress value={Math.min(100, progress + step * 10)} label="Post-sesión" meta={`${step + 1} / 3`} />
         </div>
+      </div>
 
-        <div>
-          <label className="block text-sm font-medium text-zinc-400 mb-2">
-            ¿Cómo se sintió el dolor muscular entre sesiones?
-          </label>
-          <div className="space-y-2">
-            {([
-              ['no llegó a doler', 'No llegó a doler'],
-              ['sanó a tiempo', 'Sanó a tiempo'],
-              ['aún dolía al entrenar de nuevo', 'Aún dolía al entrenar de nuevo'],
-            ] as const).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setSorenessTiming(value)}
-                className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
-                  sorenessTiming === value
-                    ? 'bg-lime-500/20 border-lime-500 text-lime-300'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="flex-1 px-6 flex flex-col justify-center max-w-sm mx-auto w-full">
+        {step === 0 && (
+          <>
+            <AppEyebrow>Pump muscular</AppEyebrow>
+            <h2 className="text-2xl font-bold text-white mt-4 mb-8">¿Qué tan bombeado quedó el músculo?</h2>
+            <div className="flex flex-col gap-2">
+              {[1, 2, 3, 4, 5].map((v) => (
+                <AppOptionButton key={v} selected={pumpQuality === v} onClick={() => setPumpQuality(v)} compact>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg font-bold tabular-nums text-lime-400/90 w-6">{v}</span>
+                    <span className="text-sm">{v === 1 ? 'Casi nada' : v === 5 ? 'Máximo pump' : `Nivel ${v}`}</span>
+                  </div>
+                </AppOptionButton>
+              ))}
+            </div>
+          </>
+        )}
 
-        <div>
-          <label className="block text-sm font-medium text-zinc-400 mb-2">
-            Dificultad percibida de la sesión (1-5)
-          </label>
-          <div className="flex justify-between px-2">
-            {[1, 2, 3, 4, 5].map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setPerceivedWorkload(v)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
-                  perceivedWorkload === v ? 'bg-orange-500 text-white scale-110' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                }`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-zinc-500 mt-1">1 = muy fácil · 5 = al límite</p>
-        </div>
+        {step === 1 && (
+          <>
+            <AppEyebrow>DOMS</AppEyebrow>
+            <h2 className="text-2xl font-bold text-white mt-4 mb-8">¿Cómo fue el dolor entre sesiones?</h2>
+            <div className="flex flex-col gap-2">
+              {([
+                ['no llegó a doler', 'No llegó a doler'],
+                ['sanó a tiempo', 'Sanó a tiempo'],
+                ['aún dolía al entrenar de nuevo', 'Aún dolía al entrenar'],
+              ] as const).map(([value, label]) => (
+                <AppOptionButton key={value} selected={sorenessTiming === value} onClick={() => setSorenessTiming(value)}>
+                  <span className="text-sm">{label}</span>
+                </AppOptionButton>
+              ))}
+            </div>
+          </>
+        )}
 
-        <div>
-          <label className="flex items-center gap-2 text-sm text-zinc-300">
-            <input
-              type="checkbox"
-              checked={jointPain}
-              onChange={(e) => setJointPain(e.target.checked)}
-              className="rounded border-zinc-600"
-            />
-            Tuve dolor articular durante la sesión
-          </label>
-          {jointPain && (
-            <input
-              type="text"
-              value={jointPainZone}
-              onChange={(e) => setJointPainZone(e.target.value)}
-              placeholder="Zona (ej. hombro, rodilla)"
-              className="mt-2 w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white text-sm"
-            />
+        {step === 2 && (
+          <>
+            <AppEyebrow>Dificultad</AppEyebrow>
+            <h2 className="text-2xl font-bold text-white mt-4 mb-4">¿Cómo de dura fue la sesión?</h2>
+            <p className="text-sm text-zinc-500 mb-6">1 = muy fácil · 5 = al límite</p>
+            <div className="flex flex-col gap-2 mb-6">
+              {[1, 2, 3, 4, 5].map((v) => (
+                <AppOptionButton key={v} selected={perceivedWorkload === v} onClick={() => setPerceivedWorkload(v)} compact>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg font-bold tabular-nums text-lime-400/90 w-6">{v}</span>
+                    <span className="text-sm">Nivel {v}</span>
+                  </div>
+                </AppOptionButton>
+              ))}
+            </div>
+            <label className="flex items-center gap-3 text-sm text-zinc-400 py-3 border-t border-zinc-800">
+              <input
+                type="checkbox"
+                checked={jointPain}
+                onChange={(e) => setJointPain(e.target.checked)}
+                className="rounded border-zinc-700 bg-zinc-950"
+              />
+              Tuve dolor articular
+            </label>
+            {jointPain && (
+              <input
+                type="text"
+                value={jointPainZone}
+                onChange={(e) => setJointPainZone(e.target.value)}
+                placeholder="Zona (ej. hombro)"
+                className="mt-2 w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-lime-500/50"
+              />
+            )}
+          </>
+        )}
+      </div>
+
+      <AppFixedFooter>
+        <div className="max-w-sm mx-auto space-y-3">
+          {step > 0 && (
+            <button
+              type="button"
+              onClick={() => setStep((s) => s - 1)}
+              className="w-full text-sm text-zinc-500 hover:text-zinc-300 py-2"
+            >
+              Anterior
+            </button>
           )}
+          <AppPrimaryButton onClick={handleNext} disabled={isSubmitting}>
+            {isSubmitting ? 'Guardando…' : isLast ? 'Finalizar sesión' : 'Continuar'}
+          </AppPrimaryButton>
         </div>
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full bg-lime-500 text-zinc-900 font-bold py-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSubmitting ? (
-             <span>Guardando...</span>
-          ) : (
-            <>
-              <Check className="w-5 h-5" />
-              Finalizar Sesión
-            </>
-          )}
-        </button>
-      </form>
-    </div>
+      </AppFixedFooter>
+    </AppShell>
   );
 };
 
@@ -628,91 +633,42 @@ interface PhaseIntroScreenProps {
 }
 
 const PhaseIntroScreen: React.FC<PhaseIntroScreenProps> = ({ phase, explanation, onContinue }) => {
-  const getPhaseInfo = () => {
-    switch (phase) {
-      case 'warmup':
-        return {
-          title: 'Calentamiento RAMP',
-          icon: '🔥',
-          color: 'from-orange-500/20 to-orange-600/10',
-          borderColor: 'border-orange-500/30',
-          textColor: 'text-orange-400'
-        };
-      case 'main':
-        return {
-          title: 'Bloque Principal',
-          icon: '💪',
-          color: 'from-lime-500/20 to-lime-600/10',
-          borderColor: 'border-lime-500/30',
-          textColor: 'text-lime-400'
-        };
-      case 'core':
-        return {
-          title: 'Entrenamiento de Core',
-          icon: '🧱',
-          color: 'from-yellow-500/20 to-yellow-600/10',
-          borderColor: 'border-yellow-500/30',
-          textColor: 'text-yellow-400'
-        };
-      case 'cooldown':
-        return {
-          title: 'Enfriamiento',
-          icon: '🧘',
-          color: 'from-cyan-500/20 to-cyan-600/10',
-          borderColor: 'border-cyan-500/30',
-          textColor: 'text-cyan-400'
-        };
-    }
+  const phaseMeta: Record<string, { title: string; icon: string }> = {
+    warmup: { title: 'Calentamiento', icon: '🔥' },
+    main: { title: 'Bloque principal', icon: '💪' },
+    core: { title: 'Core', icon: '🧱' },
+    cooldown: { title: 'Enfriamiento', icon: '🧘' },
   };
-
-  const info = getPhaseInfo();
-  const icon = explanation?.icono || info.icon;
+  const meta = phaseMeta[phase];
+  const icon = explanation?.icono || meta.icon;
+  const title = explanation?.fase || meta.title;
 
   return (
-    <div className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center p-6">
-      <div className={`w-full max-w-md bg-linear-to-b ${info.color} border ${info.borderColor} rounded-3xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500`}>
-        {/* Icon */}
-        <div className="flex justify-center mb-6">
-          <div className="w-20 h-20 bg-zinc-800/80 rounded-full flex items-center justify-center text-4xl animate-bounce">
-            {icon}
-          </div>
-        </div>
-
-        {/* Title */}
-        <h1 className={`text-2xl font-bold text-center mb-4 ${info.textColor}`}>
-          {explanation?.fase || info.title}
-        </h1>
-
-        {/* Explanation */}
-        {explanation?.explicacion && (
-          <p className="text-zinc-300 text-sm leading-relaxed text-center mb-4">
-            {explanation.explicacion}
-          </p>
-        )}
-
-        {/* Science fact */}
-        {explanation?.ciencia && (
-          <div className="bg-zinc-800/50 rounded-xl p-3 mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Dato científico</span>
-            </div>
-            <p className="text-xs text-zinc-400 leading-relaxed">
+    <AppShell>
+      <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+        <p className="text-5xl mb-6">{icon}</p>
+        <AppHero
+          eyebrow="Siguiente fase"
+          title={title}
+          body={explanation?.explicacion}
+          align="center"
+        >
+          {explanation?.ciencia ? (
+            <p className="text-xs text-zinc-500 leading-relaxed mt-4 text-left max-w-xs mx-auto">
               {explanation.ciencia}
             </p>
-          </div>
-        )}
-
-        {/* Continue button */}
-        <button
-          onClick={onContinue}
-          className="w-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
-        >
-          <Play className="w-5 h-5" />
-          ¡COMENZAR!
-        </button>
+          ) : null}
+        </AppHero>
       </div>
-    </div>
+      <AppFixedFooter>
+        <AppPrimaryButton onClick={onContinue}>
+          <span className="flex items-center justify-center gap-2">
+            <Play className="w-5 h-5" />
+            Comenzar
+          </span>
+        </AppPrimaryButton>
+      </AppFixedFooter>
+    </AppShell>
   );
 };
 
@@ -2013,7 +1969,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
   }
 
   return (
-    <div className="min-h-screen bg-zinc-900 text-white flex flex-col">
+    <AppShell>
       {isResting ? (
         <RestScreen
           restSeconds={restSeconds}
@@ -2063,7 +2019,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
           </div>
         </div>
       )}
-    </div>
+    </AppShell>
   );
 };
 

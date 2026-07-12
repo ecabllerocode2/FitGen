@@ -109,14 +109,17 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-zinc-900 text-white p-4">
-            <div className="w-full max-w-sm bg-zinc-800 p-8 rounded-xl shadow-2xl">
-                <h1 className="text-3xl font-bold mb-6 text-lime-400 text-center">
-                    {isLogin ? 'Iniciar Sesión' : 'Registrarme'}
+        <div className="flex items-center justify-center min-h-[100dvh] bg-zinc-950 text-white p-6">
+            <div className="w-full max-w-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 text-center mb-6">
+                    FitGen
+                </p>
+                <h1 className="text-2xl font-bold text-white text-center mb-8">
+                    {isLogin ? 'Iniciar sesión' : 'Crear cuenta'}
                 </h1>
                 
                 {error && (
-                    <div className="p-3 mb-4 text-sm font-medium text-red-100 bg-red-600 rounded-lg text-center">
+                    <div className="p-3 mb-6 text-sm text-red-300 bg-red-950/50 border border-red-900/50 rounded-xl text-center">
                         {error}
                     </div>
                 )}
@@ -127,7 +130,7 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
                         type="button"
                         onClick={handleGoogleSignIn}
                         disabled={isLoading}
-                        className="w-full bg-white text-zinc-900 font-semibold py-2 px-4 rounded-lg transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-100 flex items-center justify-center"
+                        className="w-full bg-white text-zinc-900 font-semibold py-3.5 px-4 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-100 flex items-center justify-center"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="h-5 w-5 mr-3">
                             <path fill="#fbbc05" d="M43.6 20.5H42V20H24v8h11.3C34.1 33 29.6 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.1 8.1 2.9l6-6C34.1 6.9 29.3 5 24 5 12.3 5 3 14.3 3 26s9.3 21 21 21c10.5 0 19.2-7.5 20.9-17.5 0.1-0.4 0.1-0.8 0.1-1.5 0-1-0.1-1.4-0.3-2.5z"/>
@@ -138,7 +141,7 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
                         {isLoading ? 'Procesando...' : (isLogin ? 'Acceder con Google' : 'Registrarme con Google')}
                     </button>
 
-                    <hr className="border-zinc-700" />
+                    <hr className="border-zinc-800 my-6" />
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
@@ -148,7 +151,7 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
-                                className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-lg focus:ring-lime-500 focus:border-lime-500 text-white"
+                                className="w-full px-4 py-3.5 bg-zinc-950 border border-zinc-800 rounded-xl focus:border-lime-500/50 focus:outline-none text-white"
                                 placeholder="tu@correo.com"
                             />
                             <p className="text-xs text-zinc-400 mt-2">Usa tu email profesional o personal. Te enviaremos notificaciones relacionadas con tu progreso.</p>
@@ -161,15 +164,15 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
                                 value={password}
                                 onChange={(e) => { setPassword(e.target.value); setPasswordTouched(true); }}
                                 required
-                                className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-lg focus:ring-lime-500 focus:border-lime-500 text-white"
+                                className="w-full px-4 py-3.5 bg-zinc-950 border border-zinc-800 rounded-xl focus:border-lime-500/50 focus:outline-none text-white"
                                 placeholder={isLogin ? 'Tu contraseña' : 'Mínimo 8 caracteres, mezcla letras y números'}
                             />
 
                             {/* Indicador de fuerza */}
                             <div className="mt-3">
-                                <div className="h-2 w-full bg-zinc-700 rounded-full overflow-hidden">
+                                <div className="h-px bg-zinc-800 rounded-full overflow-hidden">
                                     <div
-                                        className={`h-2 rounded-full transition-all duration-200 ${passwordStrengthScore(password) >= 4 ? 'bg-lime-400' : passwordStrengthScore(password) >= 2 ? 'bg-yellow-400' : 'bg-red-500'}`}
+                                        className={`h-full transition-all duration-200 ${passwordStrengthScore(password) >= 4 ? 'bg-lime-500' : passwordStrengthScore(password) >= 2 ? 'bg-yellow-500' : 'bg-red-500'}`}
                                         style={{ width: `${(passwordStrengthScore(password) / 5) * 100}%` }}
                                     />
                                 </div>
@@ -197,7 +200,7 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     required
-                                    className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-lg focus:ring-lime-500 focus:border-lime-500 text-white"
+                                    className="w-full px-4 py-3.5 bg-zinc-950 border border-zinc-800 rounded-xl focus:border-lime-500/50 focus:outline-none text-white"
                                     placeholder="Repite tu contraseña"
                                 />
                                 {confirmPassword && confirmPassword !== password && (
@@ -209,7 +212,7 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
                         <button
                             type="submit"
                             disabled={isLoading || (!isLogin && passwordStrengthScore(password) < 4)}
-                            className="w-full bg-lime-500 text-zinc-900 font-bold py-3 px-4 rounded-lg transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-lime-400 flex items-center justify-center"
+                            className="w-full bg-lime-500 text-zinc-900 font-bold py-3.5 px-4 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed hover:bg-lime-400 flex items-center justify-center"
                         >
                             {isLoading ? (
                                 <svg className="animate-spin h-5 w-5 text-zinc-900 mr-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -220,26 +223,27 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
                     </form>
                 </div>
 
-                {/* Alternar Login/Registro con tabs claras */}
-                <div className="mt-6">
-                    <div className="flex items-center justify-center space-x-2">
+                <div className="mt-8">
+                    <div className="flex items-center justify-center gap-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800">
                         <button
                             type="button"
                             onClick={() => { setIsLogin(true); setError(null); }}
-                            className={`px-4 py-2 rounded-md ${isLogin ? 'bg-lime-500 text-zinc-900 font-semibold' : 'bg-zinc-700 text-zinc-300'}`}
+                            className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${isLogin ? 'bg-lime-500 text-zinc-900' : 'text-zinc-500'}`}
                         >
                             Acceder
                         </button>
                         <button
                             type="button"
                             onClick={() => { setIsLogin(false); setError(null); }}
-                            className={`px-4 py-2 rounded-md ${!isLogin ? 'bg-lime-500 text-zinc-900 font-semibold' : 'bg-zinc-700 text-zinc-300'}`}
+                            className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${!isLogin ? 'bg-lime-500 text-zinc-900' : 'text-zinc-500'}`}
                         >
                             Registrarme
                         </button>
                     </div>
 
-                    <p className="text-center text-sm mt-4 text-zinc-400">{isLogin ? 'Bienvenido de vuelta — introduce tus credenciales para continuar.' : 'Crea una cuenta segura para guardar tu progreso y recibir recomendaciones personalizadas.'}</p>
+                    <p className="text-center text-xs mt-4 text-zinc-600 leading-relaxed">
+                        {isLogin ? 'Introduce tus credenciales para continuar.' : 'Crea una cuenta para guardar tu progreso.'}
+                    </p>
                 </div>
             </div>
         </div>

@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { 
-  ChevronDown, 
-  ChevronUp, 
   Play, 
   Clock, 
   Flame, 
@@ -17,13 +15,19 @@ import {
   RefreshCw, 
   Sparkles,
   Target,
-  BookOpen,
   AlertCircle,
   Weight
 } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import type { GeneratedSession } from '../types/session';
 import { normalizeSession } from '../utils/sessionNormalizer';
+import {
+  AppAccordion,
+  AppEyebrow,
+  AppFixedFooter,
+  AppPrimaryButton,
+  AppShell,
+} from './ui/AppPrimitives';
 
 // ==================== TIPOS FLEXIBLES ====================
 // Los datos pueden venir con diferentes estructuras, así que usamos tipos flexibles
@@ -132,104 +136,24 @@ const getYoutubeThumbnailUrl = (url?: string | null) => {
   return `https://img.youtube.com/vi/${videoId}/default.jpg`; 
 };
 
-// Helpers: sanear notas y formatear timestamps (para depuración de zonas horarias)
+// Helpers: sanear notas
 const sanitizeNotes = (s?: string | null) : string | null => {
   if (!s) return null;
   return s.replace(/\*/g, '').trim();
 };
 
-const formatSessionTimestamp = (session: any): string | null => {
-  const ts = session?.generatedAt || session?.meta?.generatedAt || session?.meta?.date || session?.meta?.createdAt;
-  if (!ts) return null;
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return String(ts);
-
-  try {
-    // Preferir formato moderno si el entorno lo soporta
-    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZoneName: 'short' } as any);
-  } catch (err) {
-    try {
-      // Fallback a Intl.DateTimeFormat con opciones básicas (más compatibles)
-      return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' } as any).format(d);
-    } catch (err2) {
-      // Último recurso: toLocaleString sin opciones
-      try {
-        return d.toLocaleString();
-      } catch (err3) {
-        return d.toUTCString();
-      }
-    }
-  }
-};
-
 // ==================== COMPONENTES UI ====================
 
 const SwapTip = () => (
-  <div className="mx-0 mb-4 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-start gap-3">
-    <div className="bg-indigo-500/20 p-1.5 rounded-full mt-0.5 shrink-0">
-      <Sparkles className="w-4 h-4 text-indigo-400" />
-    </div>
-    <div>
-      <p className="text-xs text-indigo-200 font-medium">Personaliza tu sesión</p>
-      <p className="text-[10px] text-indigo-300/80 leading-relaxed">
-        ¿No te gusta un ejercicio o te falta equipo? Toca el botón <RefreshCw className="w-3 h-3 inline mx-0.5" /> para cambiarlo.
-      </p>
-    </div>
+  <div className="mb-6 py-3 border-b border-zinc-800/90">
+    <p className="text-xs text-zinc-500 leading-relaxed">
+      <Sparkles className="w-3 h-3 inline mr-1 text-lime-500/70" />
+      Toca <RefreshCw className="w-3 h-3 inline mx-0.5" /> en un ejercicio para cambiarlo si no tienes el equipo.
+    </p>
   </div>
 );
 
-const AccordionSection = ({ 
-  title, 
-  icon: Icon, 
-  children, 
-  defaultOpen = false, 
-  colorClass = "text-zinc-100",
-  badge,
-  count
-}: { 
-  title: string;
-  icon: any;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-  colorClass?: string;
-  badge?: string;
-  count?: number;
-}) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-  
-  return (
-    <div className="bg-zinc-800 rounded-xl overflow-hidden border border-zinc-700/50 mb-4 shadow-sm">
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 bg-zinc-800/50 active:bg-zinc-700/50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-full bg-zinc-700/50 ${colorClass}`}>
-            <Icon className="w-5 h-5" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-zinc-200 text-sm uppercase tracking-wide">{title}</span>
-            {count !== undefined && (
-              <span className="text-xs bg-zinc-700 px-2 py-0.5 rounded-full text-zinc-400">
-                {count}
-              </span>
-            )}
-            {badge && (
-              <span className="text-xs bg-zinc-700 px-2 py-0.5 rounded-full text-zinc-400">{badge}</span>
-            )}
-          </div>
-        </div>
-        {isOpen ? <ChevronUp className="w-5 h-5 text-zinc-500" /> : <ChevronDown className="w-5 h-5 text-zinc-500" />}
-      </button>
-      
-      {isOpen && (
-        <div className="p-4 border-t border-zinc-700/50 bg-zinc-900/30">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-};
+// AccordionSection replaced by AppAccordion from design system
 
 // ==================== COMPONENTES DE EJERCICIO ====================
 
@@ -591,85 +515,49 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
   const totalMainSets = mainBlockExercises.reduce((acc: number, ex: any) => acc + (ex.sets || ex.prescripcion?.series || 1), 0);
 
   return (
-    <div className="min-h-screen bg-zinc-900 text-white pb-28">
-      
-      {/* HEADER DE SESIÓN */}
-      <header className="relative pt-8 pb-6 px-5 bg-linear-to-b from-zinc-800 to-zinc-900 border-b border-zinc-700/50">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1">
-            <p className="text-xs font-bold text-lime-500 uppercase tracking-wider mb-1">
-              {currentSession.dayOfWeek} • Semana {currentSession.weekNumber}
-            </p>
-            <h1 className="text-2xl font-bold text-white leading-tight">
-              {currentSession.sessionFocus}
-            </h1>
-            <p className="text-xs text-zinc-400 mt-1">{currentSession.phase}</p>
-            {formatSessionTimestamp(currentSession) && (
-              <p className="text-xs text-zinc-500 mt-1">Generado: {formatSessionTimestamp(currentSession)}</p>
-            )}
-            {/* Debug: comparar día calculado por servidor vs día en el cliente (por zona horaria) */}
-            {(() => {
-              const cs: any = currentSession as any;
-              const ts = currentSession.generatedAt || cs.meta?.generatedAt || cs.meta?.date || null;
-              if (!ts) return null;
-              const localWeekday = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(new Date(ts));
-              const serverDay = (currentSession.dayOfWeek || '').toLowerCase();
-              const localDay = (localWeekday || '').toLowerCase();
-              if (serverDay && localDay && serverDay !== localDay) {
-                return (
-                  <p className="text-xs text-amber-400 mt-1">Nota: día del servidor: <span className="font-semibold text-zinc-100">{currentSession.dayOfWeek}</span> • día local detectado: <span className="font-semibold text-zinc-100 capitalize">{localWeekday}</span>. Posible desalineación por zona horaria.</p>
-                );
-              }
-              return null;
-            })()}
-          </div>
-          <div className="bg-lime-500/10 p-3 rounded-xl border border-lime-500/20">
-            <Dumbbell className="w-6 h-6 text-lime-500" />
-          </div>
-        </div>
-        
-        {/* Stats rápidos */}
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <div className="flex items-center gap-1.5 bg-zinc-800/80 px-3 py-1.5 rounded-full border border-zinc-700/50">
-            <Clock className="w-4 h-4 text-lime-500" />
-            <span className="text-zinc-300">{currentSession.summary?.duracionEstimada || '~45 min'}</span> 
-          </div>
-          
-          <div className="flex items-center gap-1.5 bg-zinc-800/80 px-3 py-1.5 rounded-full border border-zinc-700/50">
-            <Dumbbell className="w-4 h-4 text-lime-500" />
-            <span className="text-zinc-300">{currentSession.summary?.ejerciciosTotales || totalMainExercises} ejercicios</span>
-          </div>
-          
-          <div className="flex items-center gap-1.5 bg-zinc-800/80 px-3 py-1.5 rounded-full border border-zinc-700/50">
-            <Target className="w-4 h-4 text-lime-500" />
-            <span className="text-zinc-300">RPE {currentSession.trainingParameters?.rpeTarget || 7}</span>
-          </div>
-        </div>
+    <AppShell className="pb-28">
+      <header className="px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-6 border-b border-zinc-800/90">
+        <div className="max-w-sm mx-auto">
+          <AppEyebrow>
+            {currentSession.dayOfWeek} · Semana {currentSession.weekNumber}
+          </AppEyebrow>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight mt-4">
+            {currentSession.sessionFocus}
+          </h1>
+          {currentSession.phase ? (
+            <p className="text-sm text-zinc-500 mt-2">{currentSession.phase}</p>
+          ) : null}
 
-        {/* Músculos trabajados */}
-        {currentSession.summary?.musculosTrabajos && currentSession.summary.musculosTrabajos.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {currentSession.summary.musculosTrabajos.map((musculo, idx) => (
-              <span key={idx} className="text-xs bg-lime-500/10 text-lime-400 px-2 py-1 rounded-full border border-lime-500/20">
-                {musculo}
-              </span>
-            ))}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-5 text-xs text-zinc-500">
+            <span className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-lime-500/70" />
+              {currentSession.summary?.duracionEstimada || '~45 min'}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Dumbbell className="w-3.5 h-3.5 text-lime-500/70" />
+              {currentSession.summary?.ejerciciosTotales || totalMainExercises} ejercicios
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Target className="w-3.5 h-3.5 text-lime-500/70" />
+              RPE {currentSession.trainingParameters?.rpeTarget || 7}
+            </span>
           </div>
-        )}
+
+          {currentSession.summary?.musculosTrabajos && currentSession.summary.musculosTrabajos.length > 0 && (
+            <p className="text-xs text-zinc-600 mt-4 leading-relaxed">
+              {currentSession.summary.musculosTrabajos.join(' · ')}
+            </p>
+          )}
+        </div>
       </header>
 
-      <main className="px-5 py-5 space-y-2">
+      <main className="px-6 py-6 max-w-sm mx-auto w-full">
         
         <SwapTip />
 
         {/* OBJETIVO DEL DÍA */}
         {currentSession.education && (
-          <AccordionSection 
-            title="Tu Objetivo" 
-            icon={Target} 
-            defaultOpen={true}
-            colorClass="text-lime-400"
-          >
+          <AppAccordion title="Tu objetivo" defaultOpen>
             <div className="space-y-3">
               <p className="text-sm text-zinc-300 leading-relaxed">
                 {sanitizeNotes(currentSession.education.objetivoDelDia)}
@@ -683,35 +571,21 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
                 </div>
               )}
             </div>
-          </AccordionSection>
+          </AppAccordion>
         )}
 
-        {/* CALENTAMIENTO */}
         {currentSession.warmup && currentSession.warmup.length > 0 && (
-          <AccordionSection 
-            title="Calentamiento" 
-            icon={Flame} 
-            defaultOpen={false}
-            colorClass="text-orange-400"
-            count={currentSession.warmup.length}
-          >
+          <AppAccordion title="Calentamiento" count={currentSession.warmup.length}>
             <div className="bg-zinc-900 rounded-lg p-2">
               {currentSession.warmup.map((ejercicio: any, idx: number) => (
                 <WarmupExerciseRow key={ejercicio.id || idx} exercise={ejercicio} />
               ))}
             </div>
-          </AccordionSection>
+          </AppAccordion>
         )}
 
-        {/* BLOQUE PRINCIPAL */}
         {((currentSession.mainBlock?.bloques && currentSession.mainBlock.bloques.length > 0) || ((currentSession.mainBlock as any)?.estaciones && (currentSession.mainBlock as any).estaciones.length > 0)) && (
-          <AccordionSection 
-            title="Bloque Principal" 
-            icon={Dumbbell} 
-            defaultOpen={true}
-            colorClass="text-lime-400"
-            badge={`${totalMainSets} series`}
-          >
+          <AppAccordion title="Bloque principal" badge={`${totalMainSets} series`} defaultOpen>
             {((currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones) as FlexibleStation[]).map((station, stationIdx) => (
               <div key={stationIdx} className="mb-5 last:mb-0">
                 {/* Header de estación */}
@@ -742,16 +616,12 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
                 </div>
               </div>
             ))}
-          </AccordionSection>
+          </AppAccordion>
         )}
 
-        {/* BLOQUE DE CORE */}
         {currentSession.coreBlock && currentSession.coreBlock.ejercicios && (
-          <AccordionSection 
-            title={currentSession.coreBlock.nombre || 'Core'} 
-            icon={Layers3} 
-            defaultOpen={false}
-            colorClass="text-yellow-400"
+          <AppAccordion
+            title={currentSession.coreBlock.nombre || 'Core'}
             badge={currentSession.coreBlock.rondas ? `${currentSession.coreBlock.rondas} rondas` : undefined}
           >
             {currentSession.coreBlock.instrucciones && (
@@ -762,16 +632,12 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
                 <CoreExerciseRow key={ejercicio.id || idx} exercise={ejercicio} />
               ))}
             </div>
-          </AccordionSection>
+          </AppAccordion>
         )}
 
-        {/* VUELTA A LA CALMA */}
         {currentSession.cooldown?.fases && currentSession.cooldown.fases.length > 0 && (
-          <AccordionSection 
-            title={currentSession.cooldown.nombre || 'Enfriamiento'} 
-            icon={Wind} 
-            defaultOpen={false}
-            colorClass="text-cyan-400"
+          <AppAccordion
+            title={currentSession.cooldown.nombre || 'Enfriamiento'}
             badge={`${currentSession.cooldown.duracionEstimada || 8} min`}
           >
             {currentSession.cooldown.fases.map((fase: any, faseIdx: number) => (
@@ -800,17 +666,11 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
                 )}
               </div>
             ))}
-          </AccordionSection>
+          </AppAccordion>
         )}
 
-        {/* CIENCIA DEL DÍA */}
         {currentSession.education?.cienciaDestacada && (
-          <AccordionSection 
-            title="Ciencia del Día" 
-            icon={BookOpen} 
-            defaultOpen={false}
-            colorClass="text-blue-400"
-          >
+          <AppAccordion title="Ciencia del día">
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-blue-300">
                 {currentSession.education.cienciaDestacada.titulo}
@@ -822,38 +682,28 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
                 Fuente: {currentSession.education.cienciaDestacada.fuente}
               </p>
             </div>
-          </AccordionSection>
+          </AppAccordion>
         )}
 
-        {/* TIP DEL DÍA */}
         {currentSession.tipOfTheDay && (
-          <div className="bg-linear-to-r from-lime-500/10 to-emerald-500/10 border border-lime-500/20 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <div className="bg-lime-500/20 p-2 rounded-full shrink-0">
-                <Info className="w-4 h-4 text-lime-400" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-lime-400 uppercase tracking-wider mb-1">Tip del día</p>
-                <p className="text-sm text-zinc-300">{currentSession.tipOfTheDay}</p>
-              </div>
-            </div>
+          <div className="py-4 border-b border-zinc-800/90">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600 mb-2">Tip del día</p>
+            <p className="text-sm text-zinc-400 leading-relaxed">{currentSession.tipOfTheDay}</p>
           </div>
         )}
 
       </main>
 
-      {/* BOTÓN DE INICIO FIJO */}
-      <div className="fixed bottom-0 left-0 right-0 p-5 bg-linear-to-t from-zinc-900 via-zinc-900/95 to-transparent z-50 safe-area-bottom">
-        <button 
-          onClick={handleStartSession}
-          className="w-full bg-lime-500 hover:bg-lime-400 text-zinc-900 font-bold py-4 rounded-2xl shadow-[0_0_30px_rgba(132,204,22,0.4)] flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-        >
-          <Play className="w-5 h-5 fill-current" />
-          COMENZAR SESIÓN
-        </button>
-      </div>
+      <AppFixedFooter>
+        <AppPrimaryButton onClick={handleStartSession}>
+          <span className="flex items-center justify-center gap-2">
+            <Play className="w-5 h-5 fill-current" />
+            Comenzar sesión
+          </span>
+        </AppPrimaryButton>
+      </AppFixedFooter>
 
-    </div>
+    </AppShell>
   );
 };
 

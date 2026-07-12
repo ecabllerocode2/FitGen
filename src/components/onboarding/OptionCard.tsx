@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { Check } from 'lucide-react';
 
 interface OptionCardProps {
   selected: boolean;
@@ -14,23 +13,19 @@ export default function OptionCard({ selected, onClick, title, description, icon
     <button
       type="button"
       onClick={onClick}
-      className={`w-full text-left p-4 rounded-2xl border-2 transition-all duration-200 active:scale-[0.98] ${
+      className={`w-full text-left rounded-xl border transition-all duration-200 active:scale-[0.98] px-4 py-4 ${
         selected
-          ? 'border-lime-500 bg-lime-500/10 shadow-[0_0_20px_rgba(132,204,22,0.15)]'
-          : 'border-zinc-800 bg-zinc-900 hover:border-zinc-600'
+          ? 'border-lime-500/50 bg-lime-500/10 text-white'
+          : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
       }`}
     >
       <div className="flex items-start gap-3">
-        {icon && <div className="shrink-0 mt-0.5 text-lime-400">{icon}</div>}
+        {icon ? <div className="shrink-0 mt-0.5 text-lime-400/90">{icon}</div> : null}
         <div className="flex-1 min-w-0">
-          <p className={`font-bold ${selected ? 'text-white' : 'text-zinc-200'}`}>{title}</p>
-          {description && <p className="text-sm text-zinc-500 mt-1">{description}</p>}
+          <p className={`font-semibold text-[15px] ${selected ? 'text-white' : 'text-zinc-200'}`}>{title}</p>
+          {description ? <p className="text-sm text-zinc-500 mt-1 leading-snug">{description}</p> : null}
         </div>
-        {selected && (
-          <div className="shrink-0 w-6 h-6 rounded-full bg-lime-500 flex items-center justify-center">
-            <Check className="w-4 h-4 text-zinc-900" strokeWidth={3} />
-          </div>
-        )}
+        {selected ? <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-lime-500 mt-2" /> : null}
       </div>
     </button>
   );
