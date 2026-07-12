@@ -10,13 +10,13 @@ import {
   Calendar,
   Shield,
   User as UserIcon,
-  Loader2,
   Sparkles,
 } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../../config/api';
 import type { FitnessGoal, FocusArea, DayOfWeek, ExternalLoad } from '../../types/session';
 import { TRAINING_AGE_OPTIONS, getExperienceLevelFromMonths } from '../../utils/experienceLevel';
 import { getMesocyclePreviewSessions, normalizeMesocycleForUI } from '../../utils/mesocycleNormalizer';
+import MesocycleGenerationLoader from '../MesocycleGenerationLoader';
 import StepProgress from './StepProgress';
 import OptionCard from './OptionCard';
 
@@ -53,14 +53,6 @@ const DAY_PRESETS: Record<number, number[]> = {
   5: [0, 1, 2, 4, 5],
   6: [0, 1, 2, 3, 4, 5],
 };
-
-const GENERATING_MESSAGES = [
-  'Analizando tu perfil…',
-  'Calculando volumen semanal…',
-  'Distribuyendo sesiones…',
-  'Ajustando progresión de RIR…',
-  'Finalizando tu mesociclo…',
-];
 
 interface DaySchedule {
   day: DayOfWeek;
@@ -100,7 +92,6 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
   const [step, setStep] = useState(0);
   const [phase, setPhase] = useState<Phase>('wizard');
   const [error, setError] = useState<string | null>(null);
-  const [genMessageIndex, setGenMessageIndex] = useState(0);
   const [generatedMesocycle, setGeneratedMesocycle] = useState<any>(null);
 
   const [goal, setGoal] = useState<FitnessGoal | ''>('');
@@ -137,14 +128,6 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
       setSelectedDays(new Set(p.preferredTrainingDays as DayOfWeek[]));
     }
   }, [initialData]);
-
-  useEffect(() => {
-    if (phase !== 'generating') return;
-    const id = setInterval(() => {
-      setGenMessageIndex((i) => (i + 1) % GENERATING_MESSAGES.length);
-    }, 1800);
-    return () => clearInterval(id);
-  }, [phase]);
 
   const experienceLevel = useMemo(
     () => getExperienceLevelFromMonths(trainingAgeMonths),
@@ -309,20 +292,26 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
     navigate('/', { replace: true });
   };
 
+  const generationProfile = useMemo(
+    () => ({
+      fitnessGoal: goal || 'Hipertrofia',
+      trainingAgeMonths,
+      experienceLevel,
+      trainingDaysPerWeek: selectedDays.size,
+      weeklyScheduleContext: weeklySchedule,
+      injuriesOrLimitations: injuries,
+      age: age ? parseInt(age) : undefined,
+    }),
+    [goal, trainingAgeMonths, experienceLevel, selectedDays.size, weeklySchedule, injuries, age],
+  );
+
   // --- Generating screen ---
   if (phase === 'generating' || phase === 'saving') {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6 text-center">
-        <div className="w-20 h-20 rounded-full bg-lime-500/20 flex items-center justify-center mb-6">
-          <Loader2 className="w-10 h-10 text-lime-400 animate-spin" />
-        </div>
-        <h2 className="text-2xl font-bold text-white mb-2">
-          {phase === 'saving' ? 'Guardando tu perfil…' : 'Diseñando tu mesociclo'}
-        </h2>
-        <p className="text-zinc-400 text-sm animate-pulse">
-          {phase === 'saving' ? 'Un momento…' : GENERATING_MESSAGES[genMessageIndex]}
-        </p>
-      </div>
+      <MesocycleGenerationLoader
+        phase={phase}
+        profile={generationProfile}
+      />
     );
   }
 

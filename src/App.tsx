@@ -254,7 +254,8 @@ const App: FC = () => {
                 <Route path="/mesocycle/evaluate" element={
                     userProfile?.currentMesocycle ? ( // Se requiere que exista un mesociclo para evaluar
                         <MesocycleEvaluate
-                            user={user} // Propiedad 'user' pasada y con tipo corregido
+                            user={user}
+                            profileData={userProfile?.profileData}
                         />
                     ) : (
                         // Si no hay plan, regresa al dashboard

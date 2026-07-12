@@ -21,6 +21,7 @@ import InstallPwaBanner from './InstallPwaBanner';
 import ProfileMenu from './ProfileMenu';
 import LevelUpCelebration from './LevelUpCelebration';
 import StatsAndAchievements from './StatsAndAchievements';
+import MesocycleGenerationLoader from './MesocycleGenerationLoader';
 // LocationEquipmentForm eliminado - location y equipment ahora vienen del perfil
 import ReadinessForm from './ReadinessForm';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
@@ -100,20 +101,6 @@ interface LevelUpgradeData {
         progressionRate?: string;
     };
 }
-
-// FRASES DE ENTRENADOR ELITE PARA LA GENERACIÓN DEL MESOCICLO
-const PLAN_GENERATION_QUOTES = [
-    "Analizando tu perfil metabólico y capacidad de recuperación...",
-    "Calculando volumen óptimo basado en tu nivel de entrenamiento...",
-    "Diseñando progresión de cargas con periodización ondulatoria...",
-    "Evaluando estrés sistémico y ventanas de adaptación...",
-    "Optimizando frecuencia de estímulo por grupo muscular...",
-    "Balanceando tensión mecánica y estrés metabólico...",
-    "Definiendo split arquitectónico según tu disponibilidad...",
-    "Ajustando RIR y RPE para maximizar hipertrofia funcional...",
-    "Programando deloads estratégicos para supercompensación...",
-    "Integrando principios de sobrecarga progresiva sostenible..."
-];
 
 // FRASES MOTIVADORAS PARA GENERACIÓN DE SESIONES
 const SESSION_GENERATION_QUOTES = [
@@ -223,7 +210,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     const carouselRef = useRef<HTMLDivElement>(null);
     
     const [quoteIndex, setQuoteIndex] = useState(0);
-    const [planQuoteIndex, setPlanQuoteIndex] = useState(0); // Nuevo índice para frases de plan
     const [restQuoteIndex, setRestQuoteIndex] = useState<number>(() => Math.floor(Math.random() * REST_MESSAGES.length));
     const prevHasSessionRef = useRef<boolean | null>(null);
 
@@ -257,17 +243,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         }
         return () => clearInterval(interval);
     }, [generatingSession]);
-    
-    // Efecto para rotar frases de plan (más lento para dar sensación de análisis profundo)
-    useEffect(() => {
-        let interval: any;
-        if (creatingPlan) {
-            interval = setInterval(() => {
-                setPlanQuoteIndex((prev) => (prev + 1) % PLAN_GENERATION_QUOTES.length);
-            }, 3000);
-        }
-        return () => clearInterval(interval);
-    }, [creatingPlan]);
 
     // B. Lógica de Tiempo y Estado (ACTUALIZADA con isEvaluationPending)
     const dashboardState = useMemo(() => {
@@ -378,7 +353,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
     const handleCreatePlan = async () => {
         setCreatingPlan(true);
-        setPlanQuoteIndex(0); // Reiniciar índice
         
         try {
             const token = await user.getIdToken();
@@ -529,21 +503,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         );
     }
     
-    // Overlay de carga para generación de plan (con frases profesionales)
+    // Overlay de carga para generación de plan
     if (creatingPlan) {
+        const profileForLoader = {
+            fitnessGoal: userProfile?.profileData?.fitnessGoal,
+            trainingAgeMonths: userProfile?.profileData?.trainingAgeMonths as number | undefined,
+            experienceLevel: userProfile?.profileData?.experienceLevel as string | undefined,
+            trainingDaysPerWeek: userProfile?.profileData?.trainingDaysPerWeek as number | undefined,
+            weeklyScheduleContext: userProfile?.profileData?.weeklyScheduleContext as DayContext[] | undefined,
+            preferredTrainingDays: userProfile?.profileData?.preferredTrainingDays as string[] | undefined,
+            injuriesOrLimitations: userProfile?.profileData?.injuriesOrLimitations as string[] | undefined,
+            age: userProfile?.profileData?.age as number | undefined,
+        };
+
         return (
-            <div className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center text-white px-4">
-                <div className="bg-zinc-800 p-8 rounded-2xl border border-lime-500/30 max-w-md w-full text-center shadow-2xl">
-                    <div className="w-20 h-20 bg-lime-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <Activity className="w-10 h-10 text-lime-500 animate-spin" />
-                    </div>
-                    <h2 className="text-xl font-bold text-white mb-3">Diseñando tu Mesociclo</h2>
-                    <p className="text-lime-400 text-sm font-medium mb-2 min-h-12 flex items-center justify-center animate-pulse">
-                        {PLAN_GENERATION_QUOTES[planQuoteIndex]}
-                    </p>
-                    <p className="text-zinc-500 text-xs">Tu plan personalizado estará listo en un momento...</p>
-                </div>
-            </div>
+            <MesocycleGenerationLoader
+                title="Diseñando tu mesociclo"
+                profile={profileForLoader}
+            />
         );
     }
 

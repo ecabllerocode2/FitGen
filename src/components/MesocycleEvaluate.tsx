@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User } from 'firebase/auth'; 
-import { Scale, Loader2, CheckCircle2, AlertTriangle, ChevronLeft, RefreshCw } from 'lucide-react';
+import { Scale, Loader2, CheckCircle2, AlertTriangle, ChevronLeft } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
+import MesocycleGenerationLoader from './MesocycleGenerationLoader';
+import type { MesocycleGenerationProfile } from '../utils/splitGenerationContext';
 
 // ====================================================================
 // TIPOS ESTRUCTURALES
@@ -24,6 +26,7 @@ interface PainOption extends Option {
 
 interface MesocycleEvaluateProps {
     user: User;
+    profileData?: Record<string, unknown>;
 }
 
 // ====================================================================
@@ -53,7 +56,7 @@ const NEXT_GOAL_OPTIONS: Option[] = [
 ];
 
 // --- CORRECCIÓN APLICADA AQUÍ: Se recibe y usa 'user' de props ---
-const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user }) => {
+const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user, profileData }) => {
     const navigate = useNavigate();
     // ... (Estados sin cambios)
     const [difficultyScore, setDifficultyScore] = useState<number | null>(null);
@@ -178,24 +181,39 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user }) => {
 
     // ... (El resto del componente JSX queda sin cambios)
     // --- UI DE ESTADO (Carga y Éxito) ---
-    if (isBusy || status === 'success') {
+    if (isBusy) {
+        const loaderProfile: MesocycleGenerationProfile = {
+            fitnessGoal: (profileData?.fitnessGoal as string) ?? 'Hipertrofia',
+            trainingAgeMonths: profileData?.trainingAgeMonths as number | undefined,
+            experienceLevel: profileData?.experienceLevel as MesocycleGenerationProfile['experienceLevel'],
+            trainingDaysPerWeek: profileData?.trainingDaysPerWeek as number | undefined,
+            weeklyScheduleContext: profileData?.weeklyScheduleContext as MesocycleGenerationProfile['weeklyScheduleContext'],
+            injuriesOrLimitations: profileData?.injuriesOrLimitations as string[] | undefined,
+        };
+
+        return (
+            <MesocycleGenerationLoader
+                title={status === 'evaluating' ? 'Evaluando tu mesociclo' : 'Generando tu próximo bloque'}
+                subtitle={
+                    status === 'evaluating'
+                        ? 'Analizando dificultad, molestias y progreso del ciclo anterior…'
+                        : 'Aplicando los ajustes de volumen a tu nuevo mesociclo…'
+                }
+                profile={loaderProfile}
+                evaluationMode={status === 'generating'}
+            />
+        );
+    }
+
+    if (status === 'success') {
         return (
             <div className="min-h-screen bg-zinc-900 text-white flex flex-col items-center justify-center p-6">
-                {status === 'success' ? (
-                    <>
-                        <CheckCircle2 className="w-16 h-16 text-lime-400 mb-4" />
-                        <h2 className="text-2xl font-bold mb-2">¡Nuevo mesociclo listo!</h2>
-                        <p className="text-zinc-400 text-center mb-6">Tu próximo bloque ya está generado con los ajustes de volumen.</p>
-                        <button onClick={() => navigate('/')} className="bg-lime-500 text-zinc-900 font-bold px-6 py-3 rounded-xl">
-                            Ir al Dashboard
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        <RefreshCw className="w-12 h-12 text-lime-400 animate-spin mb-4" />
-                        <p className="text-zinc-300">{status === 'evaluating' ? 'Evaluando mesociclo...' : 'Generando nuevo plan...'}</p>
-                    </>
-                )}
+                <CheckCircle2 className="w-16 h-16 text-lime-400 mb-4" />
+                <h2 className="text-2xl font-bold mb-2">¡Nuevo mesociclo listo!</h2>
+                <p className="text-zinc-400 text-center mb-6">Tu próximo bloque ya está generado con los ajustes de volumen.</p>
+                <button onClick={() => navigate('/')} className="bg-lime-500 text-zinc-900 font-bold px-6 py-3 rounded-xl">
+                    Ir al Dashboard
+                </button>
             </div>
         );
     }
