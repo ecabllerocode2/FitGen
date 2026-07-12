@@ -18,7 +18,7 @@ export function normalizeSession(raw: any): GeneratedSession | null {
     session.generatedAt = session.meta.generatedAt;
   }
 
-  // NORMALIZAR WARMUP -> array directo
+  // NORMALIZAR WARMUP -> array directo con campos UI
   if (!Array.isArray(session.warmup)) {
     // Caso: { warmup: { fases: [...] } } o { warmup: { ejercicios: [...] } }
     if (session.warmup && Array.isArray(session.warmup.fases)) {
@@ -33,6 +33,17 @@ export function normalizeSession(raw: any): GeneratedSession | null {
       // Fallback a array vacio
       session.warmup = [];
     }
+  }
+
+  if (Array.isArray(session.warmup)) {
+    session.warmup = session.warmup.map((item: any) => ({
+      ...item,
+      id: item.id ?? item.exerciseId,
+      nombre: item.nombre ?? item.name,
+      duracion: item.duracion ?? (item.durationSeconds ? `${item.durationSeconds} seg` : item.reps),
+      faseRAMP: item.faseRAMP ?? item.phase,
+      patronMovimiento: item.patronMovimiento ?? item.movementPattern,
+    }));
   }
 
   // NORMALIZAR MAINBLOCK: soporta { bloques: [...] } | { estaciones: [...] } | array

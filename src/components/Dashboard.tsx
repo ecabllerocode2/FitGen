@@ -32,6 +32,7 @@ import {
 import ReadinessForm from './ReadinessForm';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import type { ReadinessData, DayContext } from '../types/session';
+import { MIN_SESSION_GENERATION_DISPLAY_MS, waitMs } from '../utils/sessionGenerationContext';
 
 // ====================================================================
 
@@ -108,17 +109,6 @@ interface LevelUpgradeData {
         progressionRate?: string;
     };
 }
-
-// FRASES MOTIVADORAS PARA GENERACIÓN DE SESIONES
-const SESSION_GENERATION_QUOTES = [
-    "Calibrando cargas...",
-    "El dolor es temporal, la gloria es eterna.",
-    "Construyendo tu mejor versión...",
-    "No pares cuando duela, para cuando termines.",
-    "Analizando fatiga muscular...",
-    "Hoy es un buen día para superarte.",
-    "Preparando la mejor rutina para ti..."
-];
 
 // Mensajes para días de descanso.
 const REST_MESSAGES = [
@@ -213,9 +203,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     // Ref para el scroll del carrusel (legacy desktop — mobile usa selector)
     const carouselRef = useRef<HTMLDivElement>(null);
     
-    const [quoteIndex, setQuoteIndex] = useState(0);
     const [restQuoteIndex, setRestQuoteIndex] = useState<number>(() => Math.floor(Math.random() * REST_MESSAGES.length));
     const prevHasSessionRef = useRef<boolean | null>(null);
+    const sessionGenerationStartedAt = useRef<number>(0);
 
     // A. Suscripción a Firestore (Lógica inalterada)
     useEffect(() => {
@@ -243,17 +233,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         }
     }, [location.state, location.pathname, navigate]);
 
-    // Efecto para rotar frases de sesión
-    useEffect(() => {
-        let interval: any;
-        if (generatingSession) {
-            interval = setInterval(() => {
-                setQuoteIndex((prev) => (prev + 1) % SESSION_GENERATION_QUOTES.length);
-            }, 2500);
-        }
-        return () => clearInterval(interval);
-    }, [generatingSession]);
-
     useEffect(() => {
         if (!creatingPlan || !planApiDone || !planLoaderDone) return;
         setCreatingPlan(false);
@@ -262,7 +241,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         if (planExplanationData) {
             setTimeout(() => setShowPlanExplanationModal(true), 300);
         }
-    }, [creatingPlan, planApiDone, planLoaderDone]);
+    }, [creatingPlan, planApiDone, planLoaderDone, planExplanationData]);
 
     // B. Lógica de Tiempo y Estado (ACTUALIZADA con isEvaluationPending)
     const dashboardState = useMemo(() => {
@@ -426,9 +405,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
     // Función modificada para recibir el feedback - Actualizada para API V2
     const handleGenerateSession = useCallback(async (feedback: PreSessionFeedback, _isRecovery: boolean) => {
-        setIsFeedbackModalOpen(false); // Cerrar modal primero
+        setIsFeedbackModalOpen(false);
         setGeneratingSession(true);
-        setQuoteIndex(0);
+        sessionGenerationStartedAt.current = Date.now();
 
         try {
             const token = await user.getIdToken();
@@ -492,6 +471,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
             const data = await res.json();
             console.log('✅ Respuesta del servidor:', data);
+
+            const elapsed = Date.now() - sessionGenerationStartedAt.current;
+            if (elapsed < MIN_SESSION_GENERATION_DISPLAY_MS) {
+                await waitMs(MIN_SESSION_GENERATION_DISPLAY_MS - elapsed);
+            }
 
             if (data.success) {
                 console.log("✅ Sesión V2 generada OK:", data.session?.id);
@@ -613,9 +597,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
     return (
         <DashboardShell>
-            {generatingSession && (
-                <SessionGeneratingOverlay message={SESSION_GENERATION_QUOTES[quoteIndex]} />
-            )}
+            {generatingSession && <SessionGeneratingOverlay />}
 
             <FeedbackModal
                 isOpen={isFeedbackModalOpen}

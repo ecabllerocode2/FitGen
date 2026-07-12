@@ -301,25 +301,7 @@ export function AppLoading({ title = 'Preparando tu espacio', subtitle = 'Un mom
   );
 }
 
-export function SessionGeneratingOverlay({ message }: { message: string }) {
-  return (
-    <div className="fixed inset-0 z-[60] bg-zinc-950 flex flex-col overflow-hidden">
-      <div className="px-6 pt-[max(2.5rem,env(safe-area-inset-top))]">
-        <div className="h-px bg-zinc-800 rounded-full overflow-hidden">
-          <div className="h-full w-2/5 bg-lime-500 animate-pulse" />
-        </div>
-      </div>
-      <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-        <AppEyebrow>Sesión de hoy</AppEyebrow>
-        <h2 className="text-2xl font-bold text-white mt-4 mb-3">Diseñando tu rutina</h2>
-        <p className="text-[15px] text-zinc-400 max-w-[16rem] leading-relaxed">{message}</p>
-      </div>
-      <div className="pb-[max(2rem,env(safe-area-inset-bottom))] flex justify-center">
-        <span className="w-1 h-1 rounded-full bg-lime-500/50 animate-pulse" />
-      </div>
-    </div>
-  );
-}
+export { SessionGeneratingOverlay } from '../SessionGeneratingOverlay';
 
 /* Dashboard aliases */
 export const DashboardShell = AppShell;
