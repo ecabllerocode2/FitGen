@@ -5,16 +5,11 @@ import { Firestore, doc, onSnapshot } from 'firebase/firestore';
 import { format, differenceInCalendarWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
-    Dumbbell,
-    Calendar,
-    Activity,
-    CheckCircle2,
-    Play,
-    Zap,
-    X,
-    Trophy,
-    Scale,
     AlertCircle,
+    ChevronLeft,
+    ChevronRight,
+    Trophy,
+    X,
 } from 'lucide-react';
 
 import InstallPwaBanner from './InstallPwaBanner';
@@ -22,6 +17,17 @@ import ProfileMenu from './ProfileMenu';
 import LevelUpCelebration from './LevelUpCelebration';
 import StatsAndAchievements from './StatsAndAchievements';
 import MesocycleGenerationLoader from './MesocycleGenerationLoader';
+import {
+    DashboardEyebrow,
+    DashboardHero,
+    DashboardIconButton,
+    DashboardLoading,
+    DashboardPrimaryButton,
+    DashboardProgress,
+    DashboardShell,
+    SessionGeneratingOverlay,
+    WeekSessionList,
+} from './dashboard/DashboardPrimitives';
 // LocationEquipmentForm eliminado - location y equipment ahora vienen del perfil
 import ReadinessForm from './ReadinessForm';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
@@ -113,11 +119,7 @@ const SESSION_GENERATION_QUOTES = [
     "Preparando la mejor rutina para ti..."
 ];
 
-// Constante de compatibilidad usada en el overlay de carga. Mantener como alias evita duplicación.
-const MOTIVATIONAL_QUOTES = SESSION_GENERATION_QUOTES; // alias por compatibilidad con versiones previas del componente
-
-
-// Mensajes variados para días de descanso. Cambian cada vez que el usuario entra a un día de descanso.
+// Mensajes para días de descanso.
 const REST_MESSAGES = [
     "El descanso es donde ocurre la adaptación: hoy tu cuerpo se reconstruye y se fortalece.",
     "Hoy toca recuperación — permitir que los tejidos se reparen mejorará tu rendimiento mañana.",
@@ -147,32 +149,29 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, onSubmit
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-zinc-800 p-6 rounded-2xl w-full max-w-md border border-lime-500/30 animate-in zoom-in-95 duration-300 my-8 sm:my-4 max-h-[calc(100vh-6rem)] overflow-auto">
-                <div className="flex justify-between items-start mb-4">
-                    <div>
-                        <h3 className="text-xl font-bold text-lime-400 flex items-center gap-2">
-                            <Zap className="w-6 h-6" />
-                            ¿Cómo te sientes?
-                        </h3>
-                    </div>
-                    <button onClick={onClose} className="text-zinc-400 hover:text-white p-1">
-                        <X className="w-5 h-5" />
-                    </button>
+        <div className="fixed inset-0 z-50 bg-zinc-950/95 flex flex-col">
+            <div className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] flex justify-end">
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="p-2 text-zinc-500 hover:text-white transition-colors"
+                    aria-label="Cerrar"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+                <div className="max-w-sm mx-auto pt-4">
+                    <DashboardEyebrow>Pre-sesión</DashboardEyebrow>
+                    <h3 className="text-2xl font-bold text-white mt-4 mb-2">¿Cómo te sientes?</h3>
+                    <p className="text-[15px] text-zinc-400 leading-relaxed mb-8">
+                        {isRecovery
+                            ? 'Tu respuesta define una sesión de recuperación óptima.'
+                            : 'Ajustamos volumen e intensidad en tiempo real según tu estado.'}
+                    </p>
+                    <ReadinessForm onSubmit={onSubmit} isLoading={isLoading} />
                 </div>
-
-                <p className="text-zinc-300 mb-5 text-sm">
-                    {isRecovery ? (
-                        "Este feedback nos ayudará a diseñar una sesión de recuperación óptima."
-                    ) : (
-                        "Tu respuesta ajustará el volumen e intensidad de tu sesión en tiempo real."
-                    )}
-                </p>
-
-                <ReadinessForm 
-                    onSubmit={onSubmit}
-                    isLoading={isLoading}
-                />
             </div>
         </div>
     );
@@ -208,7 +207,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     const [showPlanExplanationModal, setShowPlanExplanationModal] = useState(false);
     const [planExplanationData, setPlanExplanationData] = useState<any>(null);    
     
-    // Ref para el scroll del carrusel
+    const [viewWeekIndex, setViewWeekIndex] = useState(0);
+
+    // Ref para el scroll del carrusel (legacy desktop — mobile usa selector)
     const carouselRef = useRef<HTMLDivElement>(null);
     
     const [quoteIndex, setQuoteIndex] = useState(0);
@@ -326,7 +327,32 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         };
     }, [userProfile]);
 
-    // Scroll automático a la semana actual en el carrusel
+    useEffect(() => {
+        if (dashboardState?.currentWeek) {
+            setViewWeekIndex(dashboardState.currentWeek - 1);
+        }
+    }, [dashboardState?.currentWeek]);
+
+    const weekDaysForView = useMemo(() => {
+        if (!dashboardState?.allMicrocycles?.length) return [];
+        const micro = dashboardState.allMicrocycles[viewWeekIndex];
+        if (!micro) return [];
+        const dayNames = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+        const isViewingCurrentWeek = viewWeekIndex + 1 === dashboardState.currentWeek;
+        const todayLower = dashboardState.todayName.toLowerCase();
+
+        return dayNames.map((day) => {
+            const session = micro.sessions.find((s) => s.dayOfWeek.toLowerCase() === day);
+            return {
+                day,
+                sessionFocus: session?.sessionFocus,
+                isToday: isViewingCurrentWeek && day === todayLower,
+                isDone: Boolean((session as { generated?: boolean } | undefined)?.generated),
+            };
+        });
+    }, [dashboardState, viewWeekIndex]);
+
+    // Scroll automático a la semana actual en el carrusel desktop
     useEffect(() => {
         if (carouselRef.current && dashboardState?.currentWeek) {
             const weekIndex = dashboardState.currentWeek - 1;
@@ -502,12 +528,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     // D. RENDERIZADO
 
     if (loading) {
-        return (
-            <div className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center text-white">
-                <Activity className="w-10 h-10 text-lime-500 animate-spin mb-4" />
-                <p className="text-zinc-400 animate-pulse">Cargando perfil...</p>
-            </div>
-        );
+        return <DashboardLoading />;
     }
     
     // Overlay de carga para generación de plan
@@ -535,29 +556,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     // DASHBOARD VACÍO (SIN PLAN) - Lógica inalterada
     if (!dashboardState) {
         return (
-            <div className="min-h-screen bg-zinc-900 p-6 flex flex-col items-center justify-center text-center relative">
-                <div className="absolute top-6 right-6">
-                    <ProfileMenu 
+            <DashboardShell>
+                <header className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] flex justify-end">
+                    <ProfileMenu
                         userName={userName}
                         onLogout={handleLogout}
                         onNavigateToProfile={handleNavigateToProfile}
                     />
-                </div>
-                <div className="bg-zinc-800 p-8 rounded-2xl border border-zinc-700 max-w-md w-full">
-                    <Dumbbell className="w-16 h-16 text-lime-500 mx-auto mb-6" />
-                    <h2 className="text-2xl font-bold text-white mb-2">Bienvenido, {userName.split(' ')[0]}</h2>
-                    <p className="text-zinc-400 mb-8">Vamos a crear tu plan de 4 semanas.</p>
-                    <button
-                        onClick={handleCreatePlan}
-                        disabled={creatingPlan}
-                        className="w-full bg-lime-500 text-zinc-900 px-6 py-4 rounded-xl font-bold hover:bg-lime-400 flex items-center justify-center gap-2"
+                </header>
+                <div className="flex-1 flex flex-col items-center justify-center px-8">
+                    <DashboardHero
+                        eyebrow="Bienvenido"
+                        title={userName.split(' ')[0]}
+                        body="Aún no tienes un mesociclo activo. Generemos tu primer bloque de entrenamiento."
                     >
-                        {creatingPlan ? <Activity className="animate-spin w-5 h-5" /> : "Generar Primer Mesociclo"}
-                    </button>
+                        <DashboardPrimaryButton onClick={handleCreatePlan} disabled={creatingPlan}>
+                            Crear mi plan
+                        </DashboardPrimaryButton>
+                    </DashboardHero>
                 </div>
-
-                <InstallPwaBanner />
-            </div>
+                <div className="px-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                    <InstallPwaBanner />
+                </div>
+            </DashboardShell>
         );
     }
 
@@ -574,10 +595,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         isEvaluationPending // <--- Usamos aquí
     } = dashboardState;
 
-    return (
-        <div className="min-h-screen bg-zinc-900 text-white pb-24 relative">
+    const totalWeeks = dashboardState.allMicrocycles?.length ?? duration;
+    const canPrevWeek = viewWeekIndex > 0;
+    const canNextWeek = viewWeekIndex < totalWeeks - 1;
 
-            {/* MODAL DE FEEDBACK */}
+    return (
+        <DashboardShell>
+            {generatingSession && (
+                <SessionGeneratingOverlay message={SESSION_GENERATION_QUOTES[quoteIndex]} />
+            )}
+
             <FeedbackModal
                 isOpen={isFeedbackModalOpen}
                 onClose={() => setIsFeedbackModalOpen(false)}
@@ -586,363 +613,190 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                 isRecovery={isRecoveryMode}
             />
 
-            {/* HEADER - Lógica inalterada */}
-            <header className="bg-zinc-800 p-6 rounded-b-3xl shadow-xl mb-6 border-b border-zinc-700 relative">
-                <div className="flex justify-between items-start mb-5">
-                    <div>
-                        <h1 className="text-2xl font-bold text-white tracking-tight">Hola, <span className="text-lime-400">{userName.split(' ')[0]}</span></h1>
-                        <p className="text-xs text-zinc-400 mt-1 font-medium uppercase"> {mesocycleGoal}</p>
+            <header className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4 shrink-0">
+                <div className="flex items-start justify-between gap-3 mb-5">
+                    <div className="min-w-0">
+                        <DashboardEyebrow>
+                            Semana {currentWeek} · {mesocycleGoal}
+                        </DashboardEyebrow>
+                        <h1 className="text-xl font-bold text-white mt-2 truncate">
+                            {userName.split(' ')[0]}
+                        </h1>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button
+                    <div className="flex items-center gap-0.5 shrink-0">
+                        <DashboardIconButton
                             onClick={() => setShowStatsModal(true)}
-                            className="p-2 rounded-lg bg-linear-to-br from-emerald-600/20 to-teal-600/20 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group"
-                            title="Ver Estadísticas y Logros"
+                            title="Estadísticas y logros"
                         >
-                            <Trophy className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
-                        </button>
-                        <ProfileMenu 
+                            <Trophy className="w-4 h-4" />
+                        </DashboardIconButton>
+                        <ProfileMenu
                             userName={userName}
                             onLogout={handleLogout}
                             onNavigateToProfile={handleNavigateToProfile}
                         />
                     </div>
                 </div>
-                <div className="bg-zinc-900/60 p-4 rounded-xl border border-zinc-700/50">
-                    <div className="flex justify-between text-sm mb-2 font-medium">
-                        <span className="text-zinc-300">Semana {currentWeek} / {duration}</span>
-                        <span className="text-lime-400">{currentMicrocycle?.focus}</span>
-                    </div>
-                    <div className="w-full bg-zinc-700 h-2.5 rounded-full overflow-hidden">
-                        <div className="bg-lime-500 h-full transition-all duration-1000" style={{ width: `${Math.min((currentWeek / duration) * 100, 100)}%` }}></div>
-                    </div>
-                </div>
+                <DashboardProgress
+                    value={(currentWeek / duration) * 100}
+                    label={currentMicrocycle?.focus ?? 'Mesociclo activo'}
+                    meta={`${currentWeek} / ${duration}`}
+                />
             </header>
 
-            <main className="px-5 space-y-8">
-                {/* CARD PRINCIPAL DEL DÍA DE HOY - SIEMPRE VISIBLE */}
-                <section>
-                    <div className="flex items-center gap-2 mb-4">
-                        <Calendar className="w-5 h-5 text-lime-400" />
-                        <h2 className="text-lg font-bold uppercase text-zinc-100">{todayName} <span className="text-zinc-500 text-sm font-normal">(Hoy)</span></h2>
-                    </div>
-
+            <main className="flex-1 flex flex-col min-h-0 px-6">
+                <section className="flex-1 flex items-center justify-center py-4 min-h-0">
                     {isEvaluationPending ? (
-                        // 1. EVALUACIÓN PENDIENTE (PRIORIDAD ALTA)
-                        <div className="group bg-linear-to-br from-zinc-800 to-zinc-900 border border-blue-500/50 p-6 rounded-2xl relative overflow-hidden shadow-lg shadow-blue-500/20">
-                            <h3 className="text-2xl font-bold text-white mb-2 leading-tight">¡Mesociclo Finalizado!</h3>
-                            <p className="text-zinc-400 mb-6">Completa la evaluación para que nuestro motor pueda generar tu próximo mesociclo hiper-optimizado.</p>
-                            
-                            <button
-                                onClick={() => navigate('/mesocycle/evaluate')}
-                                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 transition-all active:scale-95"
-                            >
-                                <Scale className="w-6 h-6" />
-                                Evaluar y Generar Nuevo Plan
-                            </button>
-                        </div>
+                        <DashboardHero
+                            eyebrow="Mesociclo completo"
+                            title="Hora de evaluar"
+                            body="Tu feedback calibra el volumen del próximo bloque dentro de MEV–MRV."
+                        >
+                            <DashboardPrimaryButton onClick={() => navigate('/mesocycle/evaluate')}>
+                                Evaluar y generar plan
+                            </DashboardPrimaryButton>
+                        </DashboardHero>
+                    ) : !todaysSession || isPlannedRest ? (
+                        <DashboardHero
+                            eyebrow={`${todayName} · Recuperación`}
+                            title="Día de descanso"
+                            body={REST_MESSAGES[restQuoteIndex]}
+                        />
                     ) : (
-                        // 2. PLAN ACTIVO: Muestra el plan de sesión de hoy o de descanso.
-                        (!todaysSession || isPlannedRest) ? (
-                            // 2c: Día de Descanso
-                            <div className="bg-zinc-800 border border-zinc-700 p-6 rounded-2xl text-center">
-                                <div className="w-14 h-14 bg-zinc-700 rounded-full flex items-center justify-center mb-4 mx-auto">
-                                    <CheckCircle2 className="w-7 h-7 text-zinc-400" />
-                                </div>
-                                <h3 className="text-xl font-bold text-white mb-2">Día de Descanso</h3>
-                                <p className="text-zinc-400 text-sm mb-4 italic">"{REST_MESSAGES[restQuoteIndex]}"</p>
-                                <p className="text-xs text-zinc-400">Aprovecha este día para descansar activamente: camina, realiza movilidad suave, hidrátate y prioriza el sueño.</p>
-                            </div>
-                        ) : (
-                            <div className="group bg-linear-to-br from-zinc-800 to-zinc-900 border border-lime-500/30 p-6 rounded-2xl relative overflow-hidden shadow-lg">
-
-                                {/* --- OVERLAY DE CARGA --- */}
-                                {generatingSession && (
-                                    <div className="absolute inset-0 z-50 bg-zinc-900/95 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6 animate-in fade-in duration-300">
-                                        <div className="relative mb-6">
-                                            <div className="absolute inset-0 bg-lime-500 blur-xl opacity-20 animate-pulse"></div>
-                                            <Dumbbell className="w-16 h-16 text-lime-500 animate-[spin_3s_linear_infinite]" />
-                                        </div>
-                                        <h3 className="text-xl font-bold text-white mb-2">Diseñando Sesión...</h3>
-                                        <p key={quoteIndex} className="text-zinc-400 text-sm min-h-10 animate-in slide-in-from-bottom-2 duration-500">
-                                            "{MOTIVATIONAL_QUOTES?.[quoteIndex] ?? 'Diseñando sesión...'}"
-                                        </p>
-                                    </div>
-                                )}
-
-                                <div className="relative z-10">
-                                    <span className="inline-block bg-lime-500/10 text-lime-400 text-xs font-bold px-2 py-1 rounded mb-3 border border-lime-500/20">
-                                        ENTRENAMIENTO PROGRAMADO
-                                    </span>
-                                    <h3 className="text-2xl font-bold text-white mb-2 leading-tight">{todaysSession.sessionFocus}</h3>
-
-                                    <div className="bg-zinc-900/50 p-3 rounded-lg mb-6 border-l-2 border-zinc-600">
-                                        <p className="text-xs text-zinc-300 italic">"{currentMicrocycle?.notes}"</p>
-                                    </div>
-
-                                    {isSessionReady ? (
-                                        // Botón 2a: Iniciar Sesión Lista
-                                        <button
-                                            onClick={handleStartWorkout}
-                                            className="w-full bg-lime-500 hover:bg-lime-400 text-zinc-900 font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(132,204,22,0.4)] animate-in zoom-in-95 duration-300"
-                                        >
-                                            <Play className="w-5 h-5 fill-current" />
-                                            COMENZAR SESIÓN
-                                        </button>
-                                    ) : (
-                                        // Botón 2b: Generar Sesión
-                                        <button
-                                            onClick={() => openFeedbackModal(false)}
-                                            disabled={generatingSession}
-                                            className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 border border-zinc-600 hover:border-lime-500/50 hover:text-lime-400 transition-all"
-                                        >
-                                            <Zap className="w-5 h-5" />
-                                            GENERAR RUTINA INTELIGENTE
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        )
+                        <DashboardHero
+                            eyebrow={`${todayName} · Hoy`}
+                            title={todaysSession.sessionFocus}
+                            body={currentMicrocycle?.notes}
+                        >
+                            {isSessionReady ? (
+                                <DashboardPrimaryButton onClick={handleStartWorkout}>
+                                    Comenzar sesión
+                                </DashboardPrimaryButton>
+                            ) : (
+                                <DashboardPrimaryButton
+                                    variant="ghost"
+                                    onClick={() => openFeedbackModal(false)}
+                                    disabled={generatingSession}
+                                >
+                                    Generar rutina
+                                </DashboardPrimaryButton>
+                            )}
+                        </DashboardHero>
                     )}
                 </section>
 
-                {/* VISTA DE CALENDARIO COMPLETO (MOBILE-FIRST) */}
-                <section>
-                        {/* MOBILE: CARRUSEL HORIZONTAL */}
-                        <div 
-                            ref={carouselRef}
-                            className="md:hidden flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 -mx-5 px-5"
-                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                        >
-                            {dashboardState.allMicrocycles?.map((microcycle: any, weekIdx: number) => {
-                                const isCurrentWeek = weekIdx + 1 === currentWeek;
-                                
-                                // Crear array de 7 días (Lunes a Domingo)
-                                const weekDays = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
-                                const weekGrid = weekDays.map(day => {
-                                    const session = microcycle.sessions.find(
-                                        (s: any) => s.dayOfWeek.toLowerCase() === day
-                                    );
-                                    return { day, session };
-                                });
-
-                                return (
-                                    <div 
-                                        key={weekIdx} 
-                                        className={`snap-center shrink-0 w-[85vw] rounded-2xl overflow-hidden border ${
-                                            isCurrentWeek 
-                                                ? 'border-lime-500/50 bg-lime-500/5' 
-                                                : 'border-zinc-700 bg-zinc-800'
-                                        }`}
-                                    >
-                                        {/* HEADER DE SEMANA */}
-                                        <div className={`px-4 py-3 ${
-                                            isCurrentWeek ? 'bg-lime-500/10' : 'bg-zinc-900/50'
-                                        }`}>
-                                            <div className="flex items-center justify-between mb-1">
-                                                <span className={`text-base font-bold ${
-                                                    isCurrentWeek ? 'text-lime-400' : 'text-zinc-300'
-                                                }`}>
-                                                    Semana {weekIdx + 1}
-                                                </span>
-                                                {isCurrentWeek && (
-                                                    <span className="bg-lime-500 text-zinc-900 text-xs font-bold px-2 py-1 rounded">
-                                                        Activa
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <p className="text-xs text-zinc-400">{microcycle.focus}</p>
-                                        </div>
-
-                                        {/* LISTA DE SESIONES */}
-                                        <div className="p-3 space-y-2">
-                                            {weekGrid.map(({ day, session }, dayIdx) => {
-                                                const isToday = isCurrentWeek && day === todayName.toLowerCase();
-                                                const isRestDay = !session;
-                                                const dayName = day.charAt(0).toUpperCase() + day.slice(1, 3);
-                                                
-                                                return (
-                                                    <div 
-                                                        key={dayIdx}
-                                                        className={`p-3 rounded-xl border ${
-                                                            isToday 
-                                                                ? 'bg-lime-500/10 border-lime-500/50' 
-                                                                : isRestDay
-                                                                ? 'bg-zinc-900/30 border-zinc-700/30'
-                                                                : 'bg-zinc-900/50 border-zinc-700/50'
-                                                        }`}
-                                                    >
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex items-center gap-3 flex-1">
-                                                                <span className={`text-xs font-bold uppercase min-w-8 ${
-                                                                    isToday ? 'text-lime-400' : 'text-zinc-400'
-                                                                }`}>
-                                                                    {dayName}
-                                                                </span>
-                                                                {session ? (
-                                                                    <span className={`text-sm font-medium ${
-                                                                        isToday ? 'text-lime-300' : 'text-zinc-200'
-                                                                    }`}>
-                                                                        {session.sessionFocus}
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-sm text-zinc-500">Descanso</span>
-                                                                )}
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                {session?.generated && (
-                                                                    <CheckCircle2 className="w-4 h-4 text-lime-500" />
-                                                                )}
-                                                                {isToday && (
-                                                                    <span className="h-2 w-2 rounded-full bg-lime-500 animate-pulse"></span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-
-                                        {/* NOTA DE ADAPTACIÓN */}
-                                        {microcycle.notes && (
-                                            <div className="px-3 pb-3">
-                                                <div className="bg-zinc-900/60 p-3 rounded-lg border-l-2 border-lime-500/50">
-                                                    <p className="text-xs text-zinc-400 italic leading-relaxed">
-                                                        {microcycle.notes}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                {!isEvaluationPending && weekDaysForView.length > 0 && (
+                    <section className="md:hidden shrink-0 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                        <div className="flex items-center justify-between max-w-sm mx-auto mb-3">
+                            <button
+                                type="button"
+                                disabled={!canPrevWeek}
+                                onClick={() => setViewWeekIndex((w) => Math.max(0, w - 1))}
+                                className="p-2 text-zinc-500 hover:text-white disabled:opacity-25 transition-colors"
+                                aria-label="Semana anterior"
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <div className="text-center">
+                                <DashboardEyebrow>Tu semana</DashboardEyebrow>
+                                <p className="text-sm font-semibold text-zinc-300 mt-1">
+                                    Semana {viewWeekIndex + 1}
+                                    {viewWeekIndex + 1 === currentWeek ? (
+                                        <span className="text-lime-500/80 font-normal"> · activa</span>
+                                    ) : null}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={!canNextWeek}
+                                onClick={() =>
+                                    setViewWeekIndex((w) => Math.min(totalWeeks - 1, w + 1))
+                                }
+                                className="p-2 text-zinc-500 hover:text-white disabled:opacity-25 transition-colors"
+                                aria-label="Semana siguiente"
+                            >
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
                         </div>
 
-                        {/* DESKTOP: LAYOUT POR SEMANAS CON GRID */}
-                        <div className="hidden md:block space-y-6">
-                        {dashboardState.allMicrocycles?.map((microcycle: any, weekIdx: number) => {
-                            const isCurrentWeek = weekIdx + 1 === currentWeek;
-                            
-                            // Crear array de 7 días (Lunes a Domingo)
-                            const weekDays = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
-                            const weekGrid = weekDays.map(day => {
+                        <WeekSessionList days={weekDaysForView} />
+
+                        <div className="flex justify-center gap-1 mt-4">
+                            {Array.from({ length: totalWeeks }).map((_, i) => (
+                                <button
+                                    key={i}
+                                    type="button"
+                                    aria-label={`Ir a semana ${i + 1}`}
+                                    onClick={() => setViewWeekIndex(i)}
+                                    className={`h-1 rounded-full transition-all duration-300 ${
+                                        i === viewWeekIndex
+                                            ? 'w-5 bg-lime-500'
+                                            : 'w-1 bg-zinc-800 hover:bg-zinc-700'
+                                    }`}
+                                />
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {/* Vista desktop: calendario expandido */}
+                <section className="hidden md:block shrink-0 pb-8">
+                    <div
+                        ref={carouselRef}
+                        className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
+                    >
+                        {dashboardState.allMicrocycles?.map((microcycle: Microcycle, weekIdx: number) => {
+                            const isCurrentWeekCard = weekIdx + 1 === currentWeek;
+                            const dayNames = [
+                                'lunes',
+                                'martes',
+                                'miércoles',
+                                'jueves',
+                                'viernes',
+                                'sábado',
+                                'domingo',
+                            ];
+                            const rows = dayNames.map((day) => {
                                 const session = microcycle.sessions.find(
-                                    (s: any) => s.dayOfWeek.toLowerCase() === day
+                                    (s) => s.dayOfWeek.toLowerCase() === day,
                                 );
-                                return { day, session };
+                                return {
+                                    day,
+                                    sessionFocus: session?.sessionFocus,
+                                    isToday:
+                                        isCurrentWeekCard && day === todayName.toLowerCase(),
+                                    isDone: Boolean(
+                                        (session as { generated?: boolean } | undefined)?.generated,
+                                    ),
+                                };
                             });
 
                             return (
-                                <div key={weekIdx} className={`rounded-2xl overflow-hidden border ${
-                                    isCurrentWeek 
-                                        ? 'border-lime-500/50 bg-lime-500/5' 
-                                        : 'border-zinc-700 bg-zinc-800'
-                                }`}>
-                                    {/* HEADER DE SEMANA */}
-                                    <div className={`px-4 py-3 flex items-center justify-between ${
-                                        isCurrentWeek ? 'bg-lime-500/10' : 'bg-zinc-900/50'
-                                    }`}>
-                                        <div className="flex items-center gap-3">
-                                            <span className={`text-base font-bold ${
-                                                isCurrentWeek ? 'text-lime-400' : 'text-zinc-300'
-                                            }`}>
-                                                Semana {weekIdx + 1}
-                                            </span>
-                                            <span className="text-xs text-zinc-500">{microcycle.focus}</span>
-                                        </div>
-                                        {isCurrentWeek && (
-                                            <span className="bg-lime-500 text-zinc-900 text-xs font-bold px-2 py-1 rounded">
-                                                Activa
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* HEADER DE DÍAS (solo desktop) */}
-                                    <div className="grid grid-cols-7 bg-zinc-900/80 border-b border-zinc-700">
-                                        {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((day, idx) => (
-                                            <div key={idx} className="p-2 text-center">
-                                                <span className="text-xs font-bold text-zinc-400 uppercase">{day}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* GRID DE DÍAS */}
-                                    <div className="grid grid-cols-7">
-                                        {weekGrid.map(({ day, session }, dayIdx) => {
-                                            const isToday = isCurrentWeek && day === todayName.toLowerCase();
-                                            const isRestDay = !session;
-                                            
-                                            return (
-                                                <div 
-                                                    key={dayIdx}
-                                                    className={`min-h-28 p-3 border-r border-zinc-700/50 last:border-r-0 ${
-                                                        isToday 
-                                                            ? 'bg-lime-500/10 ring-2 ring-inset ring-lime-500/50' 
-                                                            : isRestDay
-                                                            ? 'bg-zinc-900/30'
-                                                            : 'bg-zinc-800/50 hover:bg-zinc-800 transition-colors'
-                                                    }`}
-                                                >
-                                                    {session ? (
-                                                        <div className="h-full flex flex-col justify-between">
-                                                            <div>
-                                                                <div className="flex items-center gap-1 mb-2">
-                                                                    {session.generated && (
-                                                                        <CheckCircle2 className="w-3 h-3 text-lime-500" />
-                                                                    )}
-                                                                    {isToday && (
-                                                                        <span className="h-1.5 w-1.5 rounded-full bg-lime-500 animate-pulse"></span>
-                                                                    )}
-                                                                </div>
-                                                                <h4 className={`text-xs font-semibold leading-tight ${
-                                                                    isToday ? 'text-lime-400' : 'text-zinc-200'
-                                                                }`}>
-                                                                    {session.sessionFocus}
-                                                                </h4>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="h-full flex items-center justify-center">
-                                                            <span className="text-zinc-600 text-xs">Descanso</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {/* NOTA DE ADAPTACIÓN */}
-                                    {microcycle.notes && (
-                                        <div className="px-4 pb-4 pt-2">
-                                            <div className="bg-zinc-900/60 p-3 rounded-lg border-l-2 border-lime-500/50">
-                                                <p className="text-xs text-zinc-400 italic leading-relaxed">
-                                                    {microcycle.notes}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )}
+                                <div
+                                    key={weekIdx}
+                                    className={`rounded-2xl p-4 border ${
+                                        isCurrentWeekCard
+                                            ? 'border-lime-500/30 bg-lime-500/5'
+                                            : 'border-zinc-800 bg-zinc-900/30'
+                                    }`}
+                                >
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 mb-1">
+                                        Semana {weekIdx + 1}
+                                    </p>
+                                    <p className="text-sm font-semibold text-zinc-300 mb-3">
+                                        {microcycle.focus}
+                                    </p>
+                                    <WeekSessionList days={rows} />
                                 </div>
                             );
                         })}
-                        </div>
-                        
-                        {/* LEYENDA */}
-                        <div className="flex items-center gap-4 mt-2 text-xs text-zinc-400 justify-center">
-                            <div className="flex items-center gap-2">
-                                <span className="h-2 w-2 rounded-full bg-lime-500 animate-pulse"></span>
-                                <span>Hoy</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <CheckCircle2 className="w-3 h-3 text-lime-500" />
-                                <span>Lista</span>
-                            </div>
-                        </div>
-                    </section>
+                    </div>
+                </section>
             </main>
 
-            {/* 👇 AÑADIDO: Banner de instalación PWA al final */}
-            <InstallPwaBanner />
-            
+            <div className="px-6 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+                <InstallPwaBanner />
+            </div>
             {/* 🎉 Modal de Celebración de Nivel */}
             {levelUpData && (
                 <LevelUpCelebration
@@ -980,144 +834,88 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             
             {/* 📋 Modal de Explicación del Plan (NUEVO) */}
             {showPlanExplanationModal && planExplanationData && (
-                <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 overflow-y-auto">
-                    <div className="bg-zinc-800 rounded-2xl max-w-2xl w-full border border-lime-500/30 shadow-2xl animate-in zoom-in-95 duration-300 my-8">
-                        
-                        {/* Header optimizado */}
-                        <div className="bg-gradient-to-r from-lime-500/10 to-emerald-500/10 p-6 border-b border-zinc-700">
-                            <div className="flex justify-between items-start">
+                <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
+                    <div className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] flex justify-end shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => setShowPlanExplanationModal(false)}
+                            className="p-2 text-zinc-500 hover:text-white transition-colors"
+                            aria-label="Cerrar"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-6 pb-6">
+                        <div className="max-w-sm mx-auto">
+                            <DashboardEyebrow>Tu plan</DashboardEyebrow>
+                            <h2 className="text-3xl font-bold text-white mt-4 mb-8 leading-tight">
+                                {planExplanationData.splitType}
+                            </h2>
+
+                            <div className="space-y-8">
                                 <div>
-                                    <h2 className="text-3xl font-black text-white mb-2">¡Tu Plan Maestro Está Listo!</h2>
-                                    <p className="text-zinc-300 text-sm">Diseñado con ciencia deportiva de élite para maximizar tus resultados</p>
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 mb-2">
+                                        Objetivo
+                                    </p>
+                                    <p className="text-lg font-semibold text-zinc-200">
+                                        {planExplanationData.phaseGoal}
+                                    </p>
+                                    <p className="text-[15px] text-zinc-400 mt-2 leading-relaxed">
+                                        {planExplanationData.goalRationale}
+                                    </p>
                                 </div>
-                                <button 
-                                    onClick={() => setShowPlanExplanationModal(false)}
-                                    className="text-zinc-400 hover:text-white p-2 rounded-lg hover:bg-zinc-700/50 transition-colors"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
+
+                                <div>
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 mb-2">
+                                        Estrategia
+                                    </p>
+                                    <p className="text-[15px] text-zinc-400 leading-relaxed">
+                                        {planExplanationData.splitRationale}
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 mb-2">
+                                        Volumen · {planExplanationData.baseVolume} series/sem
+                                    </p>
+                                    <p className="text-[15px] text-zinc-400 leading-relaxed">
+                                        {planExplanationData.volumeRationale}
+                                    </p>
+                                </div>
+
+                                {planExplanationData.specialConsiderations?.length > 0 && (
+                                    <div className="border-t border-zinc-800 pt-6">
+                                        <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 mb-3 flex items-center gap-2">
+                                            <AlertCircle className="w-3.5 h-3.5" />
+                                            Notas
+                                        </p>
+                                        <ul className="space-y-2">
+                                            {planExplanationData.specialConsiderations.map(
+                                                (note: string, idx: number) => (
+                                                    <li
+                                                        key={idx}
+                                                        className="text-[15px] text-zinc-400 leading-relaxed"
+                                                    >
+                                                        {note}
+                                                    </li>
+                                                ),
+                                            )}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        
-                        <div className="p-6 space-y-5 max-h-[65vh] overflow-y-auto">
-                            
-                            {/* Quick Summary Cards */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="bg-lime-500/10 border border-lime-500/30 p-3 rounded-lg">
-                                    <div className="text-lime-400 text-xs font-bold uppercase tracking-wider mb-1">Split</div>
-                                    <div className="text-white font-bold text-lg">{planExplanationData.splitType}</div>
-                                </div>
-                                <div className="bg-blue-500/10 border border-blue-500/30 p-3 rounded-lg">
-                                    <div className="text-blue-400 text-xs font-bold uppercase tracking-wider mb-1">Objetivo</div>
-                                    <div className="text-white font-bold text-lg">{planExplanationData.phaseGoal}</div>
-                                </div>
-                            </div>
-                            
-                            {/* Arquitectura del Split (más visual) */}
-                            <div className="bg-zinc-900/70 p-5 rounded-xl border border-zinc-700/50 hover:border-lime-500/30 transition-colors">
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className="w-10 h-10 bg-lime-500/20 rounded-xl flex items-center justify-center shrink-0">
-                                        <Calendar className="w-5 h-5 text-lime-400" />
-                                    </div>
-                                    <h3 className="text-lg font-bold text-white">Tu Estrategia de Entrenamiento</h3>
-                                </div>
-                                <p className="text-zinc-300 text-sm leading-relaxed pl-13">{planExplanationData.splitRationale}</p>
-                            </div>
-                            
-                            {/* Objetivo de Fase (destacado) */}
-                            <div className="bg-zinc-900/70 p-5 rounded-xl border border-zinc-700/50 hover:border-blue-500/30 transition-colors">
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center shrink-0">
-                                        <Activity className="w-5 h-5 text-blue-400" />
-                                    </div>
-                                    <h3 className="text-lg font-bold text-white">Qué Esperar en Cada Sesión</h3>
-                                </div>
-                                <p className="text-zinc-300 text-sm leading-relaxed pl-13">{planExplanationData.goalRationale}</p>
-                            </div>
-                            
-                            {/* Volumen (simplificado) */}
-                            <div className="bg-zinc-900/70 p-5 rounded-xl border border-zinc-700/50 hover:border-orange-500/30 transition-colors">
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center shrink-0">
-                                        <Dumbbell className="w-5 h-5 text-orange-400" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-white">Tu Volumen: {planExplanationData.baseVolume} series/semana</h3>
-                                    </div>
-                                </div>
-                                <p className="text-zinc-300 text-sm leading-relaxed pl-13">{planExplanationData.volumeRationale}</p>
-                            </div>
-                            
-                            {/* Hoja de Ruta (mejorada visualmente) */}
-                            {planExplanationData.progressionRationale && (
-                                <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 p-5 rounded-xl">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center shrink-0">
-                                            <Activity className="w-5 h-5 text-purple-400" />
-                                        </div>
-                                        <h3 className="text-lg font-bold text-white">Tu Hoja de Ruta (4 Semanas)</h3>
-                                    </div>
-                                    <div className="space-y-2 pl-13">
-                                        <div className="flex items-start gap-3 text-sm">
-                                            <div className="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-                                                <span className="text-purple-300 font-bold text-xs">1</span>
-                                            </div>
-                                            <p className="text-zinc-300"><strong className="text-white">Ajuste técnico:</strong> No llegues al fallo, domina cada movimiento.</p>
-                                        </div>
-                                        <div className="flex items-start gap-3 text-sm">
-                                            <div className="w-6 h-6 bg-purple-500/30 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-                                                <span className="text-purple-300 font-bold text-xs">2</span>
-                                            </div>
-                                            <p className="text-zinc-300"><strong className="text-white">Intensificamos:</strong> Aquí empiezas a sentir el verdadero trabajo.</p>
-                                        </div>
-                                        <div className="flex items-start gap-3 text-sm">
-                                            <div className="w-6 h-6 bg-purple-500/40 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-                                                <span className="text-purple-200 font-bold text-xs">3</span>
-                                            </div>
-                                            <p className="text-zinc-300"><strong className="text-white">Pico de esfuerzo:</strong> Das todo. Aquí ocurre la magia del crecimiento.</p>
-                                        </div>
-                                        <div className="flex items-start gap-3 text-sm">
-                                            <div className="w-6 h-6 bg-lime-500/30 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-                                                <span className="text-lime-300 font-bold text-xs">4</span>
-                                            </div>
-                                            <p className="text-zinc-300"><strong className="text-white">Recarga de baterías:</strong> Tu cuerpo se repara y vuelves más fuerte (efecto rebote).</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            
-                            {/* Consideraciones Especiales (si existen) */}
-                            {planExplanationData.specialConsiderations && planExplanationData.specialConsiderations.length > 0 && (
-                                <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl">
-                                    <h3 className="text-sm font-bold text-yellow-300 mb-2 flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4" />
-                                        Notas Importantes
-                                    </h3>
-                                    <ul className="space-y-1.5">
-                                        {planExplanationData.specialConsiderations.map((note: string, idx: number) => (
-                                            <li key={idx} className="text-yellow-100 text-xs flex items-start gap-2">
-                                                <span className="text-yellow-400 shrink-0 mt-0.5">▸</span>
-                                                <span>{note}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                        
-                        {/* Footer con CTA potente */}
-                        <div className="p-6 border-t border-zinc-700 bg-zinc-900/50">
-                            <button
-                                onClick={() => setShowPlanExplanationModal(false)}
-                                className="w-full bg-gradient-to-r from-lime-500 to-emerald-500 hover:from-lime-400 hover:to-emerald-400 text-zinc-900 font-black text-lg py-4 rounded-xl transition-all shadow-lg hover:shadow-lime-500/50"
-                            >
-                                Entendido, ¡Vamos a Entrenar!
-                            </button>
-                        </div>
+                    </div>
+
+                    <div className="px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shrink-0">
+                        <DashboardPrimaryButton onClick={() => setShowPlanExplanationModal(false)}>
+                            Empezar
+                        </DashboardPrimaryButton>
                     </div>
                 </div>
             )}
-        </div>
+        </DashboardShell>
     );
 };
 

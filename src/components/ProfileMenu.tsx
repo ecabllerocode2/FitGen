@@ -50,7 +50,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userName, onLogout, onNavigat
         <div id="profile-menu-container" className="relative z-50">
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 p-2 bg-zinc-700/50 rounded-full text-zinc-300 hover:bg-zinc-700 transition"
+                className="flex items-center gap-1.5 p-2 rounded-full text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors"
                 aria-expanded={isOpen}
                 aria-haspopup="true"
             >
@@ -61,31 +61,31 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userName, onLogout, onNavigat
             
             {isOpen && (
                 <div 
-                    className="absolute right-0 mt-2 w-56 origin-top-right bg-zinc-800 border border-zinc-700 divide-y divide-zinc-700 rounded-md shadow-2xl animate-in slide-in-from-top-1 duration-200"
+                    className="absolute right-0 mt-2 w-52 origin-top-right bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden"
                     role="menu"
                     aria-orientation="vertical"
                 >
-                    <div className="p-3">
-                        <p className="text-sm font-bold text-white truncate">{userName}</p>
-                        <p className="text-xs text-zinc-500">Opciones de cuenta</p>
+                    <div className="px-4 py-3 border-b border-zinc-800">
+                        <p className="text-sm font-semibold text-white truncate">{userName}</p>
+                        <p className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mt-0.5">Cuenta</p>
                     </div>
 
                     <div className="py-1">
                         <button
                             onClick={handleProfileClick}
-                            className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-lime-400 flex items-center gap-3"
+                            className="w-full text-left px-4 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-900 flex items-center gap-3 transition-colors"
                             role="menuitem"
                         >
                             <Scale className="w-4 h-4" />
-                            Actualizar Perfil
+                            Actualizar perfil
                         </button>
                         <button
                             onClick={handleLogoutClick}
-                            className="w-full text-left px-4 py-2 text-sm text-red-300 hover:bg-red-900/20 hover:text-red-400 flex items-center gap-3"
+                            className="w-full text-left px-4 py-2.5 text-sm text-zinc-500 hover:text-red-400 hover:bg-zinc-900 flex items-center gap-3 transition-colors"
                             role="menuitem"
                         >
                             <LogOut className="w-4 h-4" />
-                            Cerrar Sesión
+                            Cerrar sesión
                         </button>
                     </div>
                 </div>
