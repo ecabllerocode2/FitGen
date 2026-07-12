@@ -16,7 +16,9 @@ import MesocycleEvaluate from './components/MesocycleEvaluate';
 
 // Tipos de sesión V2
 import type { GeneratedSession } from './types/session';
-import { isOnboardingFlowActive } from './utils/onboardingFlowLock';
+import { isOnboardingFlowActive, endOnboardingFlowLock } from './utils/onboardingFlowLock';
+import { readOnboardingCompletion, clearOnboardingCompletionStorage } from './utils/onboardingCompletion';
+import OnboardingCompletionFlow from './components/onboarding/OnboardingCompletionFlow';
 
 // ====================================================================
 // TIPOS Y ESTADOS
@@ -103,6 +105,13 @@ const App: FC = () => {
         window.addEventListener('fitgen-onboarding-flow', syncOnboardingFlow);
         return () => window.removeEventListener('fitgen-onboarding-flow', syncOnboardingFlow);
     }, []);
+
+    // Limpiar estado residual al re-entrar al onboarding (p. ej. borrar doc en Firestore).
+    useEffect(() => {
+        if (userProfile?.status === 'pending_onboarding' && !isOnboardingFlowActive()) {
+            clearOnboardingCompletionStorage();
+        }
+    }, [userProfile?.status, user?.uid]);
 
     // EFECTO 1: Escuchar el estado de autenticación
     useEffect(() => {
@@ -193,7 +202,7 @@ const App: FC = () => {
 
     const showOnboarding =
         Boolean(user && authServices?.db) &&
-        (currentStatus === 'pending_onboarding' || isOnboardingFlowActive());
+        currentStatus === 'pending_onboarding';
 
     // --- RENDERIZADO ---
 
@@ -201,9 +210,15 @@ const App: FC = () => {
         return <div className="h-screen flex items-center justify-center bg-red-900 text-white">{globalError}</div>;
     }
 
-    // El candado de onboarding tiene prioridad sobre cualquier otro estado (incl. approved).
+    // Flujo post-wizard: independiente del wizard (sobrevive al cambio approved).
+    if (user && isOnboardingFlowActive() && readOnboardingCompletion()) {
+        return <OnboardingCompletionFlow user={user} />;
+    }
+
+    // El candado sin payload de completion no debería ocurrir; limpiar y continuar.
     if (user && authServices?.db && isOnboardingFlowActive()) {
-        return <ProfileOnboarding user={user} db={authServices.db} />;
+        clearOnboardingCompletionStorage();
+        endOnboardingFlowLock();
     }
 
     if (!isAuthReady || currentStatus === 'loading_profile') {
@@ -232,63 +247,56 @@ const App: FC = () => {
             return <Navigate to="/" replace />;
         }
         return (
-            <>
-                <Routes>
-                    {/* 1. DASHBOARD (Home) */}
-                    <Route path="/" element={
-                        <Dashboard
+            <Routes>
+                {/* 1. DASHBOARD (Home) */}
+                <Route path="/" element={
+                    <Dashboard
+                        user={user}
+                        db={authServices.db}
+                        auth={authServices.auth}
+                    />
+                } />
+
+                <Route path="/profile-onboarding" element={
+                    <ProfileOnboarding
+                        user={user}
+                        db={authServices.db}
+                        initialData={userProfile} />
+                } />
+
+                {/* 2. VISTA GENERAL DE ENTRENAMIENTO (Resumen) */}
+                <Route path="/workout/today" element={
+                    userProfile?.currentSession ? (
+                        <WorkoutOverview session={userProfile.currentSession as GeneratedSession} />
+                    ) : (
+                        <Navigate to="/" replace />
+                    )
+                } />
+
+                {/* 3. PLAYER DE ENTRENAMIENTO (Paso a paso) */}
+                <Route path="/workout/player" element={
+                    userProfile?.currentSession ? (
+                        <WorkoutPlayer session={userProfile.currentSession as GeneratedSession} />
+                    ) : (
+                        <Navigate to="/" replace />
+                    )
+                } />
+
+                {/* 4. VISTA DE EVALUACIÓN DEL MESOCICLO */}
+                <Route path="/mesocycle/evaluate" element={
+                    userProfile?.currentMesocycle ? (
+                        <MesocycleEvaluate
                             user={user}
-                            db={authServices.db}
-                            auth={authServices.auth}
+                            profileData={userProfile?.profileData}
                         />
-                    } />
+                    ) : (
+                        <Navigate to="/" replace />
+                    )
+                } />
 
-                    <Route path="/profile-onboarding" element={
-                        <ProfileOnboarding
-                            user={user}
-                            db={authServices.db}
-                            initialData={userProfile} />
-                    } />
-
-                    {/* 2. VISTA GENERAL DE ENTRENAMIENTO (Resumen) */}
-                    <Route path="/workout/today" element={
-                        userProfile?.currentSession ? (
-                            <WorkoutOverview session={userProfile.currentSession as GeneratedSession} />
-                        ) : (
-                            <Navigate to="/" replace />
-                        )
-                    } />
-
-                    {/* 3. PLAYER DE ENTRENAMIENTO (Paso a paso) */}
-                    <Route path="/workout/player" element={
-                        userProfile?.currentSession ? (
-                            <WorkoutPlayer session={userProfile.currentSession as GeneratedSession} />
-                        ) : (
-                            <Navigate to="/" replace />
-                        )
-                    } />
-
-                    {/* 4. VISTA DE EVALUACIÓN DEL MESOCICLO */}
-                    <Route path="/mesocycle/evaluate" element={
-                        userProfile?.currentMesocycle ? (
-                            <MesocycleEvaluate
-                                user={user}
-                                profileData={userProfile?.profileData}
-                            />
-                        ) : (
-                            <Navigate to="/" replace />
-                        )
-                    } />
-
-                    {/* Fallback */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-                {isOnboardingFlowActive() && (
-                    <div className="fixed inset-0 z-[9999] bg-zinc-950">
-                        <ProfileOnboarding user={user} db={authServices.db} />
-                    </div>
-                )}
-            </>
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
         );
     }
 

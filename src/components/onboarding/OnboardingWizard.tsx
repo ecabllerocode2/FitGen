@@ -10,24 +10,11 @@ import {
   Calendar,
   Shield,
   User as UserIcon,
-  Sparkles,
 } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../../config/api';
 import type { FitnessGoal, FocusArea, DayOfWeek, ExternalLoad } from '../../types/session';
 import { TRAINING_AGE_OPTIONS, getExperienceLevelFromMonths } from '../../utils/experienceLevel';
-import { getMesocyclePreviewSessions, normalizeMesocycleForUI } from '../../utils/mesocycleNormalizer';
-import {
-  endOnboardingFlowLock,
-  readOnboardingFlowData,
-  readPendingMesocycle,
-  startOnboardingFlowLock,
-  waitMs,
-  writeOnboardingFlowData,
-  writePendingMesocycle,
-  clearPendingMesocycle,
-} from '../../utils/onboardingFlowLock';
-import { MIN_ONBOARDING_FLOW_MS, MIN_SAVING_DISPLAY_MS } from '../../utils/splitGenerationContext';
-import MesocycleGenerationLoader from '../MesocycleGenerationLoader';
+import { beginOnboardingCompletion } from '../../utils/onboardingCompletion';
 import StepProgress from './StepProgress';
 import OptionCard from './OptionCard';
 
@@ -94,42 +81,13 @@ interface OnboardingWizardProps {
   initialData?: UserProfileInitial;
 }
 
-type Phase = 'wizard' | 'saving' | 'generating' | 'preview';
-
 export default function OnboardingWizard({ user, initialData }: OnboardingWizardProps) {
   const navigate = useNavigate();
   const isEditMode = Boolean(initialData?.profileData?.name);
-  const restoredFlow = readOnboardingFlowData();
 
   const [step, setStep] = useState(0);
-  const [phase, setPhaseState] = useState<Phase>(() => {
-    if (restoredFlow?.phase) return restoredFlow.phase;
-    return 'wizard';
-  });
   const [error, setError] = useState<string | null>(null);
-  const [generatedMesocycle, setGeneratedMesocycle] = useState<any>(null);
-  const [pendingMesocycle, setPendingMesocycleState] = useState<any>(() => readPendingMesocycle());
-  const [loaderSequenceDone, setLoaderSequenceDoneState] = useState(
-    () => restoredFlow?.loaderSequenceDone ?? false,
-  );
-
-  const setPhase = (next: Phase) => {
-    setPhaseState(next);
-    if (next === 'saving' || next === 'generating' || next === 'preview') {
-      writeOnboardingFlowData({ phase: next });
-    }
-  };
-
-  const setPendingMesocycle = (meso: any) => {
-    setPendingMesocycleState(meso);
-    if (meso) writePendingMesocycle(meso);
-    else clearPendingMesocycle();
-  };
-
-  const setLoaderSequenceDone = (done: boolean) => {
-    setLoaderSequenceDoneState(done);
-    writeOnboardingFlowData({ loaderSequenceDone: done });
-  };
+  const [submitting, setSubmitting] = useState(false);
 
   const [goal, setGoal] = useState<FitnessGoal | ''>('');
   const [trainingAgeMonths, setTrainingAgeMonths] = useState(18);
@@ -165,26 +123,6 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
       setSelectedDays(new Set(p.preferredTrainingDays as DayOfWeek[]));
     }
   }, [initialData]);
-
-  useEffect(() => {
-    if (phase !== 'generating' || !pendingMesocycle || !loaderSequenceDone) return;
-
-    const goToPreview = async () => {
-      const flow = readOnboardingFlowData();
-      const startedAt = flow?.startedAt ?? Date.now();
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < MIN_ONBOARDING_FLOW_MS) {
-        await waitMs(MIN_ONBOARDING_FLOW_MS - elapsed);
-      }
-
-      setGeneratedMesocycle(pendingMesocycle);
-      setPendingMesocycle(null);
-      setLoaderSequenceDone(false);
-      setPhase('preview');
-    };
-
-    void goToPreview();
-  }, [phase, pendingMesocycle, loaderSequenceDone]);
 
   const experienceLevel = useMemo(
     () => getExperienceLevelFromMonths(trainingAgeMonths),
@@ -257,104 +195,29 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
     return null;
   };
 
-  const handleNext = () => {
-    const err = stepError();
-    if (err) {
-      setError(err);
-      return;
-    }
-    setError(null);
-    if (step < TOTAL_STEPS - 1) setStep((s) => s + 1);
-    else {
-      startOnboardingFlowLock('saving');
-      void finishOnboarding();
-    }
-  };
-
-  const handleBack = () => {
-    setError(null);
-    if (step > 0) setStep((s) => s - 1);
-  };
-
-  const finishOnboarding = async () => {
-    setPhase('saving');
-    setError(null);
-
-    try {
-      const idToken = await user.getIdToken();
-      const preferredDaysList = weeklySchedule.filter((d) => d.canTrain).map((d) => d.day);
-
-      const payload = {
-        userId: user.uid,
-        userEmail: user.email,
-        action: isEditMode ? 'profile_update_and_invalidate_plan' : 'initial_onboarding_complete',
-        profileData: {
-          name: name.trim(),
-          age: parseInt(age),
-          gender,
-          heightCm: parseInt(height),
-          initialWeight: parseFloat(weight),
-          fitnessGoal: goal,
-          trainingAgeMonths,
-          injuriesOrLimitations: injuries.length ? injuries : [],
-          focusArea,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          trainingDaysPerWeek: selectedDays.size,
-          preferredTrainingDays: preferredDaysList,
-          weeklyScheduleContext: weeklySchedule,
-          dateCompleted: new Date().toISOString(),
-        },
-      };
-
-      const saveRes = await authenticatedFetch(API_ENDPOINTS.USER_PROFILE_SAVE, idToken, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-
-      const saveText = await saveRes.text();
-      const saveData = saveText ? JSON.parse(saveText) : null;
-      if (!saveRes.ok) {
-        throw new Error(saveData?.error || saveData?.message || 'Error al guardar perfil');
-      }
-
-      await user.getIdToken(true);
-
-      if (isEditMode) {
-        endOnboardingFlowLock();
-        navigate('/', { replace: true });
-        return;
-      }
-
-      await waitMs(MIN_SAVING_DISPLAY_MS);
-
-      setPhase('generating');
-      setLoaderSequenceDone(false);
-      setPendingMesocycle(null);
-
-      const mesoRes = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, idToken, {
-        method: 'POST',
-      });
-
-      const mesoText = await mesoRes.text();
-      const mesoData = mesoText ? JSON.parse(mesoText) : null;
-      if (!mesoRes.ok || !mesoData?.success) {
-        throw new Error(mesoData?.error || 'Error al generar mesociclo');
-      }
-
-      const normalized = normalizeMesocycleForUI(mesoData.mesocycle ?? mesoData.plan);
-      setPendingMesocycle(normalized);
-    } catch (err) {
-      endOnboardingFlowLock();
-      setError((err as Error).message);
-      setPhase('wizard');
-      setStep(TOTAL_STEPS - 1);
-    }
-  };
-
-  const handleStart = async () => {
-    endOnboardingFlowLock();
-    await user.getIdToken(true);
-    navigate('/', { replace: true });
+  const buildSavePayload = () => {
+    const preferredDaysList = weeklySchedule.filter((d) => d.canTrain).map((d) => d.day);
+    return {
+      userId: user.uid,
+      userEmail: user.email,
+      action: isEditMode ? 'profile_update_and_invalidate_plan' : 'initial_onboarding_complete',
+      profileData: {
+        name: name.trim(),
+        age: parseInt(age),
+        gender,
+        heightCm: parseInt(height),
+        initialWeight: parseFloat(weight),
+        fitnessGoal: goal,
+        trainingAgeMonths,
+        injuriesOrLimitations: injuries.length ? injuries : [],
+        focusArea,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        trainingDaysPerWeek: selectedDays.size,
+        preferredTrainingDays: preferredDaysList,
+        weeklyScheduleContext: weeklySchedule,
+        dateCompleted: new Date().toISOString(),
+      },
+    };
   };
 
   const generationProfile = useMemo(
@@ -370,61 +233,45 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
     [goal, trainingAgeMonths, experienceLevel, selectedDays.size, weeklySchedule, injuries, age],
   );
 
-  // --- Generating screen ---
-  if (phase === 'generating' || phase === 'saving') {
-    return (
-      <MesocycleGenerationLoader
-        phase={phase}
-        profile={generationProfile}
-        onSequenceComplete={
-          phase === 'generating' ? () => setLoaderSequenceDone(true) : undefined
-        }
-      />
-    );
-  }
+  const saveProfileEdit = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const idToken = await user.getIdToken();
+      const saveRes = await authenticatedFetch(API_ENDPOINTS.USER_PROFILE_SAVE, idToken, {
+        method: 'POST',
+        body: JSON.stringify(buildSavePayload()),
+      });
+      const saveText = await saveRes.text();
+      const saveData = saveText ? JSON.parse(saveText) : null;
+      if (!saveRes.ok) {
+        throw new Error(saveData?.error || saveData?.message || 'Error al guardar perfil');
+      }
+      await user.getIdToken(true);
+      navigate('/', { replace: true });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-  // --- Preview screen ---
-  if (phase === 'preview' && generatedMesocycle) {
-    const sessions = getMesocyclePreviewSessions(generatedMesocycle);
-    const duration = generatedMesocycle.durationWeeks ?? generatedMesocycle.mesocyclePlan?.durationWeeks;
-    const split = generatedMesocycle.splitType ?? 'Personalizado';
+  const handleNext = () => {
+    const err = stepError();
+    if (err) {
+      setError(err);
+      return;
+    }
+    setError(null);
+    if (step < TOTAL_STEPS - 1) setStep((s) => s + 1);
+    else if (isEditMode) void saveProfileEdit();
+    else beginOnboardingCompletion(generationProfile, buildSavePayload());
+  };
 
-    return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-lime-500/20 flex items-center justify-center mb-5">
-            <Sparkles className="w-8 h-8 text-lime-400" />
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-2">¡Tu plan está listo!</h1>
-          <p className="text-zinc-400 text-sm mb-8 max-w-xs">
-            Mesociclo de {duration} semanas · {experienceLevel} · {goal}
-          </p>
-
-          <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 text-left mb-6">
-            <p className="text-xs font-bold text-lime-400 uppercase tracking-wider mb-3">Split: {split}</p>
-            <ul className="space-y-2">
-              {sessions.map((line) => (
-                <li key={line} className="text-sm text-zinc-300 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-lime-500 shrink-0" />
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        <div className="p-4 pb-8 safe-area-bottom">
-          <button
-            type="button"
-            onClick={() => void handleStart()}
-            className="w-full bg-lime-500 hover:bg-lime-400 text-zinc-900 font-bold text-lg py-4 rounded-2xl transition-all shadow-[0_0_24px_rgba(132,204,22,0.35)]"
-          >
-            Empezar
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const handleBack = () => {
+    setError(null);
+    if (step > 0) setStep((s) => s - 1);
+  };
 
   // --- Wizard steps ---
   const stepTitles = [
@@ -702,7 +549,7 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
           <button
             type="button"
             onClick={handleNext}
-            disabled={!canContinue()}
+            disabled={!canContinue() || submitting}
             className="w-full bg-lime-500 hover:bg-lime-400 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-900 font-bold text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2"
           >
             {step === TOTAL_STEPS - 1 ? (isEditMode ? 'Guardar cambios' : 'Crear mi plan') : 'Continuar'}
