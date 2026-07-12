@@ -15,7 +15,7 @@ import { API_ENDPOINTS, authenticatedFetch } from '../../config/api';
 import type { FitnessGoal, FocusArea, DayOfWeek, ExternalLoad } from '../../types/session';
 import { TRAINING_AGE_OPTIONS, getExperienceLevelFromMonths } from '../../utils/experienceLevel';
 import { beginOnboardingCompletion } from '../../utils/onboardingCompletion';
-import { AppFixedFooter, AppPrimaryButton, AppShell } from '../ui/AppPrimitives';
+import { AppFixedFooter, AppHero, AppPrimaryButton, AppShell } from '../ui/AppPrimitives';
 import StepProgress from './StepProgress';
 import OptionCard from './OptionCard';
 
@@ -89,6 +89,7 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [saveResult, setSaveResult] = useState<{ message: string; tier: string } | null>(null);
 
   const [goal, setGoal] = useState<FitnessGoal | ''>('');
   const [trainingAgeMonths, setTrainingAgeMonths] = useState(18);
@@ -249,7 +250,13 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
         throw new Error(saveData?.error || saveData?.message || 'Error al guardar perfil');
       }
       await user.getIdToken(true);
-      navigate('/', { replace: true });
+      setSaveResult({
+        message:
+          saveData.profileChange?.message ??
+          saveData.message ??
+          'Perfil actualizado correctamente.',
+        tier: saveData.profileChange?.tier ?? 'metadata_only',
+      });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -290,6 +297,33 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
     'Opcional — ajustamos ejercicios por seguridad',
     'Solo lo necesario para tu prescripción',
   ];
+
+  if (isEditMode && saveResult) {
+    return (
+      <AppShell>
+        <div className="flex-1 flex flex-col items-center justify-center px-8">
+          <AppHero
+            eyebrow="Perfil actualizado"
+            title="Listo"
+            body={saveResult.message}
+            align="center"
+          />
+        </div>
+        <AppFixedFooter>
+          <AppPrimaryButton
+            onClick={() =>
+              navigate('/', {
+                replace: true,
+                state: { profileUpdate: saveResult },
+              })
+            }
+          >
+            Volver al dashboard
+          </AppPrimaryButton>
+        </AppFixedFooter>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>

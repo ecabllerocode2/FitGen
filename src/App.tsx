@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, type FC } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 // Importaciones de Firebase
 import { onAuthStateChanged, type User, type Auth } from 'firebase/auth';
@@ -93,6 +93,7 @@ const PendingAccessView: FC<{ user: User }> = ({ user }) => {
 // ====================================================================
 
 const App: FC = () => {
+    const location = useLocation();
     const [user, setUser] = useState<User | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [authServices, setAuthServices] = useState<{ auth: Auth, db: Firestore } | null>(null);
@@ -242,8 +243,15 @@ const App: FC = () => {
     }
 
     // 4. APROBADO: CONFIGURACIÓN DE RUTAS
+    // Rutas de entrenamiento requieren mesociclo activo; perfil y dashboard siempre accesibles.
+    const mesocycleRequiredPaths = ['/workout/today', '/workout/player', '/mesocycle/evaluate'];
+    const needsMesocycleRedirect =
+        userProfile &&
+        !userProfile.currentMesocycle &&
+        mesocycleRequiredPaths.includes(location.pathname);
+
     if (currentStatus === 'approved' && user && userProfile && authServices) {
-        if (!userProfile.currentMesocycle && window.location.pathname !== '/') {
+        if (needsMesocycleRedirect) {
             return <Navigate to="/" replace />;
         }
         return (

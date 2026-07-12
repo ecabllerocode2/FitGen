@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { type User, signOut, type Auth } from 'firebase/auth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Firestore, doc, onSnapshot } from 'firebase/firestore';
 import { format, differenceInCalendarWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -75,6 +75,7 @@ interface UserProfile {
         [key: string]: unknown;
     };
     plan?: 'free';
+    planStatus?: string;
     currentMesocycle?: CurrentMesocycleData;
     currentSession?: CurrentSessionData;
     name?: string;
@@ -183,8 +184,10 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, onSubmit
 const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
     const navigate = useNavigate();
+    const location = useLocation();
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [profileUpdateNotice, setProfileUpdateNotice] = useState<string | null>(null);
 
     // Estados para botones de carga y feedback
     const [generatingSession, setGeneratingSession] = useState(false);
@@ -232,7 +235,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         return () => unsubscribe();
     }, [user, db]);
 
-
+    useEffect(() => {
+        const notice = (location.state as { profileUpdate?: { message?: string } } | null)?.profileUpdate?.message;
+        if (notice) {
+            setProfileUpdateNotice(notice);
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+    }, [location.state, location.pathname, navigate]);
 
     // Efecto para rotar frases de sesión
     useEffect(() => {
@@ -551,8 +560,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         );
     }
 
-    // DASHBOARD VACÍO (SIN PLAN) - Lógica inalterada
+    // DASHBOARD VACÍO (SIN PLAN)
     if (!dashboardState) {
+        const needsPlan = userProfile?.planStatus === 'needs_regeneration';
         return (
             <DashboardShell>
                 <header className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] flex justify-end">
@@ -566,7 +576,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     <DashboardHero
                         eyebrow="Bienvenido"
                         title={userName.split(' ')[0]}
-                        body="Aún no tienes un mesociclo activo. Generemos tu primer bloque de entrenamiento."
+                        body={
+                            needsPlan
+                                ? 'Tu perfil está actualizado. Genera un nuevo mesociclo para continuar entrenando.'
+                                : 'Aún no tienes un mesociclo activo. Generemos tu primer bloque de entrenamiento.'
+                        }
                     >
                         <DashboardPrimaryButton onClick={handleCreatePlan} disabled={creatingPlan}>
                             Crear mi plan
@@ -612,6 +626,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             />
 
             <header className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4 shrink-0">
+                {profileUpdateNotice ? (
+                    <div className="mb-4 px-4 py-3 rounded-xl border border-lime-500/30 bg-lime-500/10 text-sm text-zinc-300 leading-relaxed">
+                        {profileUpdateNotice}
+                        <button
+                            type="button"
+                            onClick={() => setProfileUpdateNotice(null)}
+                            className="block mt-2 text-xs text-lime-400/80 hover:text-lime-400"
+                        >
+                            Entendido
+                        </button>
+                    </div>
+                ) : null}
                 <div className="flex items-start justify-between gap-3 mb-5">
                     <div className="min-w-0">
                         <DashboardEyebrow>
