@@ -87,7 +87,7 @@ export default function MesocycleGenerationLoader({
   }, [phase, steps.length]);
 
   useEffect(() => {
-    if (phase === 'saving') {
+    if (phase === 'saving' && !savingComplete) {
       const timer = setTimeout(() => setSavingComplete(true), MIN_SAVING_DISPLAY_MS);
       return () => clearTimeout(timer);
     }
@@ -109,7 +109,7 @@ export default function MesocycleGenerationLoader({
     }, GENERATION_STEP_MS);
 
     return () => clearTimeout(timer);
-  }, [phase, activeStep, steps.length]);
+  }, [phase, activeStep, steps.length, savingComplete]);
 
   const heading =
     title ?? (phase === 'saving' ? 'Guardando tu perfil…' : 'Diseñando tu mesociclo');

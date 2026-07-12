@@ -96,12 +96,12 @@ const App: FC = () => {
     const [authServices, setAuthServices] = useState<{ auth: Auth, db: Firestore } | null>(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [globalError, setGlobalError] = useState<string | null>(null);
-    const [onboardingFlowActive, setOnboardingFlowActive] = useState(isOnboardingFlowActive);
+    const [, bumpOnboardingFlow] = useState(0);
 
     useEffect(() => {
-        const syncOnboardingLock = () => setOnboardingFlowActive(isOnboardingFlowActive());
-        window.addEventListener('fitgen-onboarding-flow', syncOnboardingLock);
-        return () => window.removeEventListener('fitgen-onboarding-flow', syncOnboardingLock);
+        const syncOnboardingFlow = () => bumpOnboardingFlow((n) => n + 1);
+        window.addEventListener('fitgen-onboarding-flow', syncOnboardingFlow);
+        return () => window.removeEventListener('fitgen-onboarding-flow', syncOnboardingFlow);
     }, []);
 
     // EFECTO 1: Escuchar el estado de autenticación
@@ -191,10 +191,19 @@ const App: FC = () => {
         return userProfile.status;
     }, [isAuthReady, user, userProfile]);
 
+    const showOnboarding =
+        Boolean(user && authServices?.db) &&
+        (currentStatus === 'pending_onboarding' || isOnboardingFlowActive());
+
     // --- RENDERIZADO ---
 
     if (globalError) {
         return <div className="h-screen flex items-center justify-center bg-red-900 text-white">{globalError}</div>;
+    }
+
+    // El candado de onboarding tiene prioridad sobre cualquier otro estado (incl. approved).
+    if (user && authServices?.db && isOnboardingFlowActive()) {
+        return <ProfileOnboarding user={user} db={authServices.db} />;
     }
 
     if (!isAuthReady || currentStatus === 'loading_profile') {
@@ -209,8 +218,8 @@ const App: FC = () => {
         return <AuthLayout onAuthSuccess={() => { }} auth={authServices.auth} />;
     }
 
-    if ((currentStatus === 'pending_onboarding' || onboardingFlowActive) && user && authServices?.db) {
-        return <ProfileOnboarding user={user} db={authServices.db} />;
+    if (showOnboarding) {
+        return <ProfileOnboarding user={user!} db={authServices!.db} />;
     }
 
     if (currentStatus === 'pending_approval' && user) {
@@ -223,57 +232,63 @@ const App: FC = () => {
             return <Navigate to="/" replace />;
         }
         return (
-            <Routes>
-                {/* 1. DASHBOARD (Home) */}
-                <Route path="/" element={
-                    <Dashboard
-                        user={user}
-                        db={authServices.db}
-                        auth={authServices.auth}
-                    />
-                } />
-
-                <Route path="/profile-onboarding" element={
-                    <ProfileOnboarding
-                        user={user}
-                        db={authServices.db}
-                        initialData={userProfile} />
-                } />
-
-                {/* 2. VISTA GENERAL DE ENTRENAMIENTO (Resumen) */}
-                <Route path="/workout/today" element={
-                    userProfile?.currentSession ? (
-                        <WorkoutOverview session={userProfile.currentSession as GeneratedSession} />
-                    ) : (
-                        <Navigate to="/" replace />
-                    )
-                } />
-
-                {/* 3. PLAYER DE ENTRENAMIENTO (Paso a paso) */}
-                <Route path="/workout/player" element={
-                    userProfile?.currentSession ? (
-                        <WorkoutPlayer session={userProfile.currentSession as GeneratedSession} />
-                    ) : (
-                        <Navigate to="/" replace />
-                    )
-                } />
-
-                {/* 4. VISTA DE EVALUACIÓN DEL MESOCICLO */}
-                <Route path="/mesocycle/evaluate" element={
-                    userProfile?.currentMesocycle ? ( // Se requiere que exista un mesociclo para evaluar
-                        <MesocycleEvaluate
+            <>
+                <Routes>
+                    {/* 1. DASHBOARD (Home) */}
+                    <Route path="/" element={
+                        <Dashboard
                             user={user}
-                            profileData={userProfile?.profileData}
+                            db={authServices.db}
+                            auth={authServices.auth}
                         />
-                    ) : (
-                        // Si no hay plan, regresa al dashboard
-                        <Navigate to="/" replace />
-                    )
-                } />
+                    } />
 
-                {/* Fallback */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                    <Route path="/profile-onboarding" element={
+                        <ProfileOnboarding
+                            user={user}
+                            db={authServices.db}
+                            initialData={userProfile} />
+                    } />
+
+                    {/* 2. VISTA GENERAL DE ENTRENAMIENTO (Resumen) */}
+                    <Route path="/workout/today" element={
+                        userProfile?.currentSession ? (
+                            <WorkoutOverview session={userProfile.currentSession as GeneratedSession} />
+                        ) : (
+                            <Navigate to="/" replace />
+                        )
+                    } />
+
+                    {/* 3. PLAYER DE ENTRENAMIENTO (Paso a paso) */}
+                    <Route path="/workout/player" element={
+                        userProfile?.currentSession ? (
+                            <WorkoutPlayer session={userProfile.currentSession as GeneratedSession} />
+                        ) : (
+                            <Navigate to="/" replace />
+                        )
+                    } />
+
+                    {/* 4. VISTA DE EVALUACIÓN DEL MESOCICLO */}
+                    <Route path="/mesocycle/evaluate" element={
+                        userProfile?.currentMesocycle ? (
+                            <MesocycleEvaluate
+                                user={user}
+                                profileData={userProfile?.profileData}
+                            />
+                        ) : (
+                            <Navigate to="/" replace />
+                        )
+                    } />
+
+                    {/* Fallback */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+                {isOnboardingFlowActive() && (
+                    <div className="fixed inset-0 z-[9999] bg-zinc-950">
+                        <ProfileOnboarding user={user} db={authServices.db} />
+                    </div>
+                )}
+            </>
         );
     }
 

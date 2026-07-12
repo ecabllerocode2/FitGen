@@ -19,11 +19,13 @@ const DAY_ORDER = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábad
 export const MAX_TRAINING_DAYS = 6;
 
 /** ms por paso en la pantalla de carga — tiempo para leer cada decisión */
-export const GENERATION_STEP_MS = 4200;
-export const GENERATION_FINISH_HOLD_MS = 2500;
+export const GENERATION_STEP_MS = 4500;
+export const GENERATION_FINISH_HOLD_MS = 3000;
 /** Tiempo mínimo total visible aunque el API responda al instante */
-export const MIN_GENERATION_DISPLAY_MS = 16000;
-export const MIN_SAVING_DISPLAY_MS = 2200;
+export const MIN_GENERATION_DISPLAY_MS = 22000;
+export const MIN_SAVING_DISPLAY_MS = 3200;
+/** Tiempo mínimo desde que inicia el flujo hasta mostrar la vista previa */
+export const MIN_ONBOARDING_FLOW_MS = 24000;
 
 const SPLIT_LABELS: Record<string, string> = {
   Full_Body: 'Full Body',

@@ -18,10 +18,15 @@ import { TRAINING_AGE_OPTIONS, getExperienceLevelFromMonths } from '../../utils/
 import { getMesocyclePreviewSessions, normalizeMesocycleForUI } from '../../utils/mesocycleNormalizer';
 import {
   endOnboardingFlowLock,
+  readOnboardingFlowData,
+  readPendingMesocycle,
   startOnboardingFlowLock,
   waitMs,
+  writeOnboardingFlowData,
+  writePendingMesocycle,
+  clearPendingMesocycle,
 } from '../../utils/onboardingFlowLock';
-import { MIN_SAVING_DISPLAY_MS } from '../../utils/splitGenerationContext';
+import { MIN_ONBOARDING_FLOW_MS, MIN_SAVING_DISPLAY_MS } from '../../utils/splitGenerationContext';
 import MesocycleGenerationLoader from '../MesocycleGenerationLoader';
 import StepProgress from './StepProgress';
 import OptionCard from './OptionCard';
@@ -94,13 +99,37 @@ type Phase = 'wizard' | 'saving' | 'generating' | 'preview';
 export default function OnboardingWizard({ user, initialData }: OnboardingWizardProps) {
   const navigate = useNavigate();
   const isEditMode = Boolean(initialData?.profileData?.name);
+  const restoredFlow = readOnboardingFlowData();
 
   const [step, setStep] = useState(0);
-  const [phase, setPhase] = useState<Phase>('wizard');
+  const [phase, setPhaseState] = useState<Phase>(() => {
+    if (restoredFlow?.phase) return restoredFlow.phase;
+    return 'wizard';
+  });
   const [error, setError] = useState<string | null>(null);
   const [generatedMesocycle, setGeneratedMesocycle] = useState<any>(null);
-  const [pendingMesocycle, setPendingMesocycle] = useState<any>(null);
-  const [loaderSequenceDone, setLoaderSequenceDone] = useState(false);
+  const [pendingMesocycle, setPendingMesocycleState] = useState<any>(() => readPendingMesocycle());
+  const [loaderSequenceDone, setLoaderSequenceDoneState] = useState(
+    () => restoredFlow?.loaderSequenceDone ?? false,
+  );
+
+  const setPhase = (next: Phase) => {
+    setPhaseState(next);
+    if (next === 'saving' || next === 'generating' || next === 'preview') {
+      writeOnboardingFlowData({ phase: next });
+    }
+  };
+
+  const setPendingMesocycle = (meso: any) => {
+    setPendingMesocycleState(meso);
+    if (meso) writePendingMesocycle(meso);
+    else clearPendingMesocycle();
+  };
+
+  const setLoaderSequenceDone = (done: boolean) => {
+    setLoaderSequenceDoneState(done);
+    writeOnboardingFlowData({ loaderSequenceDone: done });
+  };
 
   const [goal, setGoal] = useState<FitnessGoal | ''>('');
   const [trainingAgeMonths, setTrainingAgeMonths] = useState(18);
@@ -138,12 +167,23 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
   }, [initialData]);
 
   useEffect(() => {
-    if (phase === 'generating' && pendingMesocycle && loaderSequenceDone) {
+    if (phase !== 'generating' || !pendingMesocycle || !loaderSequenceDone) return;
+
+    const goToPreview = async () => {
+      const flow = readOnboardingFlowData();
+      const startedAt = flow?.startedAt ?? Date.now();
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_ONBOARDING_FLOW_MS) {
+        await waitMs(MIN_ONBOARDING_FLOW_MS - elapsed);
+      }
+
       setGeneratedMesocycle(pendingMesocycle);
       setPendingMesocycle(null);
       setLoaderSequenceDone(false);
       setPhase('preview');
-    }
+    };
+
+    void goToPreview();
   }, [phase, pendingMesocycle, loaderSequenceDone]);
 
   const experienceLevel = useMemo(
@@ -225,7 +265,10 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
     }
     setError(null);
     if (step < TOTAL_STEPS - 1) setStep((s) => s + 1);
-    else void finishOnboarding();
+    else {
+      startOnboardingFlowLock('saving');
+      void finishOnboarding();
+    }
   };
 
   const handleBack = () => {
@@ -234,7 +277,6 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
   };
 
   const finishOnboarding = async () => {
-    startOnboardingFlowLock();
     setPhase('saving');
     setError(null);
 
