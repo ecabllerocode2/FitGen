@@ -93,6 +93,8 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
   const [phase, setPhase] = useState<Phase>('wizard');
   const [error, setError] = useState<string | null>(null);
   const [generatedMesocycle, setGeneratedMesocycle] = useState<any>(null);
+  const [pendingMesocycle, setPendingMesocycle] = useState<any>(null);
+  const [loaderSequenceDone, setLoaderSequenceDone] = useState(false);
 
   const [goal, setGoal] = useState<FitnessGoal | ''>('');
   const [trainingAgeMonths, setTrainingAgeMonths] = useState(18);
@@ -128,6 +130,15 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
       setSelectedDays(new Set(p.preferredTrainingDays as DayOfWeek[]));
     }
   }, [initialData]);
+
+  useEffect(() => {
+    if (phase === 'generating' && pendingMesocycle && loaderSequenceDone) {
+      setGeneratedMesocycle(pendingMesocycle);
+      setPendingMesocycle(null);
+      setLoaderSequenceDone(false);
+      setPhase('preview');
+    }
+  }, [phase, pendingMesocycle, loaderSequenceDone]);
 
   const experienceLevel = useMemo(
     () => getExperienceLevelFromMonths(trainingAgeMonths),
@@ -265,11 +276,12 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
       }
 
       setPhase('generating');
+      setLoaderSequenceDone(false);
+      setPendingMesocycle(null);
 
-      const [mesoRes] = await Promise.all([
-        authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, idToken, { method: 'POST' }),
-        new Promise((r) => setTimeout(r, 4500)),
-      ]);
+      const mesoRes = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, idToken, {
+        method: 'POST',
+      });
 
       const mesoText = await mesoRes.text();
       const mesoData = mesoText ? JSON.parse(mesoText) : null;
@@ -278,8 +290,7 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
       }
 
       const normalized = normalizeMesocycleForUI(mesoData.mesocycle ?? mesoData.plan);
-      setGeneratedMesocycle(normalized);
-      setPhase('preview');
+      setPendingMesocycle(normalized);
     } catch (err) {
       setError((err as Error).message);
       setPhase('wizard');
@@ -311,6 +322,7 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
       <MesocycleGenerationLoader
         phase={phase}
         profile={generationProfile}
+        onSequenceComplete={() => setLoaderSequenceDone(true)}
       />
     );
   }

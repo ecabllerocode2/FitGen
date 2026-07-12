@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User } from 'firebase/auth'; 
 import { Scale, Loader2, CheckCircle2, AlertTriangle, ChevronLeft } from 'lucide-react';
@@ -65,6 +65,8 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user, profileData
     const [notes, setNotes] = useState<string>('');
     const [status, setStatus] = useState<'idle' | 'evaluating' | 'generating' | 'success' | 'error'>('idle');
     const [error, setError] = useState<string | null>(null);
+    const [generateApiDone, setGenerateApiDone] = useState(false);
+    const [loaderSequenceDone, setLoaderSequenceDone] = useState(false);
     
     // ... (isBusy y isFormIncomplete sin cambios)
     const isBusy = useMemo(() => 
@@ -73,6 +75,13 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user, profileData
     );
 
     const isFormIncomplete = difficultyScore === null;
+
+    useEffect(() => {
+        if (status !== 'generating' || !generateApiDone || !loaderSequenceDone) return;
+        setStatus('success');
+        const timer = setTimeout(() => navigate('/'), 1500);
+        return () => clearTimeout(timer);
+    }, [status, generateApiDone, loaderSequenceDone, navigate]);
     // ... (handlePainSelect sin cambios)
     const handlePainSelect = (value: string) => {
         setPainAreas(prevAreas => {
@@ -104,6 +113,8 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user, profileData
         const token = await user.getIdToken();
 
         try {
+            setGenerateApiDone(false);
+            setLoaderSequenceDone(false);
             // ----------------------------------------------------
             // 1. LLAMADA DE EVALUACIÓN (/api/mesocycle/evaluate)
             // ----------------------------------------------------
@@ -145,6 +156,7 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user, profileData
             // 2. LLAMADA DE GENERACIÓN (/api/mesocycle/generate)
             // ----------------------------------------------------
             setStatus('generating');
+            setLoaderSequenceDone(false);
             const generationResponse = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, token, {
                 method: 'POST',
             });
@@ -166,11 +178,7 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user, profileData
                 throw new Error(errorMessage);
             }
             
-            // 3. ÉXITO
-            setStatus('success');
-            setTimeout(() => {
-                navigate('/');
-            }, 1500);
+            setGenerateApiDone(true);
 
         } catch (err) {
             console.error(err);
@@ -200,7 +208,9 @@ const MesocycleEvaluate: React.FC<MesocycleEvaluateProps> = ({ user, profileData
                         : 'Aplicando los ajustes de volumen a tu nuevo mesociclo…'
                 }
                 profile={loaderProfile}
+                phase={status === 'evaluating' ? 'saving' : 'generating'}
                 evaluationMode={status === 'generating'}
+                onSequenceComplete={() => setLoaderSequenceDone(true)}
             />
         );
     }

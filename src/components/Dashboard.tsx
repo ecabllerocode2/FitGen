@@ -192,6 +192,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     // Estados para botones de carga y feedback
     const [generatingSession, setGeneratingSession] = useState(false);
     const [creatingPlan, setCreatingPlan] = useState(false);
+    const [planApiDone, setPlanApiDone] = useState(false);
+    const [planLoaderDone, setPlanLoaderDone] = useState(false);
     const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
     const [isRecoveryMode, setIsRecoveryMode] = useState(false);
     
@@ -243,6 +245,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         }
         return () => clearInterval(interval);
     }, [generatingSession]);
+
+    useEffect(() => {
+        if (!creatingPlan || !planApiDone || !planLoaderDone) return;
+        setCreatingPlan(false);
+        setPlanApiDone(false);
+        setPlanLoaderDone(false);
+        if (planExplanationData) {
+            setTimeout(() => setShowPlanExplanationModal(true), 300);
+        }
+    }, [creatingPlan, planApiDone, planLoaderDone]);
 
     // B. Lógica de Tiempo y Estado (ACTUALIZADA con isEvaluationPending)
     const dashboardState = useMemo(() => {
@@ -353,34 +365,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
     const handleCreatePlan = async () => {
         setCreatingPlan(true);
+        setPlanApiDone(false);
+        setPlanLoaderDone(false);
         
         try {
             const token = await user.getIdToken();
             
-            // Delay artificial para mejor UX (8 segundos para mostrar ~3 frases completas)
-            const [res] = await Promise.all([
-                authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, token, {
-                    method: 'POST',
-                }),
-                new Promise(resolve => setTimeout(resolve, 8000))
-            ]);
+            const res = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, token, {
+                method: 'POST',
+            });
             
             const data = await res.json();
             if (!data.success) throw new Error(data.error || "Error desconocido");
             
-            // Extraer explicaciones del plan generado
             if (data.plan && data.plan.metadata && data.plan.metadata.planRationale) {
                 setPlanExplanationData(data.plan.metadata.planRationale);
-                // Esperar un frame para que el estado del mesociclo se actualice en Firestore
-                setTimeout(() => {
-                    setShowPlanExplanationModal(true);
-                }, 300);
             }
-            
+
+            setPlanApiDone(true);
         } catch (error) {
-            alert("Error: " + (error as Error).message);
-        } finally {
             setCreatingPlan(false);
+            setPlanApiDone(false);
+            setPlanLoaderDone(false);
+            alert("Error: " + (error as Error).message);
         }
     };
 
@@ -520,6 +527,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             <MesocycleGenerationLoader
                 title="Diseñando tu mesociclo"
                 profile={profileForLoader}
+                onSequenceComplete={() => setPlanLoaderDone(true)}
             />
         );
     }
