@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../../firebase';
-import { API_BASE_URL } from '../../config/api';
+import { getAuth } from 'firebase/auth';
+import { API_BASE_URL, API_ENDPOINTS, authenticatedFetch } from '../../config/api';
 import { 
   Play, 
   Pause, 
@@ -22,9 +22,11 @@ import {
   Layers3,
   RotateCcw,
   Info,
-  BookOpen
+  BookOpen,
+  RefreshCw,
 } from 'lucide-react';
 import type { GeneratedSession } from '../../types/session';
+import ExerciseSwapReasonModal, { type SwapReason } from '../ExerciseSwapReasonModal';
 import {
   AppEyebrow,
   AppFixedFooter,
@@ -988,6 +990,8 @@ interface ExerciseScreenProps {
   isBodyweight?: boolean;
   prescribedWeightKg?: number | null;
   onPrescribedWeightChange?: (kg: number | null) => void;
+  onSwap?: () => void;
+  isSwapping?: boolean;
 }
 
 function parsePrescribedKg(ex: FlexibleExercise): number | null {
@@ -1018,6 +1022,8 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   isBodyweight = false,
   prescribedWeightKg = null,
   onPrescribedWeightChange,
+  onSwap,
+  isSwapping = false,
 }) => {
   const [showDescription, setShowDescription] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<'tempo' | 'rir' | 'peso' | null>(null);
@@ -1090,6 +1096,17 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {type === 'warmup' && onSwap && (
+            <button
+              type="button"
+              onClick={onSwap}
+              disabled={isSwapping}
+              className="p-2 rounded-full hover:bg-zinc-700 transition-colors disabled:opacity-50"
+              aria-label="Cambiar ejercicio de calentamiento"
+            >
+              <RefreshCw className={`w-4 h-4 text-zinc-400 ${isSwapping ? 'animate-spin' : ''}`} />
+            </button>
+          )}
           {/* Timer pequeño solo para ejercicios de tiempo */}
           {isTimedExercise && totalDurationSeconds > 0 && (
             <CircularTimer
@@ -1323,8 +1340,19 @@ interface WorkoutPlayerProps {
   onExit?: () => void;
 }
 
-const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onExit }) => {
+const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, onComplete, onExit }) => {
   const navigate = useNavigate();
+  const [session, setSession] = useState(initialSession);
+  const [swappingWarmup, setSwappingWarmup] = useState(false);
+  const [swapTarget, setSwapTarget] = useState<{
+    exerciseId: string;
+    name: string;
+    equipment: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    setSession(initialSession);
+  }, [initialSession]);
   
   const [currentPhase, setCurrentPhase] = useState<WorkoutPhase>('warmup');
   const [currentExercise, setCurrentExercise] = useState<CurrentExercise | null>(null);
@@ -1864,10 +1892,54 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
     setShowPhaseIntro(false);
   }, []);
 
+  const handleWarmupSwapRequest = useCallback(() => {
+    if (currentExercise?.type !== 'warmup') return;
+    const ex = currentExercise.exercise;
+    setSwapTarget({
+      exerciseId: ex.id,
+      name: getExerciseName(ex),
+      equipment: Array.isArray(ex.equipo) ? ex.equipo : [],
+    });
+  }, [currentExercise]);
+
+  const handleConfirmWarmupSwap = async (reason: SwapReason, excludeEquipment: boolean) => {
+    if (!swapTarget) return;
+    setSwappingWarmup(true);
+    try {
+      const user = getAuth().currentUser;
+      if (!user) throw new Error('Error de autenticación');
+      const token = await user.getIdToken();
+      const response = await authenticatedFetch(API_ENDPOINTS.SESSION_SWAP_WARMUP, token, {
+        method: 'POST',
+        body: JSON.stringify({
+          exerciseIdToReplace: swapTarget.exerciseId,
+          reason,
+          excludeEquipment,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error ?? 'No se encontró alternativa');
+      }
+      if (data.session) {
+        setSession(data.session as GeneratedSession);
+        const updated = (data.session as GeneratedSession).warmup?.[warmupIndex] as FlexibleExercise | undefined;
+        if (updated) {
+          setCurrentExercise({ type: 'warmup', exercise: updated });
+        }
+      }
+      setSwapTarget(null);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Error al cambiar ejercicio');
+    } finally {
+      setSwappingWarmup(false);
+    }
+  };
+
   const handleFinishSession = async (feedback: SessionFeedback) => {
     setIsSubmittingSession(true);
     try {
-       const user = auth.currentUser;
+       const user = getAuth().currentUser;
        if (!user) throw new Error("No user authenticated");
        
        const token = await user.getIdToken();
@@ -1969,6 +2041,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
   }
 
   return (
+    <>
     <AppShell>
       {isResting ? (
         <RestScreen
@@ -2011,6 +2084,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
               handleWeightOverride(currentExercise.exercise.id, kg);
             }
           }}
+          onSwap={currentExercise.type === 'warmup' ? handleWarmupSwapRequest : undefined}
+          isSwapping={swappingWarmup}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center">
@@ -2020,6 +2095,16 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session, onComplete, onEx
         </div>
       )}
     </AppShell>
+
+    <ExerciseSwapReasonModal
+      open={swapTarget !== null}
+      exerciseName={swapTarget?.name ?? ''}
+      equipmentTags={swapTarget?.equipment ?? []}
+      onClose={() => setSwapTarget(null)}
+      onConfirm={handleConfirmWarmupSwap}
+      loading={swappingWarmup}
+    />
+    </>
   );
 };
 

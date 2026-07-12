@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Scale, User as UserIcon, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { LogOut, Scale, User as UserIcon, ChevronDown, Ban } from 'lucide-react';
 
 interface ProfileMenuProps {
     userName: string;
@@ -8,6 +9,7 @@ interface ProfileMenuProps {
 }
 
 const ProfileMenu: React.FC<ProfileMenuProps> = ({ userName, onLogout, onNavigateToProfile }) => {
+    const navigate = useNavigate();
     const [isOpen, setIsOpen] = useState(false);
 
     // Lógica para cerrar el menú si se hace clic fuera de él
@@ -39,6 +41,11 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userName, onLogout, onNavigat
 
     const handleLogoutClick = () => {
         onLogout();
+        setIsOpen(false);
+    };
+
+    const handleExclusionsClick = () => {
+        navigate('/settings/exclusions');
         setIsOpen(false);
     };
 
@@ -78,6 +85,14 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userName, onLogout, onNavigat
                         >
                             <Scale className="w-4 h-4" />
                             Actualizar perfil
+                        </button>
+                        <button
+                            onClick={handleExclusionsClick}
+                            className="w-full text-left px-4 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-900 flex items-center gap-3 transition-colors"
+                            role="menuitem"
+                        >
+                            <Ban className="w-4 h-4" />
+                            Ejercicios excluidos
                         </button>
                         <button
                             onClick={handleLogoutClick}

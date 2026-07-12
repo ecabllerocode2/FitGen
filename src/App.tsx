@@ -13,6 +13,7 @@ import Dashboard from './components/Dashboard';
 import WorkoutOverview from './components/WorkoutOverviewV3';
 import WorkoutPlayer from './components/WorkoutPlayer';
 import MesocycleEvaluate from './components/MesocycleEvaluate';
+import ExerciseExclusionsScreen, { type ExercisePreferences } from './components/ExerciseExclusionsScreen';
 
 // Tipos de sesión V2
 import type { GeneratedSession } from './types/session';
@@ -35,6 +36,7 @@ export interface UserProfile extends DocumentData {
     plan?: 'free';
     currentSession?: any;
     currentMesocycle?: any; // Añadido para evitar errores de tipo en el guard de ruta
+    exercisePreferences?: ExercisePreferences;
     profileData?: {
         name: string;
         age: number;
@@ -300,6 +302,12 @@ const App: FC = () => {
                     ) : (
                         <Navigate to="/" replace />
                     )
+                } />
+
+                <Route path="/settings/exclusions" element={
+                    <ExerciseExclusionsScreen
+                        exercisePreferences={userProfile?.exercisePreferences}
+                    />
                 } />
 
                 {/* Fallback */}

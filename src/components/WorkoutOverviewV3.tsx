@@ -21,6 +21,7 @@ import {
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import type { GeneratedSession } from '../types/session';
 import { normalizeSession } from '../utils/sessionNormalizer';
+import ExerciseSwapReasonModal, { type SwapReason } from './ExerciseSwapReasonModal';
 import {
   AppAccordion,
   AppEyebrow,
@@ -157,12 +158,20 @@ const SwapTip = () => (
 
 // ==================== COMPONENTES DE EJERCICIO ====================
 
-const WarmupExerciseRow = ({ exercise }: { exercise: FlexibleExercise }) => {
+const WarmupExerciseRow = ({
+  exercise,
+  onSwap,
+  isSwapping,
+}: {
+  exercise: FlexibleExercise;
+  onSwap?: () => void;
+  isSwapping?: boolean;
+}) => {
   const name = getExerciseName(exercise);
   const image = getExerciseImage(exercise);
-  
+
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-zinc-800 last:border-0">
+    <div className="relative flex items-start gap-3 py-3 border-b border-zinc-800 last:border-0 pr-10">
       <div className="w-12 h-12 bg-zinc-700 rounded-lg shrink-0 flex items-center justify-center overflow-hidden">
         {image ? (
           <img src={image} alt={name} className="w-full h-full object-cover" />
@@ -182,6 +191,20 @@ const WarmupExerciseRow = ({ exercise }: { exercise: FlexibleExercise }) => {
           <p className="text-xs text-zinc-500 line-clamp-2">{exercise.instrucciones}</p>
         )}
       </div>
+      {onSwap && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSwap();
+          }}
+          disabled={isSwapping}
+          className="absolute right-0 top-3 p-2 rounded-full text-zinc-500 hover:text-lime-400 hover:bg-zinc-800 disabled:opacity-50"
+          aria-label="Cambiar ejercicio de calentamiento"
+        >
+          <RefreshCw className={`w-4 h-4 ${isSwapping ? 'animate-spin' : ''}`} />
+        </button>
+      )}
     </div>
   );
 };
@@ -429,83 +452,114 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
   const normalized = normalizeSession(initialSession) || initialSession;
   const [currentSession, setCurrentSession] = useState<GeneratedSession>(normalized as GeneratedSession);
   const [swappingId, setSwappingId] = useState<string | null>(null);
+  const [swapTarget, setSwapTarget] = useState<{
+    exerciseId: string;
+    name: string;
+    equipment: string[];
+    kind: 'warmup' | 'main';
+    stationIndex?: number;
+    exerciseIndex?: number;
+  } | null>(null);
+
+  const executeWarmupSwap = async (exerciseId: string, reason: SwapReason, excludeEquipment: boolean) => {
+    const authInstance = getAuth();
+    const user = authInstance.currentUser;
+    if (!user) throw new Error('Error de autenticación');
+    const token = await user.getIdToken();
+    const response = await authenticatedFetch(API_ENDPOINTS.SESSION_SWAP_WARMUP, token, {
+      method: 'POST',
+      body: JSON.stringify({ exerciseIdToReplace: exerciseId, reason, excludeEquipment }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error ?? 'No se encontró alternativa');
+    }
+    if (data.session) setCurrentSession(data.session as GeneratedSession);
+  };
+
+  const executeMainSwap = async (
+    exerciseId: string,
+    reason: SwapReason,
+    excludeEquipment: boolean,
+    stationIndex: number,
+    exerciseIndex: number,
+  ) => {
+    const authInstance = getAuth();
+    const user = authInstance.currentUser;
+    if (!user) throw new Error('Error de autenticación');
+    const token = await user.getIdToken();
+    const response = await authenticatedFetch(API_ENDPOINTS.SESSION_SWAP_EXERCISE, token, {
+      method: 'POST',
+      body: JSON.stringify({ exerciseIdToReplace: exerciseId, reason, excludeEquipment }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error ?? 'No se encontró alternativa');
+    }
+    if (data.session) {
+      setCurrentSession(data.session as GeneratedSession);
+    } else if (data.newExercise) {
+      setCurrentSession((prev) => {
+        const newSession = JSON.parse(JSON.stringify(prev)) as GeneratedSession;
+        const blocks = (newSession.mainBlock as any)?.bloques || (newSession.mainBlock as any)?.estaciones || [];
+        if (blocks[stationIndex]?.ejercicios) {
+          blocks[stationIndex].ejercicios[exerciseIndex] = data.newExercise;
+        }
+        return newSession;
+      });
+    }
+  };
+
+  const handleConfirmSwap = async (reason: SwapReason, excludeEquipment: boolean) => {
+    if (!swapTarget) return;
+    setSwappingId(swapTarget.exerciseId);
+    try {
+      if (swapTarget.kind === 'warmup') {
+        await executeWarmupSwap(swapTarget.exerciseId, reason, excludeEquipment);
+      } else {
+        await executeMainSwap(
+          swapTarget.exerciseId,
+          reason,
+          excludeEquipment,
+          swapTarget.stationIndex ?? 0,
+          swapTarget.exerciseIndex ?? 0,
+        );
+      }
+      setSwapTarget(null);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Error al cambiar ejercicio');
+    } finally {
+      setSwappingId(null);
+    }
+  };
 
   const handleStartSession = () => {
     console.log("Iniciando sesión...");
     navigate('/workout/player'); 
   };
 
-  const handleSwapExercise = async (
-    stationIndex: number, 
-    exerciseIndex: number, 
-    oldExercise: FlexibleExercise
+  const handleSwapExercise = (
+    stationIndex: number,
+    exerciseIndex: number,
+    oldExercise: FlexibleExercise,
   ) => {
-    setSwappingId(oldExercise.id);
-    const authInstance = getAuth();
-    const user = authInstance.currentUser;
+    setSwapTarget({
+      exerciseId: oldExercise.id,
+      name: getExerciseName(oldExercise),
+      equipment: Array.isArray(oldExercise.equipo) ? oldExercise.equipo : [],
+      kind: 'main',
+      stationIndex,
+      exerciseIndex,
+    });
+  };
 
-    if (!user) {
-      setSwappingId(null);
-      return alert("Error de autenticación. Por favor, vuelva a iniciar sesión.");
-    }
-    
-    let userToken: string;
-    try {
-      userToken = await user.getIdToken();
-    } catch (e) {
-      setSwappingId(null);
-      console.error("Error al obtener el token:", e);
-      return alert("No se pudo obtener el token de usuario. Inténtalo de nuevo.");
-    }
-    
-    try {
-      const response = await authenticatedFetch(API_ENDPOINTS.SESSION_SWAP_EXERCISE, userToken, {
-        method: 'POST',
-        body: JSON.stringify({
-          exerciseIdToReplace: oldExercise.id,
-        })
-      });
-
-      if (response.status === 401) {
-        throw new Error("Sesión expirada o token inválido. Por favor, vuelve a iniciar sesión.");
-      }
-      
-      const data = await response.json();
-      if (response.ok && data.success && data.session) {
-        setCurrentSession(data.session as GeneratedSession);
-      } else if (response.ok && data.success && data.newExercise) {
-        setCurrentSession(prevSession => {
-          const newSession = JSON.parse(JSON.stringify(prevSession)) as any;
-
-          const blocks = newSession.mainBlock?.bloques || newSession.mainBlock?.estaciones || [];
-          if (blocks && blocks[stationIndex]) {
-            blocks[stationIndex].ejercicios = blocks[stationIndex].ejercicios || [];
-            blocks[stationIndex].ejercicios[exerciseIndex] = data.newExercise;
-          } else {
-            // Fallback: intentar colocar en first block si no existe índice solicitado
-            if (blocks && blocks[0] && blocks[0].ejercicios) {
-              blocks[0].ejercicios[exerciseIndex] = data.newExercise;
-            }
-          }
-
-          // Asegurar que ambos nombres (bloques/estaciones) estén actualizados
-          if (!newSession.mainBlock.bloques && newSession.mainBlock.estaciones) {
-            newSession.mainBlock.bloques = newSession.mainBlock.estaciones;
-          } else if (!newSession.mainBlock.estaciones && newSession.mainBlock.bloques) {
-            newSession.mainBlock.estaciones = newSession.mainBlock.bloques;
-          }
-
-          return newSession as GeneratedSession;
-        });
-      } else {
-        alert(data.error || "No se encontró una alternativa adecuada.");
-      }
-    } catch (error) {
-      console.error("Error swapping exercise:", error);
-      alert(error instanceof Error ? error.message : "Error al conectar con el servidor.");
-    } finally {
-      setSwappingId(null);
-    }
+  const handleSwapWarmup = (exercise: FlexibleExercise) => {
+    setSwapTarget({
+      exerciseId: exercise.id,
+      name: getExerciseName(exercise),
+      equipment: Array.isArray(exercise.equipo) ? exercise.equipo : [],
+      kind: 'warmup',
+    });
   };
 
   // Calcular totales para los badges
@@ -578,7 +632,12 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           <AppAccordion title="Calentamiento" count={currentSession.warmup.length}>
             <div className="bg-zinc-900 rounded-lg p-2">
               {currentSession.warmup.map((ejercicio: any, idx: number) => (
-                <WarmupExerciseRow key={ejercicio.id || idx} exercise={ejercicio} />
+                <WarmupExerciseRow
+                  key={ejercicio.id || idx}
+                  exercise={ejercicio}
+                  onSwap={() => handleSwapWarmup(ejercicio)}
+                  isSwapping={swappingId === ejercicio.id}
+                />
               ))}
             </div>
           </AppAccordion>
@@ -702,6 +761,15 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           </span>
         </AppPrimaryButton>
       </AppFixedFooter>
+
+      <ExerciseSwapReasonModal
+        open={swapTarget !== null}
+        exerciseName={swapTarget?.name ?? ''}
+        equipmentTags={swapTarget?.equipment ?? []}
+        onClose={() => setSwapTarget(null)}
+        onConfirm={handleConfirmSwap}
+        loading={swappingId !== null}
+      />
 
     </AppShell>
   );
