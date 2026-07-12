@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, FlaskConical, CheckCircle2, CalendarDays } from 'lucide-react';
 import {
+  buildGenerationFrames,
   buildGenerationScienceContext,
   GENERATION_FINISH_HOLD_MS,
+  GENERATION_SPLIT_REVEAL_MS,
   GENERATION_STEP_MS,
   MIN_GENERATION_DISPLAY_MS,
   MIN_SAVING_DISPLAY_MS,
+  type GenerationFrame,
   type MesocycleGenerationProfile,
 } from '../utils/splitGenerationContext';
 import { waitMs } from '../utils/onboardingFlowLock';
@@ -17,6 +19,80 @@ interface MesocycleGenerationLoaderProps {
   phase?: 'saving' | 'generating';
   evaluationMode?: boolean;
   onSequenceComplete?: () => void;
+}
+
+function frameDuration(frame: GenerationFrame | undefined): number {
+  if (!frame) return GENERATION_STEP_MS;
+  return frame.type === 'split_reveal' ? GENERATION_SPLIT_REVEAL_MS : GENERATION_STEP_MS;
+}
+
+function FrameContent({ frame, visible }: { frame: GenerationFrame; visible: boolean }) {
+  const base =
+    'w-full max-w-sm mx-auto transition-all duration-700 ease-out ' +
+    (visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4');
+
+  if (frame.type === 'split_reveal') {
+    return (
+      <div className={base}>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-lime-500/80 mb-4 text-center">
+          Tu semana
+        </p>
+        <h2 className="text-2xl sm:text-3xl font-bold text-white text-center mb-8 leading-tight">
+          {frame.splitLabel}
+        </h2>
+        <ul className="space-y-0">
+          {frame.sessions.map((session, index) => (
+            <li
+              key={session.day}
+              className="flex items-center gap-4 py-3 border-b border-zinc-800/90 last:border-0"
+              style={{
+                transitionDelay: visible ? `${index * 80}ms` : '0ms',
+                opacity: visible ? 1 : 0,
+                transform: visible ? 'translateY(0)' : 'translateY(8px)',
+                transition: 'opacity 500ms ease, transform 500ms ease',
+              }}
+            >
+              <span className="text-xs font-bold text-zinc-500 w-7 shrink-0 tabular-nums">
+                {session.dayShort}
+              </span>
+              <span className="text-sm font-medium text-zinc-100 leading-snug">
+                {session.sessionFocus}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  if (frame.type === 'decision') {
+    return (
+      <div className={base}>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 mb-6 text-center">
+          {frame.eyebrow}
+        </p>
+        <p className="text-3xl sm:text-4xl font-bold text-white text-center leading-[1.15] mb-4">
+          {frame.value}
+        </p>
+        <p className="text-xs font-medium text-lime-400/90 text-center uppercase tracking-wider mb-5">
+          {frame.label}
+        </p>
+        <p className="text-[15px] text-zinc-400 text-center leading-relaxed">{frame.body}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={base}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 mb-6 text-center">
+        {frame.eyebrow}
+      </p>
+      <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight mb-5">
+        {frame.title}
+      </h2>
+      <p className="text-[15px] text-zinc-400 text-center leading-relaxed">{frame.body}</p>
+    </div>
+  );
 }
 
 export default function MesocycleGenerationLoader({
@@ -36,35 +112,29 @@ export default function MesocycleGenerationLoader({
     onCompleteRef.current = onSequenceComplete;
   }, [onSequenceComplete]);
 
-  const steps = useMemo(() => {
-    if (!evaluationMode) return context.steps;
-    return [
-      {
-        id: 'eval',
-        title: 'Evaluando tu mesociclo anterior',
-        detail:
-          'Tu feedback de dificultad, molestias y progreso ajusta el volumen del próximo bloque dentro de MEV–MRV.',
-      },
-      ...context.steps,
-    ];
-  }, [context.steps, evaluationMode]);
+  const evalStep = useMemo(
+    () =>
+      evaluationMode
+        ? [
+            {
+              id: 'eval',
+              title: 'Evaluando tu mesociclo anterior',
+              detail:
+                'Tu feedback de dificultad, molestias y progreso ajusta el volumen del próximo bloque dentro de MEV–MRV.',
+            },
+          ]
+        : [],
+    [evaluationMode],
+  );
 
-  const [activeStep, setActiveStep] = useState(0);
+  const frames = useMemo(
+    () => buildGenerationFrames(context, [...evalStep, ...context.steps]),
+    [context, evalStep],
+  );
+
+  const [activeFrame, setActiveFrame] = useState(0);
+  const [frameVisible, setFrameVisible] = useState(true);
   const [sequenceComplete, setSequenceComplete] = useState(false);
-  const [savingComplete, setSavingComplete] = useState(false);
-
-  const highlightedDecisionIds = useMemo(() => {
-    const ids = new Set<string>();
-    const limit = phase === 'saving' ? context.decisions.length - 1 : activeStep;
-    for (let i = 0; i <= limit && i < steps.length; i += 1) {
-      const related = steps[i]?.relatedDecisionId;
-      if (related) ids.add(related);
-    }
-    if (phase === 'saving' || sequenceComplete) {
-      for (const d of context.decisions) ids.add(d.id);
-    }
-    return ids;
-  }, [activeStep, steps, context.decisions, phase, sequenceComplete]);
 
   const tryFinish = async () => {
     if (sequenceDoneRef.current) return;
@@ -79,198 +149,133 @@ export default function MesocycleGenerationLoader({
   };
 
   useEffect(() => {
+    if (phase !== 'generating') return;
     mountedAtRef.current = Date.now();
     sequenceDoneRef.current = false;
-    setActiveStep(0);
+    setActiveFrame(0);
+    setFrameVisible(true);
     setSequenceComplete(false);
-    setSavingComplete(false);
-  }, [phase, steps.length]);
+  }, [phase, frames.length]);
 
   useEffect(() => {
-    if (phase === 'saving' && !savingComplete) {
-      const timer = setTimeout(() => setSavingComplete(true), MIN_SAVING_DISPLAY_MS);
-      return () => clearTimeout(timer);
-    }
+    if (phase !== 'generating' || sequenceComplete) return;
 
-    if (!steps.length) {
+    if (!frames.length) {
       void tryFinish();
       return;
     }
 
-    if (activeStep >= steps.length - 1) {
+    const current = frames[activeFrame];
+    const duration = frameDuration(current);
+
+    if (activeFrame >= frames.length - 1) {
       const holdTimer = setTimeout(() => {
         void tryFinish();
-      }, GENERATION_FINISH_HOLD_MS);
+      }, duration + GENERATION_FINISH_HOLD_MS);
       return () => clearTimeout(holdTimer);
     }
 
-    const timer = setTimeout(() => {
-      setActiveStep((prev) => prev + 1);
-    }, GENERATION_STEP_MS);
+    const advanceTimer = setTimeout(() => {
+      setFrameVisible(false);
+      setTimeout(() => {
+        setActiveFrame((prev) => prev + 1);
+        setFrameVisible(true);
+      }, 280);
+    }, duration);
 
-    return () => clearTimeout(timer);
-  }, [phase, activeStep, steps.length, savingComplete]);
+    return () => clearTimeout(advanceTimer);
+  }, [phase, activeFrame, frames, sequenceComplete]);
 
-  const heading =
-    title ?? (phase === 'saving' ? 'Guardando tu perfil…' : 'Diseñando tu mesociclo');
-  const sub =
-    subtitle ??
-    (phase === 'saving'
-      ? 'Preparando datos para el motor de periodización…'
-      : 'Calculando el plan óptimo para tu caso específico');
+  const savingHeading = title ?? 'Guardando tu perfil';
+  const savingSub =
+    subtitle ?? 'Sincronizando datos con el motor de entrenamiento';
 
-  const showGeneratingUi = phase === 'generating' || savingComplete;
-  const progressSteps = steps.length || 1;
-  const progressPct = showGeneratingUi
-    ? Math.round(
-        ((sequenceComplete ? progressSteps : Math.max(activeStep + 1, savingComplete ? 1 : 0)) /
-          progressSteps) *
-          100,
-      )
-    : phase === 'saving'
-      ? 12
-      : 0;
+  const totalFrames = frames.length || 1;
+  const progressPct =
+    phase === 'saving'
+      ? 8
+      : Math.round(((sequenceComplete ? totalFrames : activeFrame + 1) / totalFrames) * 100);
+
+  const statusLabel =
+    phase === 'saving'
+      ? 'Preparando'
+      : frames[activeFrame]?.type === 'split_reveal'
+        ? 'Calendario'
+        : frames[activeFrame]?.type === 'decision'
+          ? 'Decisión'
+          : 'Análisis';
+
+  if (phase === 'saving') {
+    return (
+      <div className="fixed inset-0 z-50 h-[100dvh] bg-zinc-950 flex flex-col overflow-hidden">
+        <div className="px-6 pt-[max(2.5rem,env(safe-area-inset-top))]">
+          <div className="h-px bg-zinc-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-lime-500 transition-all duration-1000 ease-out animate-pulse"
+              style={{ width: '35%' }}
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center px-8">
+          <h1 className="text-3xl font-bold text-white text-center leading-tight mb-3">
+            {savingHeading}
+          </h1>
+          <p className="text-sm text-zinc-500 text-center max-w-[16rem]">{savingSub}</p>
+        </div>
+
+        <div className="pb-[max(2rem,env(safe-area-inset-bottom))] flex justify-center">
+          <span className="w-1 h-1 rounded-full bg-lime-500/50 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  const currentFrame = frames[activeFrame];
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-5 py-8 overflow-y-auto">
-      <div className="w-full max-w-md pb-8">
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-20 h-20 rounded-full bg-lime-500/15 flex items-center justify-center mb-5 ring-1 ring-lime-500/30">
-            <Loader2 className="w-10 h-10 text-lime-400 animate-spin" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">{heading}</h2>
-          <p className="text-zinc-400 text-sm">{sub}</p>
-          <div className="w-full mt-5">
-            <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-lime-500 transition-all duration-700 ease-out"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-            {showGeneratingUi && (
-              <p className="text-[11px] text-zinc-500 mt-2">
-                Paso {Math.min(activeStep + 1, progressSteps)} de {progressSteps}
-              </p>
-            )}
-          </div>
+    <div className="fixed inset-0 z-50 h-[100dvh] bg-zinc-950 flex flex-col overflow-hidden">
+      {/* Barra de progreso */}
+      <div className="px-6 pt-[max(2.5rem,env(safe-area-inset-top))] shrink-0">
+        <div className="h-px bg-zinc-800 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-lime-500 transition-all duration-700 ease-out"
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
-
-        {showGeneratingUi && context.weeklyPlan.length > 0 && (
-          <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <CalendarDays className="w-4 h-4 text-lime-400 shrink-0" />
-              <p className="text-xs font-bold text-lime-400 uppercase tracking-wider">
-                Tu split semanal
-              </p>
-            </div>
-            <ul className="space-y-2">
-              {context.weeklyPlan.map((session) => (
-                <li
-                  key={session.day}
-                  className="flex items-center justify-between gap-2 text-sm bg-zinc-950/60 rounded-lg px-3 py-2"
-                >
-                  <span className="text-zinc-500 font-medium w-8 shrink-0">{session.dayShort}</span>
-                  <span className="text-zinc-200 text-left flex-1 truncate">{session.sessionFocus}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 mb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <FlaskConical className="w-4 h-4 text-lime-400 shrink-0" />
-            <p className="text-xs font-bold text-lime-400 uppercase tracking-wider">
-              Decisiones para tu caso
-            </p>
-          </div>
-          <ul className="space-y-2">
-            {context.decisions.map((decision) => {
-              const isHighlighted = highlightedDecisionIds.has(decision.id);
-              const isDone = sequenceComplete || isHighlighted;
-              return (
-                <li
-                  key={decision.id}
-                  className={`rounded-xl border px-3 py-2.5 transition-all duration-500 ${
-                    isHighlighted
-                      ? 'border-lime-500/40 bg-lime-500/10'
-                      : isDone
-                        ? 'border-zinc-700 bg-zinc-900/50 opacity-80'
-                        : 'border-zinc-800/80 bg-zinc-950/40 opacity-45'
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    {isDone ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-lime-500 mt-0.5 shrink-0" />
-                    ) : (
-                      <span className="w-3.5 h-3.5 rounded-full border border-zinc-600 mt-0.5 shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-xs text-zinc-500">{decision.label}</p>
-                      <p className="text-sm font-semibold text-zinc-200">{decision.value}</p>
-                      {isHighlighted && (
-                        <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
-                          {decision.rationale}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+        <div className="flex justify-between items-center mt-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
+            {statusLabel}
+          </span>
+          <span className="text-[10px] font-medium tabular-nums text-zinc-600">
+            {Math.min(activeFrame + 1, totalFrames)} / {totalFrames}
+          </span>
         </div>
+      </div>
 
-        {showGeneratingUi && (
-          <div className="space-y-2">
-            <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider px-1">
-              Calculando ahora
-            </p>
-            {steps.map((step, index) => {
-              const isActive = index === activeStep && !sequenceComplete;
-              const isDone = index < activeStep || sequenceComplete;
-              if (!isActive && !isDone) return null;
-              return (
-                <div
-                  key={step.id}
-                  className={`rounded-xl border p-3.5 transition-all duration-500 ${
-                    isActive
-                      ? 'border-lime-500/50 bg-lime-500/10'
-                      : 'border-zinc-800 bg-zinc-900/40 opacity-70'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 shrink-0">
-                      {isDone && !isActive ? (
-                        <CheckCircle2 className="w-4 h-4 text-lime-500" />
-                      ) : (
-                        <span className="block w-2 h-2 rounded-full mt-1.5 bg-lime-400 animate-pulse" />
-                      )}
-                    </div>
-                    <div className="text-left min-w-0">
-                      <p
-                        className={`text-sm font-semibold mb-0.5 ${
-                          isActive ? 'text-lime-300' : 'text-zinc-400'
-                        }`}
-                      >
-                        {step.title}
-                      </p>
-                      {isActive && (
-                        <p className="text-xs text-zinc-400 leading-relaxed">{step.detail}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+      {/* Contenido — una pantalla, sin scroll */}
+      <div className="flex-1 flex items-center justify-center px-6 min-h-0">
+        {currentFrame ? (
+          <FrameContent key={currentFrame.id + activeFrame} frame={currentFrame} visible={frameVisible} />
+        ) : null}
+      </div>
 
-        {phase === 'saving' && !savingComplete && (
-          <p className="text-center text-sm text-zinc-500 animate-pulse">
-            Sincronizando perfil con el motor de entrenamiento…
-          </p>
-        )}
+      {/* Indicador inferior */}
+      <div className="pb-[max(2rem,env(safe-area-inset-bottom))] flex justify-center shrink-0">
+        <div className="flex gap-1">
+          {frames.map((f, i) => (
+            <span
+              key={f.id}
+              className={`h-1 rounded-full transition-all duration-500 ${
+                i === activeFrame
+                  ? 'w-5 bg-lime-500'
+                  : i < activeFrame
+                    ? 'w-1 bg-lime-500/40'
+                    : 'w-1 bg-zinc-800'
+              }`}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

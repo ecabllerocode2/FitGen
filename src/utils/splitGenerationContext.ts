@@ -18,9 +18,10 @@ const DAY_ORDER = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábad
 
 export const MAX_TRAINING_DAYS = 6;
 
-/** ms por paso en la pantalla de carga — tiempo para leer cada decisión */
-export const GENERATION_STEP_MS = 4500;
-export const GENERATION_FINISH_HOLD_MS = 3000;
+/** ms por pantalla en el flujo de carga */
+export const GENERATION_STEP_MS = 4000;
+export const GENERATION_SPLIT_REVEAL_MS = 5200;
+export const GENERATION_FINISH_HOLD_MS = 1800;
 /** Tiempo mínimo total visible aunque el API responda al instante */
 export const MIN_GENERATION_DISPLAY_MS = 22000;
 export const MIN_SAVING_DISPLAY_MS = 3200;
@@ -190,8 +191,72 @@ export function getSplitLabel(splitType: string): string {
   return SPLIT_LABELS[splitType] ?? splitType.replace(/_/g, ' ');
 }
 
-export function estimateGenerationDisplayMs(stepCount: number): number {
-  return stepCount * GENERATION_STEP_MS + GENERATION_FINISH_HOLD_MS;
+export function estimateGenerationDisplayMs(frameCount: number): number {
+  if (frameCount <= 0) return MIN_GENERATION_DISPLAY_MS;
+  const beforeSplit = Math.max(0, frameCount - 1);
+  return beforeSplit * GENERATION_STEP_MS + GENERATION_SPLIT_REVEAL_MS + GENERATION_FINISH_HOLD_MS;
+}
+
+export type GenerationFrame =
+  | { type: 'process'; id: string; eyebrow: string; title: string; body: string }
+  | {
+      type: 'decision';
+      id: string;
+      eyebrow: string;
+      label: string;
+      value: string;
+      body: string;
+    }
+  | {
+      type: 'split_reveal';
+      id: string;
+      splitLabel: string;
+      sessions: WeeklySessionPreview[];
+    };
+
+export function buildGenerationFrames(
+  context: GenerationScienceContext,
+  steps: GenerationScienceStep[],
+): GenerationFrame[] {
+  const frames: GenerationFrame[] = [];
+  const usedDecisionIds = new Set<string>();
+
+  for (const step of steps) {
+    if (step.relatedDecisionId) {
+      const decision = context.decisions.find((d) => d.id === step.relatedDecisionId);
+      if (decision && !usedDecisionIds.has(decision.id)) {
+        usedDecisionIds.add(decision.id);
+        frames.push({
+          type: 'decision',
+          id: decision.id,
+          eyebrow: step.title,
+          label: decision.label,
+          value: decision.value,
+          body: decision.rationale,
+        });
+        continue;
+      }
+    }
+
+    frames.push({
+      type: 'process',
+      id: step.id,
+      eyebrow: 'Motor de periodización',
+      title: step.title,
+      body: step.detail,
+    });
+  }
+
+  if (context.weeklyPlan.length > 0) {
+    frames.push({
+      type: 'split_reveal',
+      id: 'split_reveal',
+      splitLabel: context.splitLabel,
+      sessions: context.weeklyPlan,
+    });
+  }
+
+  return frames;
 }
 
 function resolveTrainingDays(profile: MesocycleGenerationProfile): number {
@@ -633,7 +698,7 @@ export function buildGenerationScienceContext(
     detail: 'Empaquetando split, volumen, progresión y calendario en tu plan personalizado.',
   });
 
-  return {
+  const partialContext = {
     goal,
     experienceLevel,
     trainingDays,
@@ -648,7 +713,14 @@ export function buildGenerationScienceContext(
     restDays: 7 - weeklyPlan.length,
     decisions,
     steps,
-    estimatedDisplayMs: estimateGenerationDisplayMs(steps.length),
+    estimatedDisplayMs: 0,
+  };
+
+  const frames = buildGenerationFrames(partialContext, steps);
+
+  return {
+    ...partialContext,
+    estimatedDisplayMs: estimateGenerationDisplayMs(frames.length),
   };
 }
 
