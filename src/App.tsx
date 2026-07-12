@@ -16,6 +16,7 @@ import MesocycleEvaluate from './components/MesocycleEvaluate';
 
 // Tipos de sesión V2
 import type { GeneratedSession } from './types/session';
+import { isOnboardingFlowActive } from './utils/onboardingFlowLock';
 
 // ====================================================================
 // TIPOS Y ESTADOS
@@ -95,6 +96,13 @@ const App: FC = () => {
     const [authServices, setAuthServices] = useState<{ auth: Auth, db: Firestore } | null>(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [globalError, setGlobalError] = useState<string | null>(null);
+    const [onboardingFlowActive, setOnboardingFlowActive] = useState(isOnboardingFlowActive);
+
+    useEffect(() => {
+        const syncOnboardingLock = () => setOnboardingFlowActive(isOnboardingFlowActive());
+        window.addEventListener('fitgen-onboarding-flow', syncOnboardingLock);
+        return () => window.removeEventListener('fitgen-onboarding-flow', syncOnboardingLock);
+    }, []);
 
     // EFECTO 1: Escuchar el estado de autenticación
     useEffect(() => {
@@ -201,7 +209,7 @@ const App: FC = () => {
         return <AuthLayout onAuthSuccess={() => { }} auth={authServices.auth} />;
     }
 
-    if (currentStatus === 'pending_onboarding' && user && authServices?.db) {
+    if ((currentStatus === 'pending_onboarding' || onboardingFlowActive) && user && authServices?.db) {
         return <ProfileOnboarding user={user} db={authServices.db} />;
     }
 

@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, FlaskConical, CheckCircle2, CalendarDays } from 'lucide-react';
 import {
   buildGenerationScienceContext,
   GENERATION_FINISH_HOLD_MS,
   GENERATION_STEP_MS,
+  MIN_GENERATION_DISPLAY_MS,
+  MIN_SAVING_DISPLAY_MS,
   type MesocycleGenerationProfile,
 } from '../utils/splitGenerationContext';
+import { waitMs } from '../utils/onboardingFlowLock';
 
 interface MesocycleGenerationLoaderProps {
   title?: string;
@@ -13,7 +16,6 @@ interface MesocycleGenerationLoaderProps {
   profile: MesocycleGenerationProfile;
   phase?: 'saving' | 'generating';
   evaluationMode?: boolean;
-  /** Se llama cuando el usuario ha visto todos los pasos (tiempo mínimo de lectura). */
   onSequenceComplete?: () => void;
 }
 
@@ -26,6 +28,13 @@ export default function MesocycleGenerationLoader({
   onSequenceComplete,
 }: MesocycleGenerationLoaderProps) {
   const context = useMemo(() => buildGenerationScienceContext(profile), [profile]);
+  const onCompleteRef = useRef(onSequenceComplete);
+  const mountedAtRef = useRef(Date.now());
+  const sequenceDoneRef = useRef(false);
+
+  useEffect(() => {
+    onCompleteRef.current = onSequenceComplete;
+  }, [onSequenceComplete]);
 
   const steps = useMemo(() => {
     if (!evaluationMode) return context.steps;
@@ -42,30 +51,55 @@ export default function MesocycleGenerationLoader({
 
   const [activeStep, setActiveStep] = useState(0);
   const [sequenceComplete, setSequenceComplete] = useState(false);
+  const [savingComplete, setSavingComplete] = useState(false);
 
   const highlightedDecisionIds = useMemo(() => {
     const ids = new Set<string>();
-    for (let i = 0; i <= activeStep && i < steps.length; i += 1) {
-      const related = steps[i].relatedDecisionId;
+    const limit = phase === 'saving' ? context.decisions.length - 1 : activeStep;
+    for (let i = 0; i <= limit && i < steps.length; i += 1) {
+      const related = steps[i]?.relatedDecisionId;
       if (related) ids.add(related);
     }
+    if (phase === 'saving' || sequenceComplete) {
+      for (const d of context.decisions) ids.add(d.id);
+    }
     return ids;
-  }, [activeStep, steps]);
+  }, [activeStep, steps, context.decisions, phase, sequenceComplete]);
+
+  const tryFinish = async () => {
+    if (sequenceDoneRef.current) return;
+    const elapsed = Date.now() - mountedAtRef.current;
+    const minElapsed = phase === 'saving' ? MIN_SAVING_DISPLAY_MS : MIN_GENERATION_DISPLAY_MS;
+    if (elapsed < minElapsed) {
+      await waitMs(minElapsed - elapsed);
+    }
+    sequenceDoneRef.current = true;
+    setSequenceComplete(true);
+    onCompleteRef.current?.();
+  };
 
   useEffect(() => {
-    if (phase === 'saving') return;
-
+    mountedAtRef.current = Date.now();
+    sequenceDoneRef.current = false;
     setActiveStep(0);
     setSequenceComplete(false);
+    setSavingComplete(false);
   }, [phase, steps.length]);
 
   useEffect(() => {
-    if (phase === 'saving') return;
+    if (phase === 'saving') {
+      const timer = setTimeout(() => setSavingComplete(true), MIN_SAVING_DISPLAY_MS);
+      return () => clearTimeout(timer);
+    }
+
+    if (!steps.length) {
+      void tryFinish();
+      return;
+    }
 
     if (activeStep >= steps.length - 1) {
       const holdTimer = setTimeout(() => {
-        setSequenceComplete(true);
-        onSequenceComplete?.();
+        void tryFinish();
       }, GENERATION_FINISH_HOLD_MS);
       return () => clearTimeout(holdTimer);
     }
@@ -75,7 +109,7 @@ export default function MesocycleGenerationLoader({
     }, GENERATION_STEP_MS);
 
     return () => clearTimeout(timer);
-  }, [phase, activeStep, steps.length, onSequenceComplete]);
+  }, [phase, activeStep, steps.length]);
 
   const heading =
     title ?? (phase === 'saving' ? 'Guardando tu perfil…' : 'Diseñando tu mesociclo');
@@ -85,9 +119,17 @@ export default function MesocycleGenerationLoader({
       ? 'Preparando datos para el motor de periodización…'
       : 'Calculando el plan óptimo para tu caso específico');
 
-  const progressPct = phase === 'generating'
-    ? Math.round(((sequenceComplete ? steps.length : activeStep + 1) / steps.length) * 100)
-    : 0;
+  const showGeneratingUi = phase === 'generating' || savingComplete;
+  const progressSteps = steps.length || 1;
+  const progressPct = showGeneratingUi
+    ? Math.round(
+        ((sequenceComplete ? progressSteps : Math.max(activeStep + 1, savingComplete ? 1 : 0)) /
+          progressSteps) *
+          100,
+      )
+    : phase === 'saving'
+      ? 12
+      : 0;
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-5 py-8 overflow-y-auto">
@@ -98,22 +140,22 @@ export default function MesocycleGenerationLoader({
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">{heading}</h2>
           <p className="text-zinc-400 text-sm">{sub}</p>
-          {phase === 'generating' && (
-            <div className="w-full mt-5">
-              <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-lime-500 transition-all duration-700 ease-out"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-zinc-500 mt-2">
-                Paso {Math.min(activeStep + 1, steps.length)} de {steps.length}
-              </p>
+          <div className="w-full mt-5">
+            <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-lime-500 transition-all duration-700 ease-out"
+                style={{ width: `${progressPct}%` }}
+              />
             </div>
-          )}
+            {showGeneratingUi && (
+              <p className="text-[11px] text-zinc-500 mt-2">
+                Paso {Math.min(activeStep + 1, progressSteps)} de {progressSteps}
+              </p>
+            )}
+          </div>
         </div>
 
-        {phase === 'generating' && context.weeklyPlan.length > 0 && (
+        {showGeneratingUi && context.weeklyPlan.length > 0 && (
           <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 mb-4">
             <div className="flex items-center gap-2 mb-3">
               <CalendarDays className="w-4 h-4 text-lime-400 shrink-0" />
@@ -145,7 +187,7 @@ export default function MesocycleGenerationLoader({
           <ul className="space-y-2">
             {context.decisions.map((decision) => {
               const isHighlighted = highlightedDecisionIds.has(decision.id);
-              const isDone = sequenceComplete || highlightedDecisionIds.has(decision.id);
+              const isDone = sequenceComplete || isHighlighted;
               return (
                 <li
                   key={decision.id}
@@ -179,7 +221,7 @@ export default function MesocycleGenerationLoader({
           </ul>
         </div>
 
-        {phase === 'generating' && (
+        {showGeneratingUi && (
           <div className="space-y-2">
             <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider px-1">
               Calculando ahora
@@ -206,7 +248,11 @@ export default function MesocycleGenerationLoader({
                       )}
                     </div>
                     <div className="text-left min-w-0">
-                      <p className={`text-sm font-semibold mb-0.5 ${isActive ? 'text-lime-300' : 'text-zinc-400'}`}>
+                      <p
+                        className={`text-sm font-semibold mb-0.5 ${
+                          isActive ? 'text-lime-300' : 'text-zinc-400'
+                        }`}
+                      >
                         {step.title}
                       </p>
                       {isActive && (
@@ -220,7 +266,7 @@ export default function MesocycleGenerationLoader({
           </div>
         )}
 
-        {phase === 'saving' && (
+        {phase === 'saving' && !savingComplete && (
           <p className="text-center text-sm text-zinc-500 animate-pulse">
             Sincronizando perfil con el motor de entrenamiento…
           </p>

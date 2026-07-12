@@ -16,6 +16,12 @@ import { API_ENDPOINTS, authenticatedFetch } from '../../config/api';
 import type { FitnessGoal, FocusArea, DayOfWeek, ExternalLoad } from '../../types/session';
 import { TRAINING_AGE_OPTIONS, getExperienceLevelFromMonths } from '../../utils/experienceLevel';
 import { getMesocyclePreviewSessions, normalizeMesocycleForUI } from '../../utils/mesocycleNormalizer';
+import {
+  endOnboardingFlowLock,
+  startOnboardingFlowLock,
+  waitMs,
+} from '../../utils/onboardingFlowLock';
+import { MIN_SAVING_DISPLAY_MS } from '../../utils/splitGenerationContext';
 import MesocycleGenerationLoader from '../MesocycleGenerationLoader';
 import StepProgress from './StepProgress';
 import OptionCard from './OptionCard';
@@ -228,6 +234,7 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
   };
 
   const finishOnboarding = async () => {
+    startOnboardingFlowLock();
     setPhase('saving');
     setError(null);
 
@@ -271,9 +278,12 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
       await user.getIdToken(true);
 
       if (isEditMode) {
+        endOnboardingFlowLock();
         navigate('/', { replace: true });
         return;
       }
+
+      await waitMs(MIN_SAVING_DISPLAY_MS);
 
       setPhase('generating');
       setLoaderSequenceDone(false);
@@ -292,6 +302,7 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
       const normalized = normalizeMesocycleForUI(mesoData.mesocycle ?? mesoData.plan);
       setPendingMesocycle(normalized);
     } catch (err) {
+      endOnboardingFlowLock();
       setError((err as Error).message);
       setPhase('wizard');
       setStep(TOTAL_STEPS - 1);
@@ -299,6 +310,7 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
   };
 
   const handleStart = async () => {
+    endOnboardingFlowLock();
     await user.getIdToken(true);
     navigate('/', { replace: true });
   };
@@ -322,7 +334,9 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
       <MesocycleGenerationLoader
         phase={phase}
         profile={generationProfile}
-        onSequenceComplete={() => setLoaderSequenceDone(true)}
+        onSequenceComplete={
+          phase === 'generating' ? () => setLoaderSequenceDone(true) : undefined
+        }
       />
     );
   }
