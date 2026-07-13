@@ -244,6 +244,7 @@ interface NextExerciseInfo {
 // ==================== HELPERS ====================
 
 const isBodyweightExercise = (ex: FlexibleExercise): boolean => {
+  if ((ex as any).loadMode === 'bodyweight') return true;
   if (ex.prescripcion?.tipo && ex.prescripcion.tipo.toLowerCase().includes('bodyweight')) return true;
   if (ex.equipo) {
      if (Array.isArray(ex.equipo)) {
@@ -693,10 +694,10 @@ interface RestScreenProps {
   pendingLogContext: {
     isBodyweight: boolean;
     isLastSet: boolean;
-    requiresRir?: boolean;
     isTimed?: boolean;
     exerciseName: string;
     defaultReps: number;
+    defaultWeight?: number | null;
     weightPlaceholder?: string;
   } | null;
   onLogSubmit: (data: SetLog) => void;
@@ -715,15 +716,40 @@ const RestScreen: React.FC<RestScreenProps> = ({
   onLogSubmit
 }) => {
   const [weight, setWeight] = useState<string>('');
-  const [reps, setReps] = useState<string>(pendingLogContext?.defaultReps?.toString() || '');
+  const [reps, setReps] = useState<string>('');
   const [rir, setRir] = useState<string>('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  // If there is no pending context, consider submitted (for non-main exercises)
   useEffect(() => {
-    if (!pendingLogContext) setHasSubmitted(true);
-    else setHasSubmitted(false);
+    if (!pendingLogContext) {
+      setHasSubmitted(true);
+      return;
+    }
+    setHasSubmitted(false);
+    setReps(pendingLogContext.defaultReps?.toString() ?? '');
+    setWeight(
+      pendingLogContext.defaultWeight != null
+        ? String(pendingLogContext.defaultWeight)
+        : pendingLogContext.weightPlaceholder ?? '',
+    );
+    setRir('');
   }, [pendingLogContext]);
+
+  const submitWithDefaults = () => {
+    if (!pendingLogContext) return true;
+    const repsNum = parseInt(reps, 10);
+    let weightNum: number | null = null;
+    if (!pendingLogContext.isBodyweight) {
+      weightNum = weight !== '' ? parseFloat(weight) : pendingLogContext.defaultWeight ?? null;
+    }
+    onLogSubmit({
+      reps: Number.isNaN(repsNum) ? pendingLogContext.defaultReps : repsNum,
+      weight: weightNum,
+      rir: pendingLogContext.isLastSet && rir !== '' ? parseInt(rir, 10) : undefined,
+    });
+    setHasSubmitted(true);
+    return true;
+  };
 
   const validateAndSubmit = () => {
      if (!pendingLogContext) return true;
@@ -733,30 +759,29 @@ const RestScreen: React.FC<RestScreenProps> = ({
          return false;
      }
 
-     // Para ejercicios temporizados validamos que el valor sea un entero en segundos
      if (pendingLogContext.isTimed && !/^\d+$/.test(reps)) {
         alert('Por favor indica la duración en segundos (solo números).');
         return false;
      }
 
-     const repsNum = parseInt(reps);
+     const repsNum = parseInt(reps, 10);
      
      let weightNum: number | null = null;
      if (!pendingLogContext.isBodyweight) {
-        if (!weight && weight !== '0') {
+        if (!weight && weight !== '0' && pendingLogContext.defaultWeight == null) {
             alert('Por favor indica el peso usado.');
             return false;
         }
-        weightNum = parseFloat(weight);
+        weightNum = weight !== '' ? parseFloat(weight) : pendingLogContext.defaultWeight ?? null;
      }
 
      let rirNum: number | undefined = undefined;
-     if (pendingLogContext.requiresRir || pendingLogContext.isLastSet) {
+     if (pendingLogContext.isLastSet) {
         if (!rir && rir !== '0') {
-            alert('Por favor indica el RIR de la serie.');
+            alert('Por favor indica el RIR de la última serie.');
             return false;
         }
-        rirNum = parseInt(rir);
+        rirNum = parseInt(rir, 10);
      }
 
      onLogSubmit({
@@ -770,25 +795,18 @@ const RestScreen: React.FC<RestScreenProps> = ({
 
   const handleSkip = () => {
     if (!hasSubmitted && pendingLogContext) {
-       if (confirm('¿Deseas guardar los datos antes de continuar?')) {
-          if (validateAndSubmit()) {
-             onSkip();
-          }
-       } else {
-         // User ignored logging?
-         // Requirement says "debe salir un formulario que recupere los datos". Implies mandatory.
-         // But allow skip if really wanted? I will enforce it for now or rely on validateAndSubmit.
-         if (validateAndSubmit()) onSkip(); // Try to submit whatever is there? No.
-       }
-    } else {
-       onSkip();
+       submitWithDefaults();
     }
+    onSkip();
   };
 
   const handleDismiss = () => {
      if (!hasSubmitted && pendingLogContext) {
-        if (validateAndSubmit()) {
-           onDismissAlarm();
+        if (pendingLogContext.isLastSet) {
+          if (validateAndSubmit()) onDismissAlarm();
+        } else {
+          submitWithDefaults();
+          onDismissAlarm();
         }
      } else {
         onDismissAlarm();
@@ -799,40 +817,37 @@ const RestScreen: React.FC<RestScreenProps> = ({
      if (hasSubmitted || !pendingLogContext) return null;
 
      return (
-        <div className="w-full max-w-xs bg-zinc-800/90 border border-zinc-700 rounded-xl p-4 my-2 animate-in fade-in slide-in-from-bottom-2">
-            <h4 className="text-sm font-bold text-lime-400 mb-3 text-center uppercase tracking-wider">
-               Registro de Serie
-            </h4>
+        <div className="w-full max-w-xs bg-zinc-900/90 ring-1 ring-zinc-800 rounded-2xl p-4 my-3 animate-in fade-in slide-in-from-bottom-2">
+            <p className="text-xs text-zinc-500 text-center mb-3">
+              {pendingLogContext.exerciseName}
+              {pendingLogContext.isLastSet ? ' · última serie' : ''}
+            </p>
             
             <div className="flex gap-3 mb-3">
                {!pendingLogContext.isBodyweight && (
                  <div className="flex-1">
-                   <label className="text-[10px] text-zinc-400 uppercase font-bold mb-1 block">Peso</label>
+                   <label className="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider mb-1 block">Peso (kg)</label>
                    <input 
                      type="number" 
                      value={weight}
                      onChange={e => setWeight(e.target.value)}
-                     className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2 text-center text-white font-mono focus:border-lime-500 outline-none"
-                     placeholder={pendingLogContext.weightPlaceholder || "kg"}
+                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-center text-white font-semibold focus:border-lime-500/50 outline-none"
+                     placeholder={pendingLogContext.weightPlaceholder || 'kg'}
                    />
                  </div>
                )}
                <div className="flex-1">
-                   <label className="text-[10px] text-zinc-400 uppercase font-bold mb-1 block">{pendingLogContext?.isTimed ? 'Duración (segundos)' : 'Reps'}</label>
+                   <label className="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider mb-1 block">{pendingLogContext?.isTimed ? 'Segundos' : 'Reps'}</label>
                    <input 
                      type="number" 
                      value={reps}
                      onChange={e => setReps(e.target.value)}
-                     className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2 text-center text-white font-mono focus:border-lime-500 outline-none"
-                     placeholder={pendingLogContext?.isTimed ? 'segundos' : '0'}
+                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-center text-white font-semibold focus:border-lime-500/50 outline-none"
                    />
-                   {pendingLogContext?.isTimed && (
-                     <p className="text-[10px] text-zinc-500 mt-1">Introduce la duración en segundos (ej. 40). El servidor extrae el número automáticamente.</p>
-                   )}
                </div>
             </div>
 
-            {(pendingLogContext.requiresRir || pendingLogContext.isLastSet) && (
+            {pendingLogContext.isLastSet && (
                <div className="mb-3">
                    <div className="flex items-center justify-between mb-2">
                      <label className="text-[10px] text-zinc-400 uppercase font-bold">RIR (Reservas)</label>
@@ -879,10 +894,10 @@ const RestScreen: React.FC<RestScreenProps> = ({
             )}
 
             <button 
-               onClick={() => validateAndSubmit()}
-               className="w-full bg-lime-500/20 hover:bg-lime-500/30 text-lime-400 border border-lime-500/50 rounded-lg py-2 text-xs font-bold uppercase transition-colors"
+               onClick={() => (pendingLogContext.isLastSet ? validateAndSubmit() : submitWithDefaults())}
+               className="w-full bg-lime-500 hover:bg-lime-400 text-zinc-900 rounded-xl py-3 text-sm font-bold transition-colors"
             >
-               Guardar Datos
+               Confirmar
             </button>
         </div>
      );
@@ -1008,6 +1023,16 @@ function parsePrescribedKg(ex: FlexibleExercise): number | null {
   return match ? parseFloat(match[0]) : null;
 }
 
+function parseDefaultReps(ex: FlexibleExercise): number {
+  const raw = ex.reps ?? ex.prescripcion?.reps ?? ex.prescripcion?.repsOTiempo ?? getExerciseReps(ex);
+  if (typeof raw === 'number') return raw;
+  const text = String(raw);
+  const range = text.match(/(\d+)\s*[-–]\s*(\d+)/);
+  if (range) return Math.round((parseInt(range[1], 10) + parseInt(range[2], 10)) / 2);
+  const single = text.match(/(\d+)/);
+  return single ? parseInt(single[1], 10) : 0;
+}
+
 const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   exercise,
   type,
@@ -1116,7 +1141,7 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
               <span className="text-3xl font-bold text-lime-400 tabular-nums">{reps}</span>
             ) : null}
 
-            {type === 'main' && !isTimedExercise && !isBodyweight ? (
+            {type === 'main' && !isTimedExercise && !isBodyweight && !isBodyweightExercise(exercise) ? (
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -1750,18 +1775,18 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
       const isTimed = !!(duration && duration > 0);
 
       const overrideKg = ex.id ? weightOverrides[ex.id] : undefined;
-      const placeholderWeight = overrideKg != null
-        ? String(overrideKg)
-        : ex.peso ?? (parsePrescribedKg(ex) != null ? String(parsePrescribedKg(ex)) : undefined);
+      const parsedKg = parsePrescribedKg(ex);
+      const defaultWeight = overrideKg ?? parsedKg;
+      const bodyweight = isBodyweightExercise(ex);
 
       setPendingLogContext({
          exerciseName: getExerciseName(ex),
-         isBodyweight: isBodyweightExercise(ex),
+         isBodyweight: bodyweight,
          isLastSet: isLastSet,
-         requiresRir: true,
          isTimed,
-         defaultReps: isTimed ? (duration as number) : (parseInt(getExerciseReps(ex).toString()) || 0),
-         weightPlaceholder: placeholderWeight
+         defaultReps: isTimed ? (duration as number) : parseDefaultReps(ex),
+         defaultWeight: bodyweight ? null : defaultWeight,
+         weightPlaceholder: bodyweight ? undefined : (defaultWeight != null ? String(defaultWeight) : undefined),
       });
 
       if (currentExercise.setNumber === totalSets) {

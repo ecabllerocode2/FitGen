@@ -68,7 +68,9 @@ export function normalizeSession(raw: any): GeneratedSession | null {
         loadMode: ex.loadMode,
         prescribedLoadKg: ex.prescribedLoadKg,
         suggestedLoadKg: ex.suggestedLoadKg,
-        peso: ex.prescribedLoadKg != null
+        peso: ex.loadMode === 'bodyweight'
+          ? undefined
+          : ex.prescribedLoadKg != null
           ? `${ex.prescribedLoadKg} kg`
           : ex.suggestedLoadKg != null
             ? `~${ex.suggestedLoadKg} kg`
