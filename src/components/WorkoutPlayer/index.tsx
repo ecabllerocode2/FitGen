@@ -2012,6 +2012,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
          archivedSessionId: result.archivedSessionId ?? null,
        };
        storePendingCelebration(celebrationPayload);
+       onComplete?.();
        navigate('/workout/celebration', { state: celebrationPayload, replace: true });
 
     } catch (error) {
