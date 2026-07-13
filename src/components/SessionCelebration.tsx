@@ -70,6 +70,7 @@ export default function SessionCelebration({ data, onDone }: SessionCelebrationP
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-sm mx-auto w-full">
         <div
           ref={cardRef}
+          data-celebration-card
           className="w-full rounded-3xl overflow-hidden border border-zinc-800 bg-zinc-950 p-6"
         >
           <div className="flex items-center justify-between mb-6">

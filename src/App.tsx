@@ -12,6 +12,7 @@ import ProfileOnboarding from './components/ProfileOnboarding';
 import Dashboard from './components/Dashboard';
 import WorkoutOverview from './components/WorkoutOverviewV3';
 import WorkoutPlayer from './components/WorkoutPlayer';
+import WorkoutCelebrationPage from './components/WorkoutCelebrationPage';
 import MesocycleEvaluate from './components/MesocycleEvaluate';
 import ExerciseExclusionsScreen, { type ExercisePreferences } from './components/ExerciseExclusionsScreen';
 
@@ -291,6 +292,9 @@ const App: FC = () => {
                         <Navigate to="/" replace />
                     )
                 } />
+
+                {/* Celebración post-sesión (independiente de currentSession) */}
+                <Route path="/workout/celebration" element={<WorkoutCelebrationPage />} />
 
                 {/* 4. VISTA DE EVALUACIÓN DEL MESOCICLO */}
                 <Route path="/mesocycle/evaluate" element={

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { type User, signOut, type Auth } from 'firebase/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Firestore, doc, onSnapshot } from 'firebase/firestore';
-import { format, differenceInCalendarWeeks } from 'date-fns';
+import { format, differenceInCalendarWeeks, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
     AlertCircle,
@@ -196,6 +196,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     
     // Estado para el modal de estadísticas
     const [showStatsModal, setShowStatsModal] = useState(false);
+    const [statsInitialSection, setStatsInitialSection] = useState<'stats' | 'celebrations'>('stats');
     
     // Estados para el modal de explicación del plan (NUEVO)
     const [showPlanExplanationModal, setShowPlanExplanationModal] = useState(false);
@@ -301,6 +302,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             isSessionReady = true;
         }
 
+        const completedToday = Boolean(
+            userProfile.lastWorkoutDate &&
+            isSameDay(parseISO(userProfile.lastWorkoutDate), today) &&
+            todaysSession &&
+            !isSessionReady &&
+            !isPlannedRest
+        );
+
         return {
             currentWeek: currentWeekCalc,
             duration,
@@ -311,6 +320,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             isPlannedRest,
             mesocycleGoal: mesocycle.mesocyclePlan.mesocycleGoal,
             isSessionReady,
+            completedToday,
             isEvaluationPending, // <--- AÑADIDO
             allMicrocycles: mesocycle.mesocyclePlan.microcycles // <--- AÑADIDO para vista de mesociclo completo
         };
@@ -332,11 +342,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
         return dayNames.map((day) => {
             const session = micro.sessions.find((s) => s.dayOfWeek.toLowerCase() === day);
+            const isToday = isViewingCurrentWeek && day === todayLower;
             return {
                 day,
                 sessionFocus: session?.sessionFocus,
-                isToday: isViewingCurrentWeek && day === todayLower,
-                isDone: Boolean((session as { generated?: boolean } | undefined)?.generated),
+                isToday,
+                isDone:
+                    Boolean((session as { generated?: boolean } | undefined)?.generated) ||
+                    (isToday && dashboardState.completedToday),
             };
         });
     }, [dashboardState, viewWeekIndex]);
@@ -599,9 +612,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         todaysSession, 
         isPlannedRest,
         mesocycleGoal, 
-        isSessionReady, 
+        isSessionReady,
+        completedToday,
         isEvaluationPending // <--- Usamos aquí
     } = dashboardState;
+
+    const openStatsModal = (section: 'stats' | 'celebrations' = 'stats') => {
+        setStatsInitialSection(section);
+        setShowStatsModal(true);
+    };
 
     const totalWeeks = dashboardState.allMicrocycles?.length ?? duration;
     const canPrevWeek = viewWeekIndex > 0;
@@ -643,7 +662,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     </div>
                     <div className="flex items-center gap-0.5 shrink-0">
                         <DashboardIconButton
-                            onClick={() => setShowStatsModal(true)}
+                            onClick={() => openStatsModal('stats')}
                             title="Estadísticas y logros"
                         >
                             <Trophy className="w-4 h-4" />
@@ -680,6 +699,21 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                             title="Día de descanso"
                             body={REST_MESSAGES[restQuoteIndex]}
                         />
+                    ) : completedToday ? (
+                        <DashboardHero
+                            eyebrow={`${todayName} · Completado`}
+                            title="¡Listo por hoy!"
+                            body="Buen trabajo. Descansa y deja que tu cuerpo se adapte antes de la próxima sesión."
+                        >
+                            <div className="flex flex-col gap-3 w-full max-w-sm mx-auto">
+                                <DashboardPrimaryButton onClick={() => openStatsModal('celebrations')}>
+                                    Ver resumen
+                                </DashboardPrimaryButton>
+                                <DashboardPrimaryButton variant="ghost" onClick={() => openStatsModal('stats')}>
+                                    Estadísticas y logros
+                                </DashboardPrimaryButton>
+                            </div>
+                        </DashboardHero>
                     ) : (
                         <DashboardHero
                             eyebrow={`${todayName} · Hoy`}
@@ -857,6 +891,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         } : undefined,
                         profileData: userProfile.profileData,
                     }}
+                    initialSection={statsInitialSection}
                     onClose={() => setShowStatsModal(false)}
                 />
             )}

@@ -25,6 +25,8 @@ export const API_ENDPOINTS = {
   SESSION_GENERATE: `${API_BASE_URL}/api/session/generateV2`, // Cambiado a V2 por defecto
   SESSION_GENERATE_V2: `${API_BASE_URL}/api/session/generateV2`,
   SESSION_COMPLETE: `${API_BASE_URL}/api/session/complete`,
+  SESSION_CELEBRATION_CARD: `${API_BASE_URL}/api/session/celebration-card`,
+  SESSION_CELEBRATIONS: `${API_BASE_URL}/api/session/celebrations`,
   SESSION_SWAP_EXERCISE: `${API_BASE_URL}/api/session/swap-exercise`,
   SESSION_SWAP_WARMUP: `${API_BASE_URL}/api/session/swap-warmup-exercise`,
   EXERCISE_PREFERENCES: `${API_BASE_URL}/api/profile/exercise-preferences`,

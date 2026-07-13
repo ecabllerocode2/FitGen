@@ -108,7 +108,7 @@ const getExerciseReps = (ex: FlexibleExercise): string => {
 };
 
 const formatExerciseLoad = (ex: FlexibleExercise): string | null => {
-  if ((ex as any).loadMode === 'bodyweight') return 'Peso corporal';
+  if ((ex as any).isBodyweight === true || (ex as any).loadMode === 'bodyweight') return 'Peso corporal';
   if (ex.peso) return ex.peso;
   const prescribed = (ex as any).prescribedLoadKg;
   const suggested = (ex as any).suggestedLoadKg ?? ex.prescripcion?.pesoSugerido;

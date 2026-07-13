@@ -17,10 +17,11 @@ function mapExerciseFields(ex: any) {
     reps: ex.repRange ?? ex.reps,
     restSeconds: ex.restSeconds,
     loadMode: ex.loadMode,
+    isBodyweight: ex.isBodyweight ?? ex.loadMode === 'bodyweight',
     prescribedLoadKg: ex.prescribedLoadKg,
     suggestedLoadKg: ex.suggestedLoadKg,
     peso:
-      ex.loadMode === 'bodyweight'
+      ex.loadMode === 'bodyweight' || ex.isBodyweight === true
         ? undefined
         : ex.prescribedLoadKg != null
           ? `${ex.prescribedLoadKg} kg`

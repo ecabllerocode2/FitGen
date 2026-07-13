@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { getAuth } from 'firebase/auth';
 import {
   Trophy,
   Target,
@@ -16,12 +17,27 @@ import {
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppEyebrow } from './ui/AppPrimitives';
+import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 
 interface HistorySession {
   feedback?: {
     completedAt?: string;
   };
   [key: string]: unknown;
+}
+
+interface CelebrationCard {
+  id: string;
+  celebrationCardUrl: string;
+  celebrationCardExpiresAt?: string;
+  celebrationSummary: {
+    sessionFocus: string;
+    durationLabel: string;
+    exerciseCount: number;
+    totalSets: number;
+    muscles?: string[];
+    completedAt?: string;
+  };
 }
 
 interface StatsAndAchievementsProps {
@@ -48,6 +64,7 @@ interface StatsAndAchievementsProps {
     };
   };
   onClose: () => void;
+  initialSection?: 'stats' | 'celebrations';
 }
 
 interface Achievement {
@@ -64,7 +81,34 @@ interface Achievement {
 const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   userProfile,
   onClose,
+  initialSection = 'stats',
 }) => {
+  const [celebrations, setCelebrations] = useState<CelebrationCard[]>([]);
+  const [loadingCelebrations, setLoadingCelebrations] = useState(true);
+  const [activeSection, setActiveSection] = useState<'stats' | 'celebrations'>(initialSection);
+
+  useEffect(() => {
+    setActiveSection(initialSection);
+  }, [initialSection]);
+
+  useEffect(() => {
+    const loadCelebrations = async () => {
+      try {
+        const user = getAuth().currentUser;
+        if (!user) return;
+        const token = await user.getIdToken();
+        const res = await authenticatedFetch(API_ENDPOINTS.SESSION_CELEBRATIONS, token);
+        if (!res.ok) return;
+        const data = await res.json();
+        setCelebrations(data.celebrations ?? []);
+      } catch (err) {
+        console.warn('No se pudieron cargar celebraciones:', err);
+      } finally {
+        setLoadingCelebrations(false);
+      }
+    };
+    loadCelebrations();
+  }, []);
   // Calcular estadísticas
   const stats = useMemo(() => {
     const history = userProfile._history || {};
@@ -312,6 +356,115 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         </div>
 
         <div className="overflow-y-auto max-h-[calc(92dvh-8rem)] px-6 py-6 space-y-8">
+          <div className="flex gap-2 p-1 rounded-xl bg-zinc-900/80 border border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setActiveSection('stats')}
+              className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
+                activeSection === 'stats'
+                  ? 'bg-zinc-800 text-white'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              Estadísticas
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSection('celebrations')}
+              className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
+                activeSection === 'celebrations'
+                  ? 'bg-zinc-800 text-white'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              Sesiones recientes
+            </button>
+          </div>
+
+          {activeSection === 'celebrations' ? (
+            <section className="space-y-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 mb-1">
+                  Últimos 7 días
+                </p>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  Tarjetas de tus sesiones completadas. Descárgalas o compártelas cuando quieras.
+                </p>
+              </div>
+
+              {loadingCelebrations ? (
+                <p className="text-sm text-zinc-500 py-8 text-center">Cargando resúmenes…</p>
+              ) : celebrations.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-10 text-center">
+                  <Trophy className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
+                  <p className="text-sm text-zinc-500">
+                    Aún no hay tarjetas guardadas. Completa una sesión para ver tu resumen aquí.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {celebrations.map((item) => {
+                    const summary = item.celebrationSummary;
+                    const completedLabel = summary.completedAt
+                      ? format(parseISO(summary.completedAt), "d MMM · HH:mm", { locale: es })
+                      : null;
+                    return (
+                      <article
+                        key={item.id}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-900/40 overflow-hidden"
+                      >
+                        <img
+                          src={item.celebrationCardUrl}
+                          alt={`Resumen de ${summary.sessionFocus}`}
+                          className="w-full aspect-[4/5] object-cover bg-zinc-950"
+                          loading="lazy"
+                        />
+                        <div className="p-4 space-y-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">{summary.sessionFocus}</p>
+                            {completedLabel ? (
+                              <p className="text-xs text-zinc-500 mt-0.5">{completedLabel}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex gap-2">
+                            <a
+                              href={item.celebrationCardUrl}
+                              download={`fitgen-${item.id}.png`}
+                              className="flex-1 text-center rounded-xl border border-zinc-700 py-2.5 text-xs font-medium text-zinc-200 hover:border-zinc-600"
+                            >
+                              Descargar
+                            </a>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  if (navigator.share) {
+                                    await navigator.share({
+                                      title: 'FitGen — Sesión completada',
+                                      text: `Completé ${summary.sessionFocus} con FitGen.`,
+                                      url: item.celebrationCardUrl,
+                                    });
+                                  } else {
+                                    window.open(item.celebrationCardUrl, '_blank');
+                                  }
+                                } catch {
+                                  // user cancelled share
+                                }
+                              }}
+                              className="flex-1 rounded-xl border border-zinc-700 py-2.5 text-xs font-medium text-zinc-200 hover:border-zinc-600"
+                            >
+                              Compartir
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          ) : (
+          <>
           <div className="grid grid-cols-2 gap-px bg-zinc-800 rounded-xl overflow-hidden">
             <div className="bg-zinc-950 p-4">
               <div className="flex items-center justify-between mb-2">
@@ -447,6 +600,8 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
               <h3 className="text-lg font-bold text-white mb-2">Tu viaje empieza hoy</h3>
               <p className="text-sm text-zinc-500">Completa tu primera sesión para desbloquear logros</p>
             </div>
+          )}
+          </>
           )}
         </div>
       </div>

@@ -23,7 +23,8 @@ import {
 import type { GeneratedSession } from '../../types/session';
 import { normalizeSession } from '../../utils/sessionNormalizer';
 import ExerciseSwapReasonModal, { type SwapReason } from '../ExerciseSwapReasonModal';
-import SessionCelebration, { type SessionCelebrationData } from '../SessionCelebration';
+import { storePendingCelebration } from '../WorkoutCelebrationPage';
+import type { SessionCelebrationData } from '../SessionCelebration';
 import {
   AppEyebrow,
   AppFixedFooter,
@@ -246,6 +247,7 @@ interface NextExerciseInfo {
 // ==================== HELPERS ====================
 
 const isBodyweightExercise = (ex: FlexibleExercise): boolean => {
+  if ((ex as any).isBodyweight === true) return true;
   if ((ex as any).loadMode === 'bodyweight') return true;
   if (ex.prescripcion?.tipo && ex.prescripcion.tipo.toLowerCase().includes('bodyweight')) return true;
   if (ex.equipo) {
@@ -1308,7 +1310,6 @@ const buildCelebrationData = (session: GeneratedSession): SessionCelebrationData
 const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, onComplete, onExit }) => {
   const navigate = useNavigate();
   const [session, setSession] = useState(() => normalizeSession(initialSession) || initialSession);
-  const [celebrationData, setCelebrationData] = useState<SessionCelebrationData | null>(null);
   const [swappingWarmup, setSwappingWarmup] = useState(false);
   const [swapTarget, setSwapTarget] = useState<{
     exerciseId: string;
@@ -1994,9 +1995,24 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
 
        if (result.requiresEvaluation) {
          alert('Tu mesociclo terminó. Completa la evaluación en el inicio.');
+         navigate('/mesocycle/evaluate', { replace: true });
+         return;
        }
 
-       setCelebrationData(buildCelebrationData(session));
+       const celebrationPayload = {
+         data: result.celebrationSummary
+           ? {
+               sessionFocus: result.celebrationSummary.sessionFocus,
+               durationLabel: result.celebrationSummary.durationLabel,
+               exerciseCount: result.celebrationSummary.exerciseCount,
+               totalSets: result.celebrationSummary.totalSets,
+               muscles: result.celebrationSummary.muscles,
+             }
+           : buildCelebrationData(session),
+         archivedSessionId: result.archivedSessionId ?? null,
+       };
+       storePendingCelebration(celebrationPayload);
+       navigate('/workout/celebration', { state: celebrationPayload, replace: true });
 
     } catch (error) {
         console.error('Error saving session:', error);
@@ -2005,16 +2021,6 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
         setIsSubmittingSession(false);
     }
   };
-
-  const handleCelebrationDone = () => {
-    setCelebrationData(null);
-    if (onComplete) onComplete();
-    else navigate('/');
-  };
-
-  if (celebrationData) {
-    return <SessionCelebration data={celebrationData} onDone={handleCelebrationDone} />;
-  }
 
   // Show phase intro screen
   if (showPhaseIntro && currentPhase !== 'complete' && currentPhase !== 'rest') {
