@@ -7,20 +7,15 @@ import {
   Flame, 
   Dumbbell, 
   Wind, 
-  Info,
-  Layers,
-  Repeat,
-  Activity,
-  Layers3, 
-  RefreshCw, 
-  Sparkles,
-  Target,
   AlertCircle,
-  Weight
+  Layers3, 
+  RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import type { GeneratedSession } from '../types/session';
 import { normalizeSession } from '../utils/sessionNormalizer';
+import { estimateSessionDuration } from '../utils/estimateWorkoutDuration';
 import { markSessionReviewed } from '../utils/sessionReviewContext';
 import ExerciseSwapReasonModal, { type SwapReason } from './ExerciseSwapReasonModal';
 import {
@@ -102,47 +97,28 @@ const getExerciseName = (ex: FlexibleExercise): string => {
   return ex.nombre || ex.name || 'Ejercicio';
 };
 
-const getExerciseSets = (ex: FlexibleExercise): number => {
-  return ex.sets || ex.prescripcion?.series || 1;
+const getExerciseReps = (ex: FlexibleExercise): string => {
+  const raw = ex.reps ?? ex.prescripcion?.reps ?? ex.prescripcion?.repsOTiempo;
+  if (Array.isArray(raw)) return `${raw[0]}-${raw[1]} reps`;
+  if (raw == null || raw === '-') return '';
+  const text = String(raw);
+  return text.toLowerCase().includes('rep') || text.includes('s') || text.includes('min')
+    ? text
+    : `${text} reps`;
 };
 
-const getExerciseReps = (ex: FlexibleExercise): string | number => {
-  return ex.reps || ex.prescripcion?.reps || ex.prescripcion?.repsOTiempo || '-';
-};
-
-const getExerciseRIR = (ex: FlexibleExercise): number | undefined => {
-  return ex.rirTarget ?? ex.prescripcion?.rirObjetivo;
-};
-
-const getExerciseTempo = (ex: FlexibleExercise): string | undefined => {
-  return ex.tempo || ex.prescripcion?.tempo;
-};
-
-const getExerciseRest = (ex: FlexibleExercise): number | string | undefined => {
-  return ex.descanso || ex.prescripcion?.descanso;
+const formatExerciseLoad = (ex: FlexibleExercise): string | null => {
+  if (ex.peso) return ex.peso;
+  const prescribed = (ex as any).prescribedLoadKg;
+  const suggested = (ex as any).suggestedLoadKg ?? ex.prescripcion?.pesoSugerido;
+  if (typeof prescribed === 'number') return `${prescribed} kg`;
+  if (typeof suggested === 'number') return `~${suggested} kg`;
+  if ((ex as any).loadMode === 'exploratory' || suggested === 'Exploratorio') return 'Exploratorio';
+  return null;
 };
 
 const getExerciseImage = (ex: FlexibleExercise): string | undefined => {
   return ex.imageUrl || ex.imagenUrl || ex.url_img_0;
-};
-
-const getExerciseWeight = (ex: FlexibleExercise): string | undefined => {
-  return ex.peso;
-};
-
-const getYoutubeThumbnailUrl = (url?: string | null) => {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.match(regExp);
-  const videoId = (match && match[2].length === 11) ? match[2] : null;
-  if (!videoId) return null;
-  return `https://img.youtube.com/vi/${videoId}/default.jpg`; 
-};
-
-// Helpers: sanear notas
-const sanitizeNotes = (s?: string | null) : string | null => {
-  if (!s) return null;
-  return s.replace(/\*/g, '').trim();
 };
 
 // ==================== COMPONENTES UI ====================
@@ -221,19 +197,13 @@ const MainExerciseRow = ({
   isSwapping?: boolean;
 }) => {
   const name = getExerciseName(exercise);
-  const sets = getExerciseSets(exercise);
   const reps = getExerciseReps(exercise);
-  const rir = getExerciseRIR(exercise);
-  const tempo = getExerciseTempo(exercise);
-  const rest = getExerciseRest(exercise);
-  const weight = getExerciseWeight(exercise);
-  const thumbnail = getYoutubeThumbnailUrl(exercise.videoUrl);
-  const image = thumbnail || getExerciseImage(exercise);
+  const load = formatExerciseLoad(exercise);
+  const image = getExerciseImage(exercise);
 
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-zinc-800 last:border-0 relative group">
-      {/* Imagen */}
-      <div className="w-16 h-16 bg-zinc-700 rounded-lg shrink-0 flex items-center justify-center overflow-hidden relative">
+    <div className="flex items-center gap-4 py-4 border-b border-zinc-800/80 last:border-0 relative">
+      <div className="w-[4.5rem] h-[4.5rem] bg-zinc-800/80 rounded-2xl shrink-0 flex items-center justify-center overflow-hidden relative ring-1 ring-zinc-800">
         {isSwapping && (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
             <RefreshCw className="w-5 h-5 text-white animate-spin" />
@@ -242,116 +212,32 @@ const MainExerciseRow = ({
         {image ? (
           <img src={image} alt={name} className="w-full h-full object-cover" />
         ) : (
-          <Dumbbell className="w-6 h-6 text-zinc-500 opacity-50" />
+          <Dumbbell className="w-6 h-6 text-zinc-600" />
         )}
       </div>
       
-      {/* Contenido */}
-      <div className="flex-1 min-w-0 pr-8">
-        <h4 className="text-zinc-100 font-semibold text-sm leading-tight mb-1.5 truncate">
+      <div className="flex-1 min-w-0 pr-10">
+        <h4 className="text-[15px] font-semibold text-white leading-snug mb-1 line-clamp-2">
           {name}
         </h4>
-        
-        {/* Badges de prescripción */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="flex items-center gap-1 bg-zinc-800 px-2 py-0.5 rounded text-xs text-zinc-300 border border-zinc-700">
-            <Layers className="w-3 h-3 text-lime-500" />
-            <span className="font-bold">{sets}</span>
-            <span className="text-zinc-500">×</span>
-            <span className="font-bold">{reps}</span>
-          </div>
-          
-          {rir !== undefined && (
-            <div className="flex items-center gap-1 bg-lime-500/10 px-2 py-0.5 rounded text-xs text-lime-400 border border-lime-500/30">
-              <Activity className="w-3 h-3" />
-              <span className="font-bold">RIR {rir}</span>
-            </div>
-          )}
-          
-          {tempo && (
-            <div className="flex items-center gap-1 bg-purple-500/10 px-2 py-0.5 rounded text-xs text-purple-400 border border-purple-500/30">
-              <span className="font-bold">{tempo}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Peso y descanso */}
-        <div className="flex items-center gap-3 mt-1.5 text-xs text-zinc-500">
-          {weight && (
-            <span className="flex items-center gap-1">
-              <Weight className="w-3 h-3" />
-              {weight}
-            </span>
-          )}
-          {rest && (
-            <span className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {rest}s
-            </span>
-          )}
-          {exercise.parteCuerpo && (
-            <span className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
-              {exercise.parteCuerpo}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-zinc-500">
+          {reps && <span>{reps}</span>}
+          {reps && load && <span className="text-zinc-700">·</span>}
+          {load && (
+            <span className={load === 'Exploratorio' ? 'text-lime-400/90' : 'text-zinc-400'}>
+              {load}
             </span>
           )}
         </div>
 
-        {/* NUEVO: Indicadores de Progresión (API V2) */}
-        {exercise.indicadores && (
-          <div className="mt-2 space-y-1.5">
-            {/* Progresión de Peso */}
-            {exercise.indicadores.pesoAnterior && (
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-zinc-500">Anterior:</span>
-                <span className="text-zinc-400">{exercise.indicadores.pesoAnterior}</span>
-                {weight && weight !== exercise.indicadores.pesoAnterior && (
-                  <span className="text-green-400 flex items-center gap-1">
-                    <span>→</span>
-                    <span className="font-semibold">{weight}</span>
-                    <span className="text-green-500">↗</span>
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* e1RM Estimado */}
-            {exercise.indicadores.e1RMEstimado && (
-              <div className="flex items-center gap-2 text-xs bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20">
-                <span className="text-blue-400">e1RM:</span>
-                <span className="text-blue-300 font-semibold">{exercise.indicadores.e1RMEstimado}</span>
-                {exercise.indicadores.porcentajeObjetivo && (
-                  <span className="text-blue-400">({exercise.indicadores.porcentajeObjetivo})</span>
-                )}
-              </div>
-            )}
-
-            {/* Alerta de Meseta */}
-            {exercise.indicadores.esMeseta && (
-              <div className="flex items-center gap-2 text-xs bg-amber-500/10 px-2 py-1 rounded border border-amber-500/30">
-                <AlertCircle className="w-3 h-3 text-amber-400" />
-                <span className="text-amber-400">Posible meseta detectada - Ajuste aplicado</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* NUEVO: Peso Exploratorio (Semana 1) */}
-        {(exercise.prescripcion?.pesoSugerido === 'Exploratorio' || weight === 'Exploratorio') && exercise.prescripcion?.explicacion && (
-          <div className="mt-2 bg-indigo-500/10 p-2 rounded-lg border border-indigo-500/30">
-            <div className="flex items-start gap-2">
-              <Info className="w-3 h-3 text-indigo-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-semibold text-indigo-300 mb-0.5">🔍 Peso Exploratorio</p>
-                <p className="text-xs text-indigo-200 leading-relaxed">
-                  {sanitizeNotes(exercise.prescripcion.explicacion)}
-                </p>
-              </div>
-            </div>
-          </div>
+        {exercise.indicadores?.esMeseta && (
+          <p className="text-[11px] text-amber-400/90 mt-1.5 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3 shrink-0" />
+            Ajuste por meseta
+          </p>
         )}
       </div>
       
-      {/* Botón swap */}
       {onSwap && (
         <button 
           onClick={(e) => {
@@ -359,10 +245,10 @@ const MainExerciseRow = ({
             onSwap();
           }}
           disabled={isSwapping}
-          className="absolute right-0 top-3 p-2 rounded-full bg-transparent hover:bg-zinc-700 text-zinc-500 hover:text-lime-400 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="absolute right-0 top-1/2 -translate-y-1/2 p-2 rounded-full text-zinc-600 hover:text-lime-400 hover:bg-zinc-800/80 transition-colors disabled:opacity-50"
           aria-label="Cambiar ejercicio"
         >
-          {!isSwapping && <RefreshCw className="w-4 h-4" />}
+          <RefreshCw className={`w-4 h-4 ${isSwapping ? 'animate-spin' : ''}`} />
         </button>
       )}
     </div>
@@ -371,43 +257,21 @@ const MainExerciseRow = ({
 
 const CoreExerciseRow = ({ exercise }: { exercise: FlexibleExercise }) => {
   const name = getExerciseName(exercise);
-  const image = exercise.url_img_0 || exercise.imagenUrl || getExerciseImage(exercise);
-  const repsOrTime = exercise.prescripcion?.repsOTiempo || `${exercise.reps || exercise.prescripcion?.reps} reps`;
-  const isIsometric = exercise.prescripcion?.tipo === 'isometrico';
+  const image = getExerciseImage(exercise);
+  const detail = getExerciseReps(exercise) || `${exercise.prescripcion?.series ?? 1} series`;
   
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-zinc-800 last:border-0">
-      <div className="w-14 h-14 bg-zinc-700 rounded-lg shrink-0 flex items-center justify-center overflow-hidden">
+    <div className="flex items-center gap-4 py-3 border-b border-zinc-800/80 last:border-0">
+      <div className="w-14 h-14 bg-zinc-800/80 rounded-xl shrink-0 flex items-center justify-center overflow-hidden ring-1 ring-zinc-800">
         {image ? (
           <img src={image} alt={name} className="w-full h-full object-cover" />
         ) : (
-          <Layers3 className="w-5 h-5 text-yellow-400 opacity-50" />
+          <Layers3 className="w-5 h-5 text-yellow-500/50" />
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <h4 className="text-zinc-100 font-semibold text-sm leading-tight mb-1 truncate">
-          {name}
-        </h4>
-        <div className="flex flex-wrap items-center gap-2 mt-1">
-          <div className="flex items-center gap-1 bg-zinc-800 px-2 py-0.5 rounded text-xs text-zinc-300 border border-zinc-700">
-            <Layers className="w-3 h-3 text-yellow-500" />
-            <span className="font-bold">{exercise.prescripcion?.series || 1}</span> Series
-          </div>
-          <div className="flex items-center gap-1 bg-zinc-800 px-2 py-0.5 rounded text-xs text-zinc-300 border border-zinc-700">
-            {isIsometric ? (
-              <Clock className="w-3 h-3 text-yellow-500" />
-            ) : (
-              <Repeat className="w-3 h-3 text-yellow-500" />
-            )}
-            <span className="font-bold">{repsOrTime}</span>
-          </div>
-          {exercise.prescripcion?.notaUnilateral && (
-            <span className="text-xs text-zinc-500">{sanitizeNotes(exercise.prescripcion.notaUnilateral)}</span>
-          )}
-        </div>
-        {sanitizeNotes(exercise.notas) && (
-          <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{sanitizeNotes(exercise.notas)}</p>
-        )}
+        <h4 className="text-sm font-semibold text-white leading-snug truncate">{name}</h4>
+        <p className="text-xs text-zinc-500 mt-0.5">{detail}</p>
       </div>
     </div>
   );
@@ -575,8 +439,10 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
   const mainBlocksForTotals = currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones || [];
   const mainBlockExercises = (mainBlocksForTotals as any).flatMap((s: any) => s.ejercicios || []) || [];
   const totalMainExercises = mainBlockExercises.length;
-  const totalMainSets = mainBlockExercises.reduce((acc: number, ex: any) => acc + (ex.sets || ex.prescripcion?.series || 1), 0);
-  const objectiveText = sanitizeNotes(currentSession.education?.objetivoDelDia);
+  const sessionStats = estimateSessionDuration(currentSession);
+  const muscleSummary = currentSession.summary?.musculosTrabajos?.length
+    ? currentSession.summary.musculosTrabajos
+    : (currentSession as { sessionMuscles?: string[] }).sessionMuscles;
 
   return (
     <AppShell className={isPreflight ? 'pb-8' : 'pb-28'}>
@@ -602,29 +468,21 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
             <p className="text-sm text-zinc-500 mt-2">{currentSession.phase}</p>
           ) : null}
 
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-5 text-xs text-zinc-500">
-            <span className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-lime-500/70" />
-              {currentSession.summary?.duracionEstimada || '~45 min'}
+          <div className="flex flex-wrap gap-x-5 gap-y-2 mt-5 text-sm text-zinc-500">
+            <span className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-lime-500/80" />
+              {sessionStats.duracionEstimada}
             </span>
-            <span className="flex items-center gap-1.5">
-              <Dumbbell className="w-3.5 h-3.5 text-lime-500/70" />
-              {currentSession.summary?.ejerciciosTotales || totalMainExercises} ejercicios
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Target className="w-3.5 h-3.5 text-lime-500/70" />
-              RPE {currentSession.trainingParameters?.rpeTarget || 7}
+            <span className="flex items-center gap-2">
+              <Dumbbell className="w-4 h-4 text-lime-500/80" />
+              {sessionStats.ejerciciosTotales || totalMainExercises} ejercicios
             </span>
           </div>
 
-          {currentSession.summary?.musculosTrabajos && currentSession.summary.musculosTrabajos.length > 0 && (
+          {muscleSummary && muscleSummary.length > 0 && (
             <p className="text-xs text-zinc-600 mt-4 leading-relaxed">
-              {currentSession.summary.musculosTrabajos.join(' · ')}
+              {muscleSummary.join(' · ')}
             </p>
-          )}
-
-          {isPreflight && objectiveText && (
-            <p className="text-sm text-zinc-400 mt-4 leading-relaxed line-clamp-3">{objectiveText}</p>
           )}
         </div>
       </header>
@@ -653,25 +511,6 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         
         <SwapTip />
 
-        {/* OBJETIVO DEL DÍA — solo en vista completa */}
-        {!isPreflight && currentSession.education && (
-          <AppAccordion title="Tu objetivo" defaultOpen>
-            <div className="space-y-3">
-              <p className="text-sm text-zinc-300 leading-relaxed">
-                {sanitizeNotes(currentSession.education.objetivoDelDia)}
-              </p>
-              {sanitizeNotes(currentSession.education.consejoTecnico) && (
-                <div className="bg-lime-500/5 border border-lime-500/20 rounded-lg p-3 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-lime-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-lime-300">
-                    {sanitizeNotes(currentSession.education.consejoTecnico)}
-                  </p>
-                </div>
-              )}
-            </div>
-          </AppAccordion>
-        )}
-
         {currentSession.warmup && currentSession.warmup.length > 0 && (
           <AppAccordion title="Calentamiento" count={currentSession.warmup.length} defaultOpen={isPreflight}>
             <div className="bg-zinc-900 rounded-lg p-2">
@@ -688,37 +527,25 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         )}
 
         {((currentSession.mainBlock?.bloques && currentSession.mainBlock.bloques.length > 0) || ((currentSession.mainBlock as any)?.estaciones && (currentSession.mainBlock as any).estaciones.length > 0)) && (
-          <AppAccordion title="Bloque principal" badge={`${totalMainSets} series`} defaultOpen={isPreflight}>
-            {((currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones) as FlexibleStation[]).map((station, stationIdx) => (
-              <div key={stationIdx} className="mb-5 last:mb-0">
-                {/* Header de estación */}
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="w-7 h-7 bg-lime-500/20 rounded-full flex items-center justify-center text-lime-400 font-bold text-xs">
-                    {stationIdx + 1}
-                  </span>
-                  <span className="text-sm font-medium text-zinc-300">
-                    Estación {stationIdx + 1}
-                  </span>
-                  {station.tipo && station.tipo !== 'estacion' && station.tipo !== 'simple' && (
-                    <span className="text-xs text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
-                      {station.tipo}
-                    </span>
-                  )}
-                </div>
-                
-                {/* Ejercicios de la estación */}
-                <div className="bg-zinc-900 rounded-xl p-3 border border-zinc-800/50">
-                  {station.ejercicios && station.ejercicios.map((ejercicio, ejIdx) => (
-                    <MainExerciseRow 
-                      key={ejercicio.id || ejIdx}
-                      exercise={ejercicio}
-                      onSwap={() => handleSwapExercise(stationIdx, ejIdx, ejercicio)}
-                      isSwapping={swappingId === ejercicio.id}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+          <AppAccordion title="Bloque principal" count={totalMainExercises} defaultOpen={isPreflight}>
+            <div className="rounded-2xl bg-zinc-900/60 ring-1 ring-zinc-800/80 px-4">
+              {((currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones) as FlexibleStation[]).flatMap((station) => station.ejercicios ?? []).map((ejercicio, ejIdx) => (
+                <MainExerciseRow 
+                  key={ejercicio.id || ejIdx}
+                  exercise={ejercicio}
+                  onSwap={() => {
+                    const stationIdx = ((currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones) as FlexibleStation[]).findIndex(
+                      (s) => s.ejercicios?.some((e) => e.id === ejercicio.id),
+                    );
+                    const exerciseIndex = stationIdx >= 0
+                      ? ((currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones) as FlexibleStation[])[stationIdx].ejercicios?.findIndex((e) => e.id === ejercicio.id) ?? 0
+                      : ejIdx;
+                    handleSwapExercise(stationIdx >= 0 ? stationIdx : 0, exerciseIndex, ejercicio);
+                  }}
+                  isSwapping={swappingId === ejercicio.id}
+                />
+              ))}
+            </div>
           </AppAccordion>
         )}
 
@@ -743,56 +570,12 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
             title={currentSession.cooldown.nombre || 'Enfriamiento'}
             badge={`${currentSession.cooldown.duracionEstimada || 8} min`}
           >
-            {currentSession.cooldown.fases.map((fase: any, faseIdx: number) => (
-              <div key={faseIdx} className="mb-4 last:mb-0">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">{fase.icono}</span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">
-                    {fase.fase}
-                  </span>
-                  <span className="text-xs text-zinc-500">{fase.duracion} min</span>
-                </div>
-                <p className="text-xs text-zinc-400 mb-2">{fase.descripcion}</p>
-                
-                {fase.contenido?.ejercicios && fase.contenido.ejercicios.length > 0 && (
-                  <div className="bg-zinc-900 rounded-lg p-2">
-                    {fase.contenido.ejercicios.map((ejercicio: any, ejIdx: number) => (
-                      <CooldownExerciseRow key={ejercicio.id || ejIdx} exercise={ejercicio} />
-                    ))}
-                  </div>
-                )}
-                
-                {fase.contenido?.instrucciones && !fase.contenido.ejercicios && (
-                  <p className="text-xs text-zinc-500 italic bg-zinc-900 rounded-lg p-3">
-                    {fase.contenido.instrucciones}
-                  </p>
-                )}
-              </div>
-            ))}
-          </AppAccordion>
-        )}
-
-        {!isPreflight && currentSession.education?.cienciaDestacada && (
-          <AppAccordion title="Ciencia del día">
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium text-blue-300">
-                {currentSession.education.cienciaDestacada.titulo}
-              </h4>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                {currentSession.education.cienciaDestacada.contenido}
-              </p>
-              <p className="text-xs text-zinc-500 italic">
-                Fuente: {currentSession.education.cienciaDestacada.fuente}
-              </p>
+            <div className="rounded-2xl bg-zinc-900/60 ring-1 ring-zinc-800/80 px-2">
+              {currentSession.cooldown.fases.flatMap((fase: any) => fase.contenido?.ejercicios ?? []).map((ejercicio: any, ejIdx: number) => (
+                <CooldownExerciseRow key={ejercicio.id || ejIdx} exercise={ejercicio} />
+              ))}
             </div>
           </AppAccordion>
-        )}
-
-        {!isPreflight && currentSession.tipOfTheDay && (
-          <div className="py-4 border-b border-zinc-800/90">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600 mb-2">Tip del día</p>
-            <p className="text-sm text-zinc-400 leading-relaxed">{currentSession.tipOfTheDay}</p>
-          </div>
         )}
 
       </main>
