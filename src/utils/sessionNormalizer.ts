@@ -1,5 +1,79 @@
 import type { GeneratedSession } from '../types/session';
 
+function mapExerciseFields(ex: any) {
+  const imageUrl = ex.imageUrl ?? ex.url_img_0 ?? ex.imagenUrl ?? null;
+  const imageUrl2 = ex.imageUrl2 ?? ex.url_img_1 ?? null;
+  return {
+    ...ex,
+    id: ex.exerciseId ?? ex.id,
+    nombre: ex.exerciseName ?? ex.nombre ?? ex.name,
+    parteCuerpo: ex.muscleGroup ?? ex.parteCuerpo,
+    patronMovimiento: ex.movementPattern ?? ex.patronMovimiento,
+    imageUrl,
+    imageUrl2,
+    url_img_0: imageUrl,
+    url_img_1: imageUrl2,
+    sets: ex.sets,
+    reps: ex.repRange ?? ex.reps,
+    restSeconds: ex.restSeconds,
+    loadMode: ex.loadMode,
+    prescribedLoadKg: ex.prescribedLoadKg,
+    suggestedLoadKg: ex.suggestedLoadKg,
+    peso:
+      ex.loadMode === 'bodyweight'
+        ? undefined
+        : ex.prescribedLoadKg != null
+          ? `${ex.prescribedLoadKg} kg`
+          : ex.suggestedLoadKg != null
+            ? `~${ex.suggestedLoadKg} kg`
+            : ex.loadMode === 'exploratory'
+              ? 'Exploratorio'
+              : ex.peso,
+    prescripcion: ex.prescripcion ?? {
+      series: ex.sets,
+      reps: ex.repRange ?? ex.reps,
+      rirObjetivo: ex.rirTarget,
+      pesoSugerido: ex.prescribedLoadKg ?? ex.suggestedLoadKg,
+      descanso: ex.restSeconds,
+      tempo: ex.tempo,
+    },
+  };
+}
+
+function mapCooldownExercise(ex: any) {
+  const imageUrl = ex.imageUrl ?? ex.url_img_0 ?? null;
+  return {
+    ...ex,
+    id: ex.id ?? ex.exerciseId,
+    nombre: ex.nombre ?? ex.name,
+    tiempo: ex.tiempo ?? (ex.durationSeconds ? `${ex.durationSeconds}s` : ex.reps),
+    imageUrl,
+    imageUrl2: ex.imageUrl2 ?? ex.url_img_1 ?? null,
+    url_img_0: imageUrl,
+    url_img_1: ex.imageUrl2 ?? ex.url_img_1 ?? null,
+    musculoObjetivo: ex.musculoObjetivo ?? ex.muscleGroup,
+  };
+}
+
+function wrapCooldownExercises(exercises: any[]) {
+  const mapped = exercises.map(mapCooldownExercise);
+  const totalSeconds = mapped.reduce((sum, ex) => sum + (ex.durationSeconds ?? 45), 0);
+  return {
+    tipo: 'cooldown',
+    nombre: 'Enfriamiento',
+    duracionEstimada: Math.max(1, Math.ceil(totalSeconds / 60)),
+    fases: [
+      {
+        fase: 'General',
+        duracion: Math.max(1, Math.ceil(totalSeconds / 60)),
+        icono: '',
+        descripcion: '',
+        contenido: { tipo: 'estiramientos', ejercicios: mapped },
+      },
+    ],
+  };
+}
+
 // Normaliza distintas variantes de la sesión que pueden llegar desde Firestore
 // Devuelve un objeto que cumple (de forma floja) con GeneratedSession
 export function normalizeSession(raw: any): GeneratedSession | null {
@@ -43,6 +117,10 @@ export function normalizeSession(raw: any): GeneratedSession | null {
       duracion: item.duracion ?? (item.durationSeconds ? `${item.durationSeconds} seg` : item.reps),
       faseRAMP: item.faseRAMP ?? item.phase,
       patronMovimiento: item.patronMovimiento ?? item.movementPattern,
+      imageUrl: item.imageUrl ?? item.url_img_0 ?? null,
+      imageUrl2: item.imageUrl2 ?? item.url_img_1 ?? null,
+      url_img_0: item.url_img_0 ?? item.imageUrl ?? null,
+      url_img_1: item.url_img_1 ?? item.imageUrl2 ?? null,
     }));
   }
 
@@ -53,53 +131,43 @@ export function normalizeSession(raw: any): GeneratedSession | null {
     session.mainBlock = {
       tipo: 'estaciones',
       descripcion: '',
-      bloques: [{ ejercicios: exercises.map((ex: any) => ({
-        id: ex.exerciseId ?? ex.id,
-        nombre: ex.exerciseName ?? ex.nombre,
-        parteCuerpo: ex.muscleGroup ?? ex.parteCuerpo,
-        patronMovimiento: ex.movementPattern ?? ex.patronMovimiento,
-        imageUrl: ex.imageUrl ?? ex.url_img_0 ?? null,
-        imageUrl2: ex.imageUrl2 ?? ex.url_img_1 ?? null,
-        url_img_0: ex.url_img_0 ?? ex.imageUrl ?? null,
-        url_img_1: ex.url_img_1 ?? ex.imageUrl2 ?? null,
-        sets: ex.sets,
-        reps: ex.repRange,
-        restSeconds: ex.restSeconds,
-        loadMode: ex.loadMode,
-        prescribedLoadKg: ex.prescribedLoadKg,
-        suggestedLoadKg: ex.suggestedLoadKg,
-        peso: ex.loadMode === 'bodyweight'
-          ? undefined
-          : ex.prescribedLoadKg != null
-          ? `${ex.prescribedLoadKg} kg`
-          : ex.suggestedLoadKg != null
-            ? `~${ex.suggestedLoadKg} kg`
-            : ex.loadMode === 'exploratory'
-              ? 'Exploratorio'
-              : undefined,
-        prescripcion: {
-          series: ex.sets,
-          reps: ex.repRange,
-          rirObjetivo: ex.rirTarget,
-          pesoSugerido: ex.prescribedLoadKg ?? ex.suggestedLoadKg,
-          descanso: ex.restSeconds,
-          tempo: ex.tempo,
-        },
-      })) }],
+      bloques: [{ ejercicios: exercises.map(mapExerciseFields) }],
     };
   } else if (session.mainBlock) {
     const mb = session.mainBlock;
     if (Array.isArray(mb)) {
       session.mainBlock = { tipo: 'estaciones', descripcion: '', bloques: mb };
     } else if (Array.isArray(mb.bloques)) {
-      // ok
+      session.mainBlock = {
+        ...mb,
+        bloques: mb.bloques.map((block: any) => ({
+          ...block,
+          ejercicios: (block.ejercicios ?? []).map(mapExerciseFields),
+        })),
+      };
     } else if (Array.isArray(mb.estaciones)) {
-      session.mainBlock = { ...mb, bloques: mb.estaciones };
+      session.mainBlock = {
+        ...mb,
+        bloques: mb.estaciones.map((block: any) => ({
+          ...block,
+          ejercicios: (block.ejercicios ?? []).map(mapExerciseFields),
+        })),
+      };
     } else if (Array.isArray(mb.blocks)) {
-      session.mainBlock = { ...mb, bloques: mb.blocks };
+      session.mainBlock = {
+        ...mb,
+        bloques: mb.blocks.map((block: any) => ({
+          ...block,
+          ejercicios: (block.ejercicios ?? []).map(mapExerciseFields),
+        })),
+      };
     } else if (mb.ejercicios && Array.isArray(mb.ejercicios)) {
       // un único bloque representado como objeto con ejercicios
-      session.mainBlock = { tipo: 'estaciones', descripcion: '', bloques: [ { ejercicios: mb.ejercicios } ] };
+      session.mainBlock = {
+        tipo: 'estaciones',
+        descripcion: '',
+        bloques: [{ ejercicios: mb.ejercicios.map(mapExerciseFields) }],
+      };
     } else {
       // Asegurar la forma minima
       session.mainBlock = session.mainBlock || { tipo: 'estaciones', descripcion: '', bloques: [] };
@@ -117,15 +185,30 @@ export function normalizeSession(raw: any): GeneratedSession | null {
     session.coreBlock.ejercicios = session.coreBlock.ejercicios || [];
   }
 
-  // NORMALIZAR COOLDOWN
+  // NORMALIZAR COOLDOWN — backend v3 devuelve array plano
   if (!session.cooldown) {
     session.cooldown = { tipo: 'cooldown', nombre: 'Enfriamiento', duracionEstimada: 0, fases: [] } as any;
+  } else if (Array.isArray(session.cooldown)) {
+    session.cooldown = wrapCooldownExercises(session.cooldown);
   } else if (!Array.isArray(session.cooldown.fases)) {
     if (Array.isArray(session.cooldown.ejercicios)) {
-      session.cooldown.fases = [ { fase: 'General', duracion: session.cooldown.duracionEstimada || 0, icono: '', descripcion: session.cooldown.instrucciones || '', contenido: { tipo: 'estiramientos', ejercicios: session.cooldown.ejercicios } } ];
+      session.cooldown = wrapCooldownExercises(session.cooldown.ejercicios);
     } else {
       session.cooldown.fases = session.cooldown.fases || [];
     }
+  } else if (Array.isArray(session.cooldown.fases)) {
+    session.cooldown = {
+      ...session.cooldown,
+      fases: session.cooldown.fases.map((fase: any) => ({
+        ...fase,
+        contenido: fase.contenido
+          ? {
+              ...fase.contenido,
+              ejercicios: (fase.contenido.ejercicios ?? []).map(mapCooldownExercise),
+            }
+          : fase.contenido,
+      })),
+    };
   }
 
   // EDUCATION

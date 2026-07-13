@@ -343,7 +343,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
     if (!response.ok || !data.success) {
       throw new Error(data.error ?? 'No se encontró alternativa');
     }
-    if (data.session) setCurrentSession(data.session as GeneratedSession);
+    if (data.session) setCurrentSession(normalizeSession(data.session) || (data.session as GeneratedSession));
   };
 
   const executeMainSwap = async (
@@ -366,7 +366,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
       throw new Error(data.error ?? 'No se encontró alternativa');
     }
     if (data.session) {
-      setCurrentSession(data.session as GeneratedSession);
+      setCurrentSession(normalizeSession(data.session) || (data.session as GeneratedSession));
     } else if (data.newExercise) {
       setCurrentSession((prev) => {
         const newSession = JSON.parse(JSON.stringify(prev)) as GeneratedSession;
@@ -566,7 +566,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           </AppAccordion>
         )}
 
-        {!isPreflight && currentSession.cooldown?.fases && currentSession.cooldown.fases.length > 0 && (
+        {currentSession.cooldown?.fases && currentSession.cooldown.fases.length > 0 && (
           <AppAccordion
             title={currentSession.cooldown.nombre || 'Enfriamiento'}
             badge={`${currentSession.cooldown.duracionEstimada || 8} min`}

@@ -21,7 +21,9 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { GeneratedSession } from '../../types/session';
+import { normalizeSession } from '../../utils/sessionNormalizer';
 import ExerciseSwapReasonModal, { type SwapReason } from '../ExerciseSwapReasonModal';
+import SessionCelebration, { type SessionCelebrationData } from '../SessionCelebration';
 import {
   AppEyebrow,
   AppFixedFooter,
@@ -332,7 +334,7 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
   isPaused = false
 }) => {
   const radius = size === 'large' ? 90 : 24;
-  const strokeWidth = size === 'large' ? 8 : 3;
+  const strokeWidth = size === 'large' ? 2 : 1;
   const circumference = 2 * Math.PI * radius;
   const progress = (remainingSeconds / totalSeconds) * circumference;
   
@@ -1278,9 +1280,35 @@ interface WorkoutPlayerProps {
   onExit?: () => void;
 }
 
+const buildCelebrationData = (session: GeneratedSession): SessionCelebrationData => {
+  let exerciseCount = 0;
+  let totalSets = 0;
+  const mb = session.mainBlock as any;
+  if (Array.isArray(mb?.bloques)) {
+    for (const block of mb.bloques) {
+      for (const ex of block.ejercicios ?? []) {
+        exerciseCount += 1;
+        totalSets += ex.sets ?? ex.prescripcion?.series ?? 0;
+      }
+    }
+  } else if (Array.isArray(mb)) {
+    exerciseCount = mb.length;
+    totalSets = mb.reduce((sum: number, ex: any) => sum + (ex.sets ?? 0), 0);
+  }
+
+  return {
+    sessionFocus: session.sessionFocus ?? 'Entrenamiento',
+    durationLabel: session.summary?.duracionEstimada ?? '—',
+    exerciseCount: exerciseCount || session.summary?.ejerciciosTotales || 0,
+    totalSets: totalSets || session.summary?.seriesTotales || 0,
+    muscles: session.summary?.musculosTrabajos,
+  };
+};
+
 const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, onComplete, onExit }) => {
   const navigate = useNavigate();
-  const [session, setSession] = useState(initialSession);
+  const [session, setSession] = useState(() => normalizeSession(initialSession) || initialSession);
+  const [celebrationData, setCelebrationData] = useState<SessionCelebrationData | null>(null);
   const [swappingWarmup, setSwappingWarmup] = useState(false);
   const [swapTarget, setSwapTarget] = useState<{
     exerciseId: string;
@@ -1289,7 +1317,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
   } | null>(null);
 
   useEffect(() => {
-    setSession(initialSession);
+    setSession(normalizeSession(initialSession) || initialSession);
   }, [initialSession]);
   
   const [currentPhase, setCurrentPhase] = useState<WorkoutPhase>('warmup');
@@ -1363,6 +1391,27 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
   // Get main block data safely
   const getMainBlocks = useCallback(() => {
     const mainBlock = session.mainBlock as any;
+    if (Array.isArray(mainBlock) && (mainBlock[0]?.exerciseId || mainBlock[0]?.id)) {
+      return [{
+        ejercicios: mainBlock.map((ex: any) => ({
+          ...ex,
+          id: ex.exerciseId ?? ex.id,
+          nombre: ex.exerciseName ?? ex.nombre,
+          parteCuerpo: ex.muscleGroup ?? ex.parteCuerpo,
+          imageUrl: ex.imageUrl ?? ex.url_img_0 ?? null,
+          imageUrl2: ex.imageUrl2 ?? ex.url_img_1 ?? null,
+          url_img_0: ex.url_img_0 ?? ex.imageUrl ?? null,
+          url_img_1: ex.url_img_1 ?? ex.imageUrl2 ?? null,
+          reps: ex.repRange ?? ex.reps,
+          prescripcion: ex.prescripcion ?? {
+            series: ex.sets,
+            reps: ex.repRange,
+            rirObjetivo: ex.rirTarget,
+            descanso: ex.restSeconds,
+          },
+        })),
+      }];
+    }
     return mainBlock?.bloques || mainBlock?.estaciones || [];
   }, [session]);
 
@@ -1860,8 +1909,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
         throw new Error(data.error ?? 'No se encontró alternativa');
       }
       if (data.session) {
-        setSession(data.session as GeneratedSession);
-        const updated = (data.session as GeneratedSession).warmup?.[warmupIndex] as FlexibleExercise | undefined;
+        setSession(normalizeSession(data.session) || (data.session as GeneratedSession));
+        const updated = (normalizeSession(data.session) || data.session as GeneratedSession).warmup?.[warmupIndex] as FlexibleExercise | undefined;
         if (updated) {
           setCurrentExercise({ type: 'warmup', exercise: updated });
         }
@@ -1946,9 +1995,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
        if (result.requiresEvaluation) {
          alert('Tu mesociclo terminó. Completa la evaluación en el inicio.');
        }
-       
-       if (onComplete) onComplete();
-       else navigate('/');
+
+       setCelebrationData(buildCelebrationData(session));
 
     } catch (error) {
         console.error('Error saving session:', error);
@@ -1957,6 +2005,16 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
         setIsSubmittingSession(false);
     }
   };
+
+  const handleCelebrationDone = () => {
+    setCelebrationData(null);
+    if (onComplete) onComplete();
+    else navigate('/');
+  };
+
+  if (celebrationData) {
+    return <SessionCelebration data={celebrationData} onDone={handleCelebrationDone} />;
+  }
 
   // Show phase intro screen
   if (showPhaseIntro && currentPhase !== 'complete' && currentPhase !== 'rest') {
