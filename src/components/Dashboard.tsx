@@ -33,6 +33,7 @@ import ReadinessForm from './ReadinessForm';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import type { ReadinessData, DayContext } from '../types/session';
 import { MIN_SESSION_GENERATION_DISPLAY_MS, waitMs } from '../utils/sessionGenerationContext';
+import { markSessionReviewed } from '../utils/sessionReviewContext';
 
 // ====================================================================
 
@@ -63,6 +64,7 @@ interface CurrentMesocycleData {
     status?: string; 
 }
 interface CurrentSessionData {
+    id?: string;
     meta?: {
         date: string;
         generatedAt: string;
@@ -189,6 +191,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     
     // Estados para el modal de celebración de nivel
     const [showLevelUpModal, setShowLevelUpModal] = useState(false);
+    const [pendingPreflightNav, setPendingPreflightNav] = useState(false);
     const [levelUpData, setLevelUpData] = useState<LevelUpgradeData | null>(null);
     
     // Estado para el modal de estadísticas
@@ -479,11 +482,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
             if (data.success) {
                 console.log("✅ Sesión V2 generada OK:", data.session?.id);
-                
+
                 // 🎯 DETECTAR UPGRADE DE NIVEL
                 if (data.levelUpgrade?.shouldShowCelebration) {
                     setLevelUpData(data.levelUpgrade);
                     setShowLevelUpModal(true);
+                    setPendingPreflightNav(true);
+                } else {
+                    navigate('/workout/today', { state: { preflight: true }, replace: true });
                 }
             } else {
                 console.error('❌ Respuesta no exitosa:', data);
@@ -496,7 +502,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         } finally {
             setGeneratingSession(false);
         }
-    }, [user, dashboardState]);
+    }, [user, dashboardState, navigate]);
 
 
     // Nueva función para manejar el envío del modal
@@ -513,7 +519,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
 
     const handleStartWorkout = () => {
-        navigate('/workout/today');
+        const sessionId = userProfile?.currentSession?.id as string | undefined;
+        if (sessionId) markSessionReviewed(sessionId);
+        navigate('/workout/player');
+    };
+
+    const handleReviewWorkout = () => {
+        navigate('/workout/today', { state: { preflight: false } });
     };
 
     // D. RENDERIZADO
@@ -675,9 +687,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                             body={currentMicrocycle?.notes}
                         >
                             {isSessionReady ? (
-                                <DashboardPrimaryButton onClick={handleStartWorkout}>
-                                    Comenzar sesión
-                                </DashboardPrimaryButton>
+                                <div className="flex flex-col gap-3 w-full max-w-sm mx-auto">
+                                    <DashboardPrimaryButton onClick={handleStartWorkout}>
+                                        Entrenar
+                                    </DashboardPrimaryButton>
+                                    <DashboardPrimaryButton variant="ghost" onClick={handleReviewWorkout}>
+                                        Revisar rutina
+                                    </DashboardPrimaryButton>
+                                </div>
                             ) : (
                                 <DashboardPrimaryButton
                                     variant="ghost"
@@ -807,7 +824,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             {levelUpData && (
                 <LevelUpCelebration
                     isOpen={showLevelUpModal}
-                    onClose={() => setShowLevelUpModal(false)}
+                    onClose={() => {
+                        setShowLevelUpModal(false);
+                        if (pendingPreflightNav) {
+                            setPendingPreflightNav(false);
+                            navigate('/workout/today', { state: { preflight: true }, replace: true });
+                        }
+                    }}
                     data={{
                         celebrationTitle: levelUpData.celebrationTitle || '¡Nivel Mejorado!',
                         celebrationMessage: levelUpData.celebrationMessage || 'Has alcanzado un nuevo nivel de entrenamiento',

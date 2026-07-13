@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { 
   Play, 
@@ -21,9 +21,11 @@ import {
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import type { GeneratedSession } from '../types/session';
 import { normalizeSession } from '../utils/sessionNormalizer';
+import { markSessionReviewed } from '../utils/sessionReviewContext';
 import ExerciseSwapReasonModal, { type SwapReason } from './ExerciseSwapReasonModal';
 import {
   AppAccordion,
+  AppBackButton,
   AppEyebrow,
   AppFixedFooter,
   AppPrimaryButton,
@@ -448,6 +450,8 @@ interface WorkoutOverviewProps {
 
 const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSession }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isPreflight = (location.state as { preflight?: boolean } | null)?.preflight === true;
   // Aceptar distintas formas de session que puedan llegar desde Firestore
   const normalized = normalizeSession(initialSession) || initialSession;
   const [currentSession, setCurrentSession] = useState<GeneratedSession>(normalized as GeneratedSession);
@@ -534,8 +538,13 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
   };
 
   const handleStartSession = () => {
-    console.log("Iniciando sesión...");
-    navigate('/workout/player'); 
+    const sessionId = currentSession.id ?? (currentSession as { id?: string }).id;
+    if (sessionId) markSessionReviewed(sessionId);
+    navigate('/workout/player');
+  };
+
+  const handleOpenFullReview = () => {
+    navigate('/workout/today', { state: { preflight: false }, replace: true });
   };
 
   const handleSwapExercise = (
@@ -567,18 +576,29 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
   const mainBlockExercises = (mainBlocksForTotals as any).flatMap((s: any) => s.ejercicios || []) || [];
   const totalMainExercises = mainBlockExercises.length;
   const totalMainSets = mainBlockExercises.reduce((acc: number, ex: any) => acc + (ex.sets || ex.prescripcion?.series || 1), 0);
+  const objectiveText = sanitizeNotes(currentSession.education?.objetivoDelDia);
 
   return (
-    <AppShell className="pb-28">
+    <AppShell className={isPreflight ? 'pb-8' : 'pb-28'}>
       <header className="px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-6 border-b border-zinc-800/90">
         <div className="max-w-sm mx-auto">
-          <AppEyebrow>
-            {currentSession.dayOfWeek} · Semana {currentSession.weekNumber}
-          </AppEyebrow>
+          <AppBackButton
+            onClick={() => navigate('/')}
+            label={isPreflight ? 'Inicio' : 'Inicio'}
+          />
+          <div className="mt-4">
+            <AppEyebrow>
+              {isPreflight ? 'Lista para entrenar' : `${currentSession.dayOfWeek} · Semana ${currentSession.weekNumber}`}
+            </AppEyebrow>
+          </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight mt-4">
             {currentSession.sessionFocus}
           </h1>
-          {currentSession.phase ? (
+          {isPreflight ? (
+            <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
+              Revisa o cambia ejercicios antes de empezar. Cuando estés listo, pulsa empezar.
+            </p>
+          ) : currentSession.phase ? (
             <p className="text-sm text-zinc-500 mt-2">{currentSession.phase}</p>
           ) : null}
 
@@ -602,15 +622,39 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
               {currentSession.summary.musculosTrabajos.join(' · ')}
             </p>
           )}
+
+          {isPreflight && objectiveText && (
+            <p className="text-sm text-zinc-400 mt-4 leading-relaxed line-clamp-3">{objectiveText}</p>
+          )}
         </div>
       </header>
+
+      {isPreflight && (
+        <div className="sticky top-0 z-30 px-6 py-4 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800/80">
+          <div className="max-w-sm mx-auto space-y-2">
+            <AppPrimaryButton onClick={handleStartSession}>
+              <span className="flex items-center justify-center gap-2">
+                <Play className="w-5 h-5 fill-current" />
+                Empezar ahora
+              </span>
+            </AppPrimaryButton>
+            <button
+              type="button"
+              onClick={handleOpenFullReview}
+              className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 py-1 transition-colors"
+            >
+              Ver rutina completa
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="px-6 py-6 max-w-sm mx-auto w-full">
         
         <SwapTip />
 
-        {/* OBJETIVO DEL DÍA */}
-        {currentSession.education && (
+        {/* OBJETIVO DEL DÍA — solo en vista completa */}
+        {!isPreflight && currentSession.education && (
           <AppAccordion title="Tu objetivo" defaultOpen>
             <div className="space-y-3">
               <p className="text-sm text-zinc-300 leading-relaxed">
@@ -629,7 +673,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         )}
 
         {currentSession.warmup && currentSession.warmup.length > 0 && (
-          <AppAccordion title="Calentamiento" count={currentSession.warmup.length}>
+          <AppAccordion title="Calentamiento" count={currentSession.warmup.length} defaultOpen={isPreflight}>
             <div className="bg-zinc-900 rounded-lg p-2">
               {currentSession.warmup.map((ejercicio: any, idx: number) => (
                 <WarmupExerciseRow
@@ -644,7 +688,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         )}
 
         {((currentSession.mainBlock?.bloques && currentSession.mainBlock.bloques.length > 0) || ((currentSession.mainBlock as any)?.estaciones && (currentSession.mainBlock as any).estaciones.length > 0)) && (
-          <AppAccordion title="Bloque principal" badge={`${totalMainSets} series`} defaultOpen>
+          <AppAccordion title="Bloque principal" badge={`${totalMainSets} series`} defaultOpen={isPreflight}>
             {((currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones) as FlexibleStation[]).map((station, stationIdx) => (
               <div key={stationIdx} className="mb-5 last:mb-0">
                 {/* Header de estación */}
@@ -678,7 +722,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           </AppAccordion>
         )}
 
-        {currentSession.coreBlock && currentSession.coreBlock.ejercicios && (
+        {!isPreflight && currentSession.coreBlock && currentSession.coreBlock.ejercicios && (
           <AppAccordion
             title={currentSession.coreBlock.nombre || 'Core'}
             badge={currentSession.coreBlock.rondas ? `${currentSession.coreBlock.rondas} rondas` : undefined}
@@ -694,7 +738,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           </AppAccordion>
         )}
 
-        {currentSession.cooldown?.fases && currentSession.cooldown.fases.length > 0 && (
+        {!isPreflight && currentSession.cooldown?.fases && currentSession.cooldown.fases.length > 0 && (
           <AppAccordion
             title={currentSession.cooldown.nombre || 'Enfriamiento'}
             badge={`${currentSession.cooldown.duracionEstimada || 8} min`}
@@ -728,7 +772,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           </AppAccordion>
         )}
 
-        {currentSession.education?.cienciaDestacada && (
+        {!isPreflight && currentSession.education?.cienciaDestacada && (
           <AppAccordion title="Ciencia del día">
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-blue-300">
@@ -744,7 +788,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           </AppAccordion>
         )}
 
-        {currentSession.tipOfTheDay && (
+        {!isPreflight && currentSession.tipOfTheDay && (
           <div className="py-4 border-b border-zinc-800/90">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600 mb-2">Tip del día</p>
             <p className="text-sm text-zinc-400 leading-relaxed">{currentSession.tipOfTheDay}</p>
@@ -753,14 +797,16 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
 
       </main>
 
-      <AppFixedFooter>
-        <AppPrimaryButton onClick={handleStartSession}>
-          <span className="flex items-center justify-center gap-2">
-            <Play className="w-5 h-5 fill-current" />
-            Comenzar sesión
-          </span>
-        </AppPrimaryButton>
-      </AppFixedFooter>
+      {!isPreflight && (
+        <AppFixedFooter>
+          <AppPrimaryButton onClick={handleStartSession}>
+            <span className="flex items-center justify-center gap-2">
+              <Play className="w-5 h-5 fill-current" />
+              Comenzar sesión
+            </span>
+          </AppPrimaryButton>
+        </AppFixedFooter>
+      )}
 
       <ExerciseSwapReasonModal
         open={swapTarget !== null}
