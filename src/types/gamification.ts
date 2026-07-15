@@ -7,6 +7,7 @@ export interface GamificationCounters {
   longestStreakDays: number;
   seasonPoints: number;
   seasonSessionsCompleted: number;
+  seasonWeeksPerfect: number;
   fitCoinsBalance: number;
   currentSeasonId: string;
 }
@@ -16,10 +17,18 @@ export interface AchievementView {
   title: string;
   description: string;
   category: string;
+  milestone?: boolean;
   unlocked: boolean;
   unlockedAt: string | null;
   progress: number;
   target: number;
+}
+
+export interface AchievementSection {
+  category: string;
+  label: string;
+  achievements: AchievementView[];
+  nextLocked: AchievementView | null;
 }
 
 export interface GamificationSummary {
@@ -32,22 +41,38 @@ export interface GamificationSummary {
     equippedCelebrationId: string | null;
   };
   achievements: AchievementView[];
+  achievementSections?: AchievementSection[];
   unlockedCount: number;
   nextAchievement: AchievementView | null;
   updatedAt: string;
 }
 
+export interface GamificationAchievementUnlock {
+  id: string;
+  title: string;
+  description: string;
+  milestone?: boolean;
+  unlockedAt: string;
+}
+
 export interface GamificationDelta {
   seasonPointsEarned: number;
   fitCoinsEarned: number;
-  newAchievements: Array<{
-    id: string;
-    title: string;
-    description: string;
-    unlockedAt: string;
-  }>;
+  newAchievements: GamificationAchievementUnlock[];
   avatarStageUp: boolean;
-  currentStreakDays: number;
+  currentStreakDays?: number;
   weekPerfectBonus?: boolean;
-  lifetimeSessionsCompleted: number;
+  lifetimeSessionsCompleted?: number;
+  mesocycleCounted?: boolean;
+  lifetimeMesocyclesCompleted?: number;
+}
+
+export const MILESTONE_ACHIEVEMENT_IDS = new Set([
+  'sessions-100',
+  'sessions-365',
+  'sessions-500',
+]);
+
+export function isMilestoneAchievement(id: string): boolean {
+  return MILESTONE_ACHIEVEMENT_IDS.has(id);
 }

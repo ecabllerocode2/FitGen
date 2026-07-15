@@ -11,7 +11,7 @@ export const BODYWEIGHT_EFFECTIVE_LOAD_FACTORS: Record<string, number> = {
   General: 0.5,
 };
 
-type BodyweightExerciseMeta = {
+export type BodyweightExerciseMeta = {
   movementPattern?: string;
   patronMovimiento?: string;
   bodyweightEffectiveLoadFactor?: number;
@@ -20,10 +20,11 @@ type BodyweightExerciseMeta = {
   actualWeightKg?: number | null;
 };
 
-type BodyweightSet = {
+export type BodyweightSet = {
   load?: number | null;
   weightKg?: number | null;
   actualWeightKg?: number | null;
+  reps?: number;
 };
 
 export function getExerciseMovementPattern(exercise: BodyweightExerciseMeta = {}): string {

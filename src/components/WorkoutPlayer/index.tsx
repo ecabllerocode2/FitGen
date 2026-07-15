@@ -27,6 +27,7 @@ import ExerciseSwapReasonModal, { type SwapReason } from '../ExerciseSwapReasonM
 import WorkoutSessionPlanModal from '../WorkoutSessionPlanModal';
 import { storePendingCelebration } from '../WorkoutCelebrationPage';
 import type { SessionCelebrationData } from '../SessionCelebration';
+import { storePendingAchievementUnlocks } from '../gamification/AchievementUnlockModal';
 import { computeMainBlockVolumeFromLogs } from '../../utils/sessionWeight';
 import {
   AppEyebrow,
@@ -2135,10 +2136,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
        const result = await response.json();
 
        if (result.gamificationDelta?.newAchievements?.length) {
-         const titles = result.gamificationDelta.newAchievements
-           .map((a: { title: string }) => a.title)
-           .join(', ');
-         alert(`Logro desbloqueado: ${titles}`);
+         storePendingAchievementUnlocks(result.gamificationDelta.newAchievements);
        }
 
        if (result.weeklyAdjustment && Object.keys(result.weeklyAdjustment).length > 0) {

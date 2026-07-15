@@ -1,27 +1,31 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
-  Trophy,
-  Target,
-  Calendar,
-  Flame,
-  TrendingUp,
-  Award,
-  Dumbbell,
-  CheckCircle2,
   ArrowLeft,
+  Award,
+  Calendar,
+  Crown,
+  Home,
+  Image,
+  Sparkles,
 } from 'lucide-react';
 import { format, differenceInDays, parseISO, startOfWeek, endOfWeek } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { AppEyebrow } from './ui/AppPrimitives';
 import { fetchRecentSessions, type RecentSessionRow } from '../utils/recentSessions';
 import { db } from '../firebase';
 import { pickMotivationalPhraseForDate } from '../utils/motivationalPhrases';
 import { fetchGamificationSummary } from '../api/gamification';
-import type { AchievementView, GamificationSummary } from '../types/gamification';
+import type { AchievementSection, AchievementView, GamificationSummary } from '../types/gamification';
 import { achievementIcon } from '../utils/achievementIcons';
-import SessionShareCard from './SessionShareCard';
 import { computeMainBlockVolumeKg, resolveProfileBodyWeightKg } from '../utils/sessionWeight';
 import type { ShareCardData } from '../utils/shareCard';
+import FitCoinIcon from './gamification/FitCoinIcon';
+import { formatFitCoins, formatSeasonLabel } from '../utils/gamificationDisplay';
+import HubHomeTab from './gamification/HubHomeTab';
+import HubAchievementsTab from './gamification/HubAchievementsTab';
+import HubSeasonTab from './gamification/HubSeasonTab';
+import HubSessionsTab, { buildSessionHistoryItem } from './gamification/HubSessionsTab';
+import HubRankingTab from './gamification/HubRankingTab';
+
+export type HubTab = 'home' | 'achievements' | 'season' | 'sessions' | 'ranking';
 
 interface HistorySession {
   id: string;
@@ -67,6 +71,21 @@ interface StatsAndAchievementsProps {
   };
   onClose: () => void;
   initialSection?: 'stats' | 'celebrations';
+  initialTab?: HubTab;
+}
+
+const HUB_TABS: Array<{ id: HubTab; label: string; icon: typeof Home }> = [
+  { id: 'home', label: 'Inicio', icon: Home },
+  { id: 'achievements', label: 'Logros', icon: Award },
+  { id: 'season', label: 'Temporada', icon: Calendar },
+  { id: 'sessions', label: 'Sesiones', icon: Image },
+  { id: 'ranking', label: 'Ranking', icon: Crown },
+];
+
+function resolveInitialTab(initialSection?: 'stats' | 'celebrations', initialTab?: HubTab): HubTab {
+  if (initialTab) return initialTab;
+  if (initialSection === 'celebrations') return 'sessions';
+  return 'home';
 }
 
 interface Achievement {
@@ -78,6 +97,8 @@ interface Achievement {
   unlockedDate?: string;
   progress?: number;
   target?: number;
+  category?: string;
+  milestone?: boolean;
 }
 
 function mapAchievementView(row: AchievementView): Achievement {
@@ -90,6 +111,16 @@ function mapAchievementView(row: AchievementView): Achievement {
     unlockedDate: row.unlockedAt ?? undefined,
     progress: row.progress,
     target: row.target,
+    category: row.category,
+    milestone: row.milestone,
+  };
+}
+
+function mapAchievementSection(section: AchievementSection) {
+  return {
+    ...section,
+    achievements: section.achievements.map(mapAchievementView),
+    nextLocked: section.nextLocked ? mapAchievementView(section.nextLocked) : null,
   };
 }
 
@@ -165,6 +196,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   userProfile,
   onClose,
   initialSection = 'stats',
+  initialTab,
 }) => {
   const [history, setHistory] = useState<HistorySession[]>(() =>
     seedSessions.filter((s) => s.completed !== false).map(mapRow),
@@ -172,15 +204,17 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   const [loadingHistory, setLoadingHistory] = useState(seedSessions.length === 0);
   const [loadingGamification, setLoadingGamification] = useState(true);
   const [gamification, setGamification] = useState<GamificationSummary | null>(null);
-  const [activeSection, setActiveSection] = useState<'stats' | 'celebrations'>(initialSection);
+  const [activeTab, setActiveTab] = useState<HubTab>(() =>
+    resolveInitialTab(initialSection, initialTab),
+  );
   const profileBodyWeightKg = useMemo(
     () => resolveProfileBodyWeightKg(userProfile?.profileData),
     [userProfile?.profileData],
   );
 
   useEffect(() => {
-    setActiveSection(initialSection);
-  }, [initialSection]);
+    setActiveTab(resolveInitialTab(initialSection, initialTab));
+  }, [initialSection, initialTab]);
 
   useEffect(() => {
     if (!userId) return;
@@ -299,8 +333,10 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       });
     }
 
-    const monthsCompleted =
-      (gamification?.counters.lifetimeSessionsCompleted ?? totalSessions) >= 14 ? 1 : 0;
+    const mesocyclesCompleted =
+      gamification?.counters.lifetimeMesocyclesCompleted ?? 0;
+
+    const monthsCompleted = mesocyclesCompleted;
 
     const lastSessionDate = datedSessions[0]?.date ?? null;
 
@@ -315,8 +351,16 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       currentWeekMessage,
       lastSessionDate,
       seasonPoints: gamification?.counters.seasonPoints ?? 0,
+      mesocyclesCompleted,
     };
   }, [history, userProfile.currentMesocycle, gamification]);
+
+  const achievementSections = useMemo(() => {
+    if (gamification?.achievementSections?.length) {
+      return gamification.achievementSections.map(mapAchievementSection);
+    }
+    return [];
+  }, [gamification]);
 
   const achievements: Achievement[] = useMemo(() => {
     if (gamification?.achievements?.length) {
@@ -416,269 +460,131 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
     }).length;
   }, [history]);
 
+  const sessionHistoryItems = useMemo(
+    () =>
+      history.map((item) => {
+        const completed = sessionDate(item);
+        return buildSessionHistoryItem(
+          item,
+          historyToShareData(item, profileBodyWeightKg),
+          completed,
+        );
+      }),
+    [history, profileBodyWeightKg],
+  );
+
+  const fitCoins = gamification?.counters.fitCoinsBalance ?? 0;
+  const seasonId = gamification?.counters.currentSeasonId ?? '2026-07';
+  const seasonSessions = gamification?.counters.seasonSessionsCompleted ?? 0;
+  const seasonWeeksPerfect = gamification?.counters.seasonWeeksPerfect ?? 0;
+
   return (
     <div className="fixed inset-0 bg-zinc-950/95 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[92dvh] overflow-hidden">
-        <div className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] pb-5 border-b border-zinc-800/90">
+      <div className="bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[92dvh] overflow-hidden flex flex-col">
+        <div className="relative shrink-0 px-6 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4 border-b border-zinc-800/90 overflow-hidden">
+          <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-lime-500/10 blur-3xl" />
           <button
             type="button"
             onClick={onClose}
-            className="mb-5 p-2 -ml-2 text-zinc-500 hover:text-zinc-200 transition-colors"
+            className="relative mb-4 p-2 -ml-2 text-zinc-500 hover:text-zinc-200 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <AppEyebrow>Progreso</AppEyebrow>
-          <h2 className="text-2xl font-bold text-white mt-3">Estadísticas y logros</h2>
-          <p className="text-sm text-zinc-500 mt-1">
-            {userProfile.profileData?.name || 'Atleta'}
-          </p>
-        </div>
 
-        <div className="overflow-y-auto max-h-[calc(92dvh-8rem)] px-6 py-6 space-y-6">
-          <div className="flex gap-2 p-1 rounded-xl bg-zinc-900/80 border border-zinc-800">
-            <button
-              type="button"
-              onClick={() => setActiveSection('stats')}
-              className={`flex-1 rounded-lg py-2.5 text-xs font-medium transition-colors ${
-                activeSection === 'stats'
-                  ? 'bg-lime-500/10 text-lime-400 ring-1 ring-lime-500/30'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              Estadísticas
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection('celebrations')}
-              className={`flex-1 rounded-lg py-2.5 text-xs font-medium transition-colors ${
-                activeSection === 'celebrations'
-                  ? 'bg-lime-500/10 text-lime-400 ring-1 ring-lime-500/30'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              Sesiones ({stats.totalSessions})
-            </button>
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-lime-400" />
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-lime-400/90">
+                  Arena FitGen
+                </p>
+              </div>
+              <h2 className="text-2xl font-bold text-white mt-2 leading-tight">
+                {userProfile.profileData?.name || 'Atleta'}
+              </h2>
+              <p className="text-xs text-zinc-500 mt-1 capitalize">
+                {formatSeasonLabel(seasonId)} · Progreso y recompensas
+              </p>
+            </div>
+            <div className="shrink-0 rounded-2xl border border-lime-500/20 bg-lime-500/10 px-3 py-2 text-right">
+              <div className="flex items-center justify-end gap-1.5">
+                <FitCoinIcon size={16} />
+                <span className="text-[9px] uppercase tracking-wider text-lime-400 font-semibold">FitCoins</span>
+              </div>
+              <p className="text-lg font-bold text-white tabular-nums mt-0.5">{formatFitCoins(fitCoins)}</p>
+            </div>
           </div>
 
-          {activeSection === 'celebrations' ? (
-            <section className="space-y-4">
-              <p className="text-sm text-zinc-400 leading-relaxed">
-                Historial de sesiones. Añade una foto opcional, elige formato Feed o Story, y comparte tu tarjeta.
-              </p>
+          <div className="relative mt-4 -mx-1 overflow-x-auto scrollbar-none">
+            <div className="flex gap-1.5 p-1 min-w-max">
+              {HUB_TABS.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveTab(id)}
+                  className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-semibold transition-colors ${
+                    activeTab === id
+                      ? 'bg-lime-500/15 text-lime-300 ring-1 ring-lime-500/30'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
-              {loadingHistory ? (
-                <p className="text-sm text-zinc-500 py-8 text-center">Cargando historial…</p>
-              ) : history.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-10 text-center">
-                  <Trophy className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
-                  <p className="text-sm text-zinc-500">
-                    Aún no hay sesiones registradas. Completa tu primer entrenamiento.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {history.map((item) => {
-                    const completed = sessionDate(item);
-                    const focus = item.sessionFocus ?? 'Entrenamiento';
-                    const shareData = historyToShareData(item, profileBodyWeightKg);
-                    const completedLabel = completed
-                      ? format(completed, "EEEE d MMM · HH:mm", { locale: es })
-                      : null;
-
-                    return (
-                      <article
-                        key={item.id}
-                        className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden p-4 space-y-4"
-                      >
-                        <div>
-                          <p className="text-sm font-semibold text-white">{focus}</p>
-                          {completedLabel && (
-                            <p className="text-xs text-zinc-500 mt-0.5 capitalize">{completedLabel}</p>
-                          )}
-                        </div>
-                        <SessionShareCard
-                          data={shareData}
-                          showPhotoOptions
-                          showAspectToggle
-                          compact
-                        />
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          {loadingHistory || loadingGamification ? (
+            <p className="text-sm text-zinc-500 py-10 text-center">Cargando tu arena…</p>
           ) : (
             <>
-              {loadingHistory || loadingGamification ? (
-                <p className="text-sm text-zinc-500 py-6 text-center">Calculando tu progreso…</p>
-              ) : (
-                <>
-                  <div className="rounded-2xl border border-lime-500/20 bg-gradient-to-br from-lime-500/10 via-zinc-900/80 to-zinc-950 p-5">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-lime-500/80 mb-2">
-                      Total acumulado
-                    </p>
-                    <div className="flex items-end justify-between gap-4">
-                      <div>
-                        <p className="text-5xl font-bold text-white tabular-nums leading-none">
-                          {stats.totalSessions}
-                        </p>
-                        <p className="text-sm text-zinc-400 mt-2">
-                          {stats.totalSessions === 1 ? 'sesión completada' : 'sesiones completadas'}
-                        </p>
-                      </div>
-                      {stats.lastSessionDate && (
-                        <div className="text-right">
-                          <p className="text-[10px] uppercase tracking-wider text-zinc-600">Última sesión</p>
-                          <p className="text-sm text-zinc-300 mt-1">
-                            {format(stats.lastSessionDate, "d MMM", { locale: es })}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    {thisWeekCount > 0 && (
-                      <p className="text-xs text-lime-400/90 mt-4 pt-4 border-t border-lime-500/10">
-                        {thisWeekCount} {thisWeekCount === 1 ? 'sesión' : 'sesiones'} esta semana
-                        {stats.seasonPoints > 0 && (
-                          <span className="text-zinc-500"> · {stats.seasonPoints} pts temporada</span>
-                        )}
-                      </p>
-                    )}
-                  </div>
+              {activeTab === 'home' && (
+                <HubHomeTab
+                  athleteName={userProfile.profileData?.name || 'Atleta'}
+                  fitCoins={fitCoins}
+                  seasonPoints={stats.seasonPoints}
+                  totalSessions={stats.totalSessions}
+                  currentStreak={stats.currentStreak}
+                  weeksCompleted={stats.weeksCompleted}
+                  mesocyclesCompleted={stats.mesocyclesCompleted}
+                  activeDays={stats.activeDays}
+                  thisWeekCount={thisWeekCount}
+                  lastSessionDate={stats.lastSessionDate}
+                  motivationalMessage={motivationalMessage}
+                  currentWeekMessage={stats.currentWeekMessage}
+                  nextGoal={nextGoal ?? null}
+                  onGoAchievements={() => setActiveTab('achievements')}
+                  onGoSeason={() => setActiveTab('season')}
+                />
+              )}
 
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { label: 'Racha', value: stats.currentStreak, icon: Flame },
-                      { label: 'Semanas', value: stats.weeksCompleted, icon: Calendar },
-                      { label: 'Días activo', value: stats.activeDays, icon: TrendingUp },
-                      { label: 'Logros', value: unlockedAchievements.length, icon: Award },
-                    ].map(({ label, value, icon: Icon }) => (
-                      <div
-                        key={label}
-                        className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4"
-                      >
-                        <Icon className="w-4 h-4 text-lime-500/70 mb-3" />
-                        <p className="text-2xl font-bold text-white tabular-nums">{value}</p>
-                        <p className="text-[10px] text-zinc-600 uppercase tracking-wider mt-1">{label}</p>
-                      </div>
-                    ))}
-                  </div>
+              {activeTab === 'achievements' && (
+                <HubAchievementsTab
+                  achievementSections={achievementSections}
+                  unlockedCount={unlockedAchievements.length}
+                  totalCount={achievements.length}
+                />
+              )}
 
-                  <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/30 px-4 py-4">
-                    <p className="text-sm text-zinc-300 leading-relaxed italic">{motivationalMessage}</p>
-                  </div>
+              {activeTab === 'season' && (
+                <HubSeasonTab
+                  seasonId={seasonId}
+                  seasonPoints={stats.seasonPoints}
+                  seasonSessions={seasonSessions}
+                  seasonWeeksPerfect={seasonWeeksPerfect}
+                  fitCoins={fitCoins}
+                />
+              )}
 
-                  {stats.currentWeekMessage && (
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 px-4 py-4">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-2">
-                        Esta semana
-                      </p>
-                      <p className="text-sm text-zinc-400">{stats.currentWeekMessage}</p>
-                    </div>
-                  )}
+              {activeTab === 'sessions' && (
+                <HubSessionsTab loading={loadingHistory} items={sessionHistoryItems} />
+              )}
 
-                  {nextGoal && stats.totalSessions > 0 && (
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-4">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-lime-500/70 mb-2">
-                        Próximo logro
-                      </p>
-                      <p className="text-base font-semibold text-white">{nextGoal.title}</p>
-                      <p className="text-sm text-zinc-500 mt-1 mb-3">{nextGoal.description}</p>
-                      {nextGoal.progress !== undefined && nextGoal.target ? (
-                        <div>
-                          <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-lime-500 transition-all duration-500"
-                              style={{
-                                width: `${Math.min(100, (nextGoal.progress / nextGoal.target) * 100)}%`,
-                              }}
-                            />
-                          </div>
-                          <p className="text-[10px] text-zinc-500 mt-2 tabular-nums">
-                            {nextGoal.progress} / {nextGoal.target}
-                          </p>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
-
-                  {unlockedAchievements.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-                        <Award className="w-4 h-4 text-lime-500" />
-                        Desbloqueados ({unlockedAchievements.length})
-                      </h3>
-                      <div className="space-y-2">
-                        {unlockedAchievements.map((achievement) => (
-                          <div
-                            key={achievement.id}
-                            className="flex items-start gap-3 rounded-xl border border-lime-500/25 bg-lime-500/5 px-4 py-3"
-                          >
-                            <div className="text-lime-400 shrink-0 mt-0.5">{achievement.icon}</div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-white text-sm">{achievement.title}</h4>
-                              <p className="text-xs text-zinc-400 mt-0.5">{achievement.description}</p>
-                              {achievement.unlockedDate && (
-                                <p className="text-[10px] text-lime-500/70 mt-2">
-                                  {format(parseISO(achievement.unlockedDate), "d MMM yyyy", { locale: es })}
-                                </p>
-                              )}
-                            </div>
-                            <CheckCircle2 className="w-4 h-4 text-lime-500 shrink-0 mt-1" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {lockedAchievements.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold text-zinc-500 mb-3 flex items-center gap-2">
-                        <Target className="w-4 h-4" />
-                        Por desbloquear ({lockedAchievements.length})
-                      </h3>
-                      <div className="space-y-2">
-                        {lockedAchievements.map((achievement) => (
-                          <div
-                            key={achievement.id}
-                            className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 px-4 py-3"
-                          >
-                            <div className="text-zinc-600 shrink-0 mt-0.5">{achievement.icon}</div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-zinc-300 text-sm">{achievement.title}</h4>
-                              <p className="text-xs text-zinc-600 mt-0.5 mb-2">{achievement.description}</p>
-                              {achievement.progress !== undefined && achievement.target ? (
-                                <div>
-                                  <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
-                                    <div
-                                      className="h-full bg-zinc-600 transition-all duration-500"
-                                      style={{
-                                        width: `${Math.min(100, (achievement.progress / achievement.target) * 100)}%`,
-                                      }}
-                                    />
-                                  </div>
-                                  <p className="text-[10px] text-zinc-600 mt-1.5 tabular-nums">
-                                    {achievement.progress} / {achievement.target}
-                                  </p>
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {stats.totalSessions === 0 && (
-                    <div className="text-center py-8 rounded-2xl border border-dashed border-zinc-800">
-                      <Dumbbell className="w-10 h-10 text-zinc-700 mx-auto mb-4" />
-                      <h3 className="text-lg font-bold text-white mb-2">Tu viaje empieza hoy</h3>
-                      <p className="text-sm text-zinc-500 px-6">
-                        Completa tu primera sesión para ver estadísticas y desbloquear logros
-                      </p>
-                    </div>
-                  )}
-                </>
+              {activeTab === 'ranking' && (
+                <HubRankingTab seasonPoints={stats.seasonPoints} seasonId={seasonId} />
               )}
             </>
           )}

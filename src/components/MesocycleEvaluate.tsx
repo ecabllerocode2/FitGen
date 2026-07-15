@@ -5,6 +5,8 @@ import { AlertTriangle } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import MesocycleGenerationLoader from './MesocycleGenerationLoader';
 import LevelUpCelebration from './LevelUpCelebration';
+import AchievementUnlockModal from './gamification/AchievementUnlockModal';
+import type { GamificationAchievementUnlock } from '../types/gamification';
 import type { MesocycleGenerationProfile } from '../utils/splitGenerationContext';
 import {
   AppBackButton,
@@ -80,6 +82,8 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
     previousLevel: string;
   } | null>(null);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
+  const [achievementUnlocks, setAchievementUnlocks] = useState<GamificationAchievementUnlock[]>([]);
+  const [showAchievementModal, setShowAchievementModal] = useState(false);
 
   const isBusy = useMemo(() => status === 'evaluating' || status === 'generating', [status]);
   const isLast = step === STEPS.length - 1;
@@ -140,6 +144,10 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
       }
 
       const evaluationData = await evaluationResponse.json();
+      if (evaluationData.gamificationDelta?.newAchievements?.length) {
+        setAchievementUnlocks(evaluationData.gamificationDelta.newAchievements);
+        setShowAchievementModal(true);
+      }
       if (evaluationData.levelUpgrade?.shouldShowCelebration) {
         setLevelUpData(evaluationData.levelUpgrade);
         setShowLevelUpModal(true);
@@ -234,6 +242,11 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
             }}
           />
         )}
+        <AchievementUnlockModal
+          achievements={achievementUnlocks}
+          open={showAchievementModal}
+          onClose={() => setShowAchievementModal(false)}
+        />
       </>
     );
   }

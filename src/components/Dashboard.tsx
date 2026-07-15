@@ -21,7 +21,8 @@ import {
 import InstallPwaBanner from './InstallPwaBanner';
 import ProfileMenu from './ProfileMenu';
 import LevelUpCelebration from './LevelUpCelebration';
-import StatsAndAchievements from './StatsAndAchievements';
+import StatsAndAchievements, { type HubTab } from './StatsAndAchievements';
+import ProgressArenaCard from './gamification/ProgressArenaCard';
 import MesocycleGenerationLoader from './MesocycleGenerationLoader';
 import {
     DashboardEyebrow,
@@ -41,6 +42,7 @@ import type { ReadinessData, DayContext } from '../types/session';
 import { MIN_SESSION_GENERATION_DISPLAY_MS, waitMs } from '../utils/sessionGenerationContext';
 import { markSessionReviewed } from '../utils/sessionReviewContext';
 import { fetchGamificationSummary } from '../api/gamification';
+import type { GamificationSummary } from '../types/gamification';
 
 // ====================================================================
 
@@ -209,7 +211,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     
     // Estado para el modal de estadísticas
     const [showStatsModal, setShowStatsModal] = useState(false);
-    const [statsInitialSection, setStatsInitialSection] = useState<'stats' | 'celebrations'>('stats');
+    const [statsInitialTab, setStatsInitialTab] = useState<HubTab>('home');
+    const [gamificationSummary, setGamificationSummary] = useState<GamificationSummary | null>(null);
     
     // Estados para el modal de explicación del plan (NUEVO)
     const [showPlanExplanationModal, setShowPlanExplanationModal] = useState(false);
@@ -226,7 +229,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
     const [recentSessions, setRecentSessions] = useState<RecentSessionRow[]>([]);
     const [authToken, setAuthToken] = useState('');
-    const [lifetimeSessions, setLifetimeSessions] = useState<number | null>(null);
 
     // A. Suscripción a Firestore (Lógica inalterada)
     useEffect(() => {
@@ -260,7 +262,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         if (!authToken) return;
         void fetchGamificationSummary(authToken).then((summary) => {
             if (summary) {
-                setLifetimeSessions(summary.counters.lifetimeSessionsCompleted);
+                setGamificationSummary(summary);
             }
         });
     }, [authToken, userProfile?.lastWorkoutDate]);
@@ -710,8 +712,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         isEvaluationPending // <--- Usamos aquí
     } = dashboardState;
 
-    const openStatsModal = (section: 'stats' | 'celebrations' = 'stats') => {
-        setStatsInitialSection(section);
+    const openProgressHub = (tab: HubTab = 'home') => {
+        setStatsInitialTab(tab);
         setShowStatsModal(true);
     };
 
@@ -755,14 +757,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     </div>
                     <div className="flex items-center gap-0.5 shrink-0">
                         <DashboardIconButton
-                            onClick={() => openStatsModal('stats')}
-                            title="Estadísticas y logros"
+                            onClick={() => openProgressHub('home')}
+                            title="Arena FitGen"
                         >
                             <span className="relative">
                                 <Trophy className="w-4 h-4" />
-                                {lifetimeSessions != null && lifetimeSessions > 0 && (
+                                {(gamificationSummary?.counters.fitCoinsBalance ?? 0) > 0 && (
                                     <span className="absolute -top-2 -right-2 min-w-[1rem] h-4 px-1 rounded-full bg-lime-500 text-[9px] font-bold text-zinc-950 leading-4 text-center">
-                                        {lifetimeSessions > 99 ? '99+' : lifetimeSessions}
+                                        {gamificationSummary!.counters.fitCoinsBalance > 99
+                                            ? '99+'
+                                            : gamificationSummary!.counters.fitCoinsBalance}
                                     </span>
                                 )}
                             </span>
@@ -782,6 +786,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             </header>
 
             <main className="flex-1 flex flex-col min-h-0 px-6">
+                <div className="shrink-0 pb-4">
+                    <ProgressArenaCard
+                        fitCoins={gamificationSummary?.counters.fitCoinsBalance ?? 0}
+                        seasonPoints={gamificationSummary?.counters.seasonPoints ?? 0}
+                        currentStreak={gamificationSummary?.counters.currentStreakDays ?? 0}
+                        unlockedAchievements={gamificationSummary?.unlockedCount ?? 0}
+                        seasonId={gamificationSummary?.counters.currentSeasonId}
+                        onOpen={() => openProgressHub('home')}
+                    />
+                </div>
                 <section className="flex-1 flex items-center justify-center py-4 min-h-0">
                     {isEvaluationPending ? (
                         <DashboardHero
@@ -806,11 +820,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                             body="Buen trabajo. Descansa y deja que tu cuerpo se adapte antes de la próxima sesión."
                         >
                             <div className="flex flex-col gap-3 w-full max-w-sm mx-auto">
-                                <DashboardPrimaryButton onClick={() => openStatsModal('celebrations')}>
-                                    Ver resumen
+                                <DashboardPrimaryButton onClick={() => openProgressHub('sessions')}>
+                                    Ver tarjetas de sesión
                                 </DashboardPrimaryButton>
-                                <DashboardPrimaryButton variant="ghost" onClick={() => openStatsModal('stats')}>
-                                    Estadísticas y logros
+                                <DashboardPrimaryButton variant="ghost" onClick={() => openProgressHub('home')}>
+                                    Abrir Arena FitGen
                                 </DashboardPrimaryButton>
                             </div>
                         </DashboardHero>
@@ -1001,7 +1015,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         } : undefined,
                         profileData: userProfile.profileData,
                     }}
-                    initialSection={statsInitialSection}
+                    initialTab={statsInitialTab}
                     onClose={() => setShowStatsModal(false)}
                 />
             )}

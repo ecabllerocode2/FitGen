@@ -1,10 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import SessionCelebration, { type SessionCelebrationData } from './SessionCelebration';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import { renderShareCardCanvas } from '../utils/shareCard';
 import { pickMotivationalPhrase } from '../utils/motivationalPhrases';
+import AchievementUnlockModal, {
+  consumePendingAchievementUnlocks,
+} from './gamification/AchievementUnlockModal';
+import type { GamificationAchievementUnlock } from '../types/gamification';
 
 const STORAGE_KEY = 'fitgen.pendingCelebration';
 
@@ -35,6 +39,9 @@ export default function WorkoutCelebrationPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const uploadedRef = useRef(false);
+  const [achievementUnlocks, setAchievementUnlocks] = useState<GamificationAchievementUnlock[]>(
+    () => consumePendingAchievementUnlocks(),
+  );
 
   const statePayload = (location.state as PendingCelebration | null) ?? null;
   const payload = statePayload ?? readPendingCelebration();
@@ -84,12 +91,19 @@ export default function WorkoutCelebrationPage() {
   if (!payload) return null;
 
   return (
-    <SessionCelebration
-      data={payload.data}
-      onDone={() => {
-        clearPendingCelebration();
-        navigate('/', { replace: true });
-      }}
-    />
+    <>
+      <SessionCelebration
+        data={payload.data}
+        onDone={() => {
+          clearPendingCelebration();
+          navigate('/', { replace: true });
+        }}
+      />
+      <AchievementUnlockModal
+        achievements={achievementUnlocks}
+        open={achievementUnlocks.length > 0}
+        onClose={() => setAchievementUnlocks([])}
+      />
+    </>
   );
 }
