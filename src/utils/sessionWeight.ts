@@ -60,8 +60,5 @@ export function computeTotalWeightFromLogs(
 
 export function formatTotalWeightKg(kg: number | null | undefined): string | null {
   if (kg == null || kg <= 0) return null;
-  if (kg >= 1000) {
-    return `${(kg / 1000).toLocaleString('es-MX', { maximumFractionDigits: 1 })} t`;
-  }
   return `${kg.toLocaleString('es-MX')} kg`;
 }

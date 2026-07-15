@@ -59,6 +59,33 @@ function wrapText(
   return cursorY;
 }
 
+function wrapTextCentered(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  centerX: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+) {
+  const words = text.split(/\s+/);
+  let line = '';
+  let cursorY = y;
+  ctx.textAlign = 'center';
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, centerX, cursorY);
+      line = word;
+      cursorY += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  if (line) ctx.fillText(line, centerX, cursorY);
+  ctx.textAlign = 'left';
+  return cursorY;
+}
+
 function drawCoverImage(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
@@ -88,17 +115,84 @@ function drawBrandGradient(ctx: CanvasRenderingContext2D, width: number, height:
   ctx.fillRect(0, 0, width, height);
 }
 
-function drawPlainBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
+function drawDesignedBackground(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  aspect: ShareCardAspect,
+) {
   const bg = ctx.createLinearGradient(0, 0, width, height);
-  bg.addColorStop(0, '#18181b');
-  bg.addColorStop(0.55, '#09090b');
-  bg.addColorStop(1, '#0a0a0a');
+  bg.addColorStop(0, '#141416');
+  bg.addColorStop(0.5, '#09090b');
+  bg.addColorStop(1, '#050506');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.strokeStyle = 'rgba(132, 204, 22, 0.25)';
+  const glowTop = ctx.createRadialGradient(width * 0.85, height * 0.12, 0, width * 0.85, height * 0.12, width * 0.55);
+  glowTop.addColorStop(0, 'rgba(132, 204, 22, 0.18)');
+  glowTop.addColorStop(1, 'rgba(132, 204, 22, 0)');
+  ctx.fillStyle = glowTop;
+  ctx.fillRect(0, 0, width, height);
+
+  const glowBottom = ctx.createRadialGradient(width * 0.15, height * 0.88, 0, width * 0.15, height * 0.88, width * 0.45);
+  glowBottom.addColorStop(0, 'rgba(163, 230, 53, 0.1)');
+  glowBottom.addColorStop(1, 'rgba(163, 230, 53, 0)');
+  ctx.fillStyle = glowBottom;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = 'rgba(132, 204, 22, 0.22)';
   ctx.lineWidth = 1;
   ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
+
+  const ringY = aspect === '9:16' ? height * 0.38 : height * 0.42;
+  ctx.strokeStyle = 'rgba(132, 204, 22, 0.06)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(width / 2, ringY, width * 0.32, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawStatTile(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  value: string,
+  label: string,
+  accent = false,
+) {
+  ctx.fillStyle = 'rgba(24, 24, 27, 0.92)';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 14);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(63, 63, 70, 0.9)';
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = accent ? '#a3e635' : '#ffffff';
+  ctx.font = 'bold 20px system-ui, -apple-system, sans-serif';
+  ctx.fillText(value, x + w / 2, y + h / 2 - 2);
+  ctx.fillStyle = '#71717a';
+  ctx.font = '600 10px system-ui, -apple-system, sans-serif';
+  ctx.fillText(label, x + w / 2, y + h / 2 + 16);
+  ctx.textAlign = 'left';
+}
+
+function drawHeaderBadges(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  pad: number,
+  aspect: ShareCardAspect,
+) {
+  ctx.fillStyle = '#84cc16';
+  ctx.font = '700 11px system-ui, -apple-system, sans-serif';
+  ctx.fillText('FITGEN', pad, pad + 12);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(163, 230, 53, 0.85)';
+  ctx.font = '600 10px system-ui, -apple-system, sans-serif';
+  ctx.fillText(aspect === '9:16' ? 'STORY' : 'FEED', width - pad, pad + 12);
+  ctx.textAlign = 'left';
 }
 
 function formatCompletedLabel(iso?: string): string | null {
@@ -183,44 +277,92 @@ function drawBulletsDown(
   return y;
 }
 
-export async function renderShareCardCanvas(
+function renderDesignShareCard(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
   data: ShareCardData,
-  scale = 2,
-): Promise<string> {
-  const aspect = data.aspect ?? '4:5';
-  const { width, height } = DIMENSIONS[aspect];
-  const canvas = document.createElement('canvas');
-  canvas.width = width * scale;
-  canvas.height = height * scale;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas no disponible');
-  ctx.scale(scale, scale);
+  aspect: ShareCardAspect,
+) {
+  drawDesignedBackground(ctx, width, height, aspect);
+  const pad = 32;
+  const maxTextWidth = width - pad * 2;
+  drawHeaderBadges(ctx, width, pad, aspect);
 
-  if (data.photoDataUrl) {
-    try {
-      const photo = await loadImage(data.photoDataUrl);
-      drawCoverImage(ctx, photo, width, height);
-      drawBrandGradient(ctx, width, height);
-    } catch {
-      drawPlainBackground(ctx, width, height);
-    }
-  } else {
-    drawPlainBackground(ctx, width, height);
+  const dateLabel = formatCompletedLabel(data.completedAt);
+  const weightLabel = formatTotalWeightKg(data.totalWeightKg ?? null);
+  const centerY = aspect === '9:16' ? height * 0.36 : height * 0.34;
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#a3e635';
+  ctx.font = '700 10px system-ui, -apple-system, sans-serif';
+  ctx.fillText('SESIÓN COMPLETADA', width / 2, centerY - 56);
+
+  if (dateLabel) {
+    ctx.fillStyle = '#71717a';
+    ctx.font = '600 10px system-ui, -apple-system, sans-serif';
+    ctx.fillText(dateLabel.toUpperCase(), width / 2, centerY - 36);
   }
 
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
+  wrapTextCentered(ctx, data.sessionFocus, width / 2, centerY - 8, maxTextWidth, 34);
+
+  if (weightLabel) {
+    ctx.fillStyle = '#a3e635';
+    ctx.font = 'bold 42px system-ui, -apple-system, sans-serif';
+    ctx.fillText(weightLabel, width / 2, centerY + 72);
+    ctx.fillStyle = '#71717a';
+    ctx.font = '600 12px system-ui, -apple-system, sans-serif';
+    ctx.fillText('movidos en total', width / 2, centerY + 98);
+  }
+
+  const tilesY = weightLabel ? centerY + 130 : centerY + 48;
+  const gap = 10;
+  const tileW = (maxTextWidth - gap * 2) / 3;
+  const tileH = 64;
+  drawStatTile(ctx, pad, tilesY, tileW, tileH, data.durationLabel || '—', 'DURACIÓN', true);
+  drawStatTile(ctx, pad + tileW + gap, tilesY, tileW, tileH, String(data.exerciseCount), 'EJERCICIOS');
+  drawStatTile(ctx, pad + (tileW + gap) * 2, tilesY, tileW, tileH, String(data.totalSets), 'SERIES');
+
+  let belowY = tilesY + tileH + 24;
+  if (data.muscles?.length) {
+    ctx.fillStyle = '#a1a1aa';
+    ctx.font = '500 13px system-ui, -apple-system, sans-serif';
+    belowY = wrapTextCentered(
+      ctx,
+      data.muscles.slice(0, 4).join(' · '),
+      width / 2,
+      belowY,
+      maxTextWidth,
+      20,
+    ) + 16;
+  }
+
+  if (data.phrase) {
+    ctx.fillStyle = '#71717a';
+    ctx.font = 'italic 14px system-ui, -apple-system, sans-serif';
+    wrapTextCentered(ctx, `"${data.phrase}"`, width / 2, belowY, maxTextWidth - 16, 20);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(132, 204, 22, 0.9)';
+  ctx.font = '600 11px system-ui, -apple-system, sans-serif';
+  ctx.fillText('Entrenamiento completado con FitGen', width / 2, height - 24);
+  ctx.textAlign = 'left';
+}
+
+function renderPhotoOverlayShareCard(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  data: ShareCardData,
+  aspect: ShareCardAspect,
+) {
   const pad = 28;
   const maxTextWidth = width - pad * 2;
-  const panelStart = drawBottomScrim(ctx, width, height, aspect === '9:16' ? 0.48 : 0.45);
-
-  ctx.fillStyle = '#84cc16';
-  ctx.font = '700 11px system-ui, -apple-system, sans-serif';
-  ctx.fillText('FITGEN', pad, pad + 12);
-
-  ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(163, 230, 53, 0.85)';
-  ctx.font = '600 10px system-ui, -apple-system, sans-serif';
-  ctx.fillText(aspect === '9:16' ? 'STORY' : 'FEED', width - pad, pad + 12);
-  ctx.textAlign = 'left';
+  drawBottomScrim(ctx, width, height, aspect === '9:16' ? 0.48 : 0.45);
+  drawHeaderBadges(ctx, width, pad, aspect);
 
   const footerY = height - 22;
   ctx.fillStyle = 'rgba(132, 204, 22, 0.9)';
@@ -230,6 +372,7 @@ export async function renderShareCardCanvas(
   const dateLabel = formatCompletedLabel(data.completedAt);
   const weightLabel = formatTotalWeightKg(data.totalWeightKg ?? null);
   const bullets = buildBullets(data);
+  const panelStart = height * (aspect === '9:16' ? 0.48 : 0.45);
 
   ctx.font = 'bold 26px system-ui, -apple-system, sans-serif';
   const titleHeight = measureWrapText(ctx, data.sessionFocus, maxTextWidth, 32);
@@ -269,6 +412,38 @@ export async function renderShareCardCanvas(
     ctx.font = 'italic 13px system-ui, -apple-system, sans-serif';
     wrapText(ctx, data.phrase, pad, y + 16, maxTextWidth, 18);
   }
+}
+
+export async function renderShareCardCanvas(
+  data: ShareCardData,
+  scale = 2,
+): Promise<string> {
+  const aspect = data.aspect ?? '4:5';
+  const { width, height } = DIMENSIONS[aspect];
+  const canvas = document.createElement('canvas');
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas no disponible');
+  ctx.scale(scale, scale);
+
+  const hasPhoto = Boolean(data.photoDataUrl);
+
+  if (hasPhoto) {
+    try {
+      const photo = await loadImage(data.photoDataUrl!);
+      drawCoverImage(ctx, photo, width, height);
+      drawBrandGradient(ctx, width, height);
+    } catch {
+      drawDesignedBackground(ctx, width, height, aspect);
+      renderDesignShareCard(ctx, width, height, data, aspect);
+      return canvas.toDataURL('image/png');
+    }
+    renderPhotoOverlayShareCard(ctx, width, height, data, aspect);
+  } else {
+    drawDesignedBackground(ctx, width, height, aspect);
+    renderDesignShareCard(ctx, width, height, data, aspect);
+  }
 
   return canvas.toDataURL('image/png');
 }
@@ -277,7 +452,7 @@ export async function renderShareCardPreviewUrl(data: ShareCardData): Promise<st
   return renderShareCardCanvas(data, 2);
 }
 
-/** Sync legacy renderer — plain card without photo. */
+/** Sync legacy renderer — delegates to design-only card. */
 export function renderCelebrationCardCanvas(data: ShareCardData, scale = 2): string {
   const aspect = data.aspect ?? '4:5';
   const { width, height } = DIMENSIONS[aspect];
@@ -287,31 +462,8 @@ export function renderCelebrationCardCanvas(data: ShareCardData, scale = 2): str
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas no disponible');
   ctx.scale(scale, scale);
-  drawPlainBackground(ctx, width, height);
-
-  ctx.fillStyle = '#84cc16';
-  ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('FITGEN', 24, 36);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 24px system-ui, sans-serif';
-  ctx.fillText('¡Sesión completada!', 24, 72);
-
-  ctx.fillStyle = '#a1a1aa';
-  ctx.font = '14px system-ui, sans-serif';
-  if (data.phrase) wrapText(ctx, data.phrase, 24, 98, width - 48, 20);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '600 18px system-ui, sans-serif';
-  wrapText(ctx, data.sessionFocus, 24, 160, width - 48, 22);
-
-  const weightLabel = formatTotalWeightKg(data.totalWeightKg ?? null);
-  if (weightLabel) {
-    ctx.fillStyle = '#a3e635';
-    ctx.font = 'bold 20px system-ui, sans-serif';
-    ctx.fillText(weightLabel, 24, 210);
-  }
-
+  drawDesignedBackground(ctx, width, height, aspect);
+  renderDesignShareCard(ctx, width, height, data, aspect);
   return canvas.toDataURL('image/png');
 }
 
