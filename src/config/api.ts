@@ -10,11 +10,25 @@
  */
 export const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
+/** Optional — bypass Vercel Deployment Protection on preview backend (Settings → Deployment Protection). */
+const VERCEL_PROTECTION_BYPASS = import.meta.env.VITE_VERCEL_PROTECTION_BYPASS as
+  | string
+  | undefined;
+
+function protectionBypassHeaders(): Record<string, string> {
+  if (!VERCEL_PROTECTION_BYPASS) return {};
+  return {
+    'x-vercel-protection-bypass': VERCEL_PROTECTION_BYPASS,
+    'x-vercel-set-bypass-cookie': 'true',
+  };
+}
+
 // Log de debug para verificar la configuración
 console.log('🔧 API Configuration:', {
   mode: import.meta.env.MODE,
   backendUrl: API_BASE_URL,
-  env: import.meta.env.VITE_BACKEND_URL
+  env: import.meta.env.VITE_BACKEND_URL,
+  hasProtectionBypass: Boolean(VERCEL_PROTECTION_BYPASS),
 });
 
 /**
@@ -50,23 +64,26 @@ export const API_ENDPOINTS = {
  */
 export const createAuthHeaders = (token: string) => ({
   'Content-Type': 'application/json',
-  'Authorization': `Bearer ${token}`,
+  Authorization: `Bearer ${token}`,
+  ...protectionBypassHeaders(),
 });
 
 /**
  * Helper para realizar peticiones autenticadas
  */
 export const authenticatedFetch = async (
-  endpoint: string, 
-  token: string, 
-  options: RequestInit = {}
+  endpoint: string,
+  token: string,
+  options: RequestInit = {},
 ) => {
+  const mergedHeaders = {
+    ...createAuthHeaders(token),
+    ...(options.headers as Record<string, string> | undefined),
+  };
+
   return fetch(endpoint, {
     ...options,
-    headers: {
-      ...createAuthHeaders(token),
-      ...options.headers,
-    },
+    headers: mergedHeaders,
   });
 };
 

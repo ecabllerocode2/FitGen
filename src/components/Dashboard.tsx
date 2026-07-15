@@ -963,6 +963,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             {/* 📊 Modal de Estadísticas y Logros */}
             {showStatsModal && userProfile && (
                 <StatsAndAchievements
+                    userId={user.uid}
+                    seedSessions={recentSessions}
                     userProfile={{
                         createdAt: userProfile.createdAt ?? userProfile.lastWorkoutDate ?? new Date().toISOString(),
                         lastWorkoutDate: userProfile.lastWorkoutDate,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
-import { API_BASE_URL, API_ENDPOINTS, authenticatedFetch } from '../../config/api';
+import { API_ENDPOINTS, authenticatedFetch } from '../../config/api';
 import { 
   Play, 
   Pause, 
@@ -2096,13 +2096,9 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
          performanceData: { exercises }
        };
 
-       const response = await fetch(`${API_BASE_URL}/api/session/complete`, {
+       const response = await authenticatedFetch(API_ENDPOINTS.SESSION_COMPLETE, token, {
            method: 'POST',
-           headers: {
-               'Content-Type': 'application/json',
-               'Authorization': `Bearer ${token}`
-           },
-           body: JSON.stringify(payload)
+           body: JSON.stringify(payload),
        });
 
        if (!response.ok) {

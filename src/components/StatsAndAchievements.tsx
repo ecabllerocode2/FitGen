@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import { getAuth } from 'firebase/auth';
 import {
   Trophy,
   Target,
@@ -39,6 +38,8 @@ interface HistorySession {
 }
 
 interface StatsAndAchievementsProps {
+  userId: string;
+  seedSessions?: RecentSessionRow[];
   userProfile: {
     createdAt?: string;
     lastWorkoutDate?: string;
@@ -101,12 +102,16 @@ function sessionDate(session: HistorySession): Date | null {
 }
 
 const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
+  userId,
+  seedSessions = [],
   userProfile,
   onClose,
   initialSection = 'stats',
 }) => {
-  const [history, setHistory] = useState<HistorySession[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [history, setHistory] = useState<HistorySession[]>(() =>
+    seedSessions.filter((s) => s.completed !== false).map(mapRow),
+  );
+  const [loadingHistory, setLoadingHistory] = useState(seedSessions.length === 0);
   const [activeSection, setActiveSection] = useState<'stats' | 'celebrations'>(initialSection);
 
   useEffect(() => {
@@ -114,20 +119,31 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   }, [initialSection]);
 
   useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+
     const loadHistory = async () => {
       try {
-        const user = getAuth().currentUser;
-        if (!user) return;
-        const rows = await fetchRecentSessions(db, user.uid, 40);
+        const rows = await fetchRecentSessions(db, userId, 40);
+        if (cancelled) return;
         setHistory(rows.filter((s) => s.completed !== false).map(mapRow));
       } catch (err) {
         console.warn('No se pudo cargar historial:', err);
       } finally {
-        setLoadingHistory(false);
+        if (!cancelled) setLoadingHistory(false);
       }
     };
-    loadHistory();
-  }, []);
+
+    if (seedSessions.length > 0) {
+      setHistory(seedSessions.filter((s) => s.completed !== false).map(mapRow));
+      setLoadingHistory(false);
+    }
+
+    void loadHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, seedSessions]);
 
   const stats = useMemo(() => {
     const datedSessions = history
