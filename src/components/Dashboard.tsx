@@ -40,6 +40,7 @@ import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import type { ReadinessData, DayContext } from '../types/session';
 import { MIN_SESSION_GENERATION_DISPLAY_MS, waitMs } from '../utils/sessionGenerationContext';
 import { markSessionReviewed } from '../utils/sessionReviewContext';
+import { fetchGamificationSummary } from '../api/gamification';
 
 // ====================================================================
 
@@ -224,6 +225,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     const sessionGenerationStartedAt = useRef<number>(0);
 
     const [recentSessions, setRecentSessions] = useState<RecentSessionRow[]>([]);
+    const [authToken, setAuthToken] = useState('');
+    const [lifetimeSessions, setLifetimeSessions] = useState<number | null>(null);
 
     // A. Suscripción a Firestore (Lógica inalterada)
     useEffect(() => {
@@ -247,6 +250,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         if (!user) return;
         return subscribeRecentSessions(db, user.uid, setRecentSessions, 10);
     }, [user, db]);
+
+    useEffect(() => {
+        if (!user) return;
+        void user.getIdToken().then(setAuthToken);
+    }, [user]);
+
+    useEffect(() => {
+        if (!authToken) return;
+        void fetchGamificationSummary(authToken).then((summary) => {
+            if (summary) {
+                setLifetimeSessions(summary.counters.lifetimeSessionsCompleted);
+            }
+        });
+    }, [authToken, userProfile?.lastWorkoutDate]);
 
     useEffect(() => {
         if (!user || !userProfile?.currentSession) return;
@@ -741,7 +758,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                             onClick={() => openStatsModal('stats')}
                             title="Estadísticas y logros"
                         >
-                            <Trophy className="w-4 h-4" />
+                            <span className="relative">
+                                <Trophy className="w-4 h-4" />
+                                {lifetimeSessions != null && lifetimeSessions > 0 && (
+                                    <span className="absolute -top-2 -right-2 min-w-[1rem] h-4 px-1 rounded-full bg-lime-500 text-[9px] font-bold text-zinc-950 leading-4 text-center">
+                                        {lifetimeSessions > 99 ? '99+' : lifetimeSessions}
+                                    </span>
+                                )}
+                            </span>
                         </DashboardIconButton>
                         <ProfileMenu
                             userName={userName}
@@ -961,9 +985,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             )}
             
             {/* 📊 Modal de Estadísticas y Logros */}
-            {showStatsModal && userProfile && (
+            {showStatsModal && userProfile && authToken && (
                 <StatsAndAchievements
                     userId={user.uid}
+                    authToken={authToken}
                     seedSessions={recentSessions}
                     userProfile={{
                         createdAt: userProfile.createdAt ?? userProfile.lastWorkoutDate ?? new Date().toISOString(),

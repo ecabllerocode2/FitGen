@@ -2108,6 +2108,13 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
        
        const result = await response.json();
 
+       if (result.gamificationDelta?.newAchievements?.length) {
+         const titles = result.gamificationDelta.newAchievements
+           .map((a: { title: string }) => a.title)
+           .join(', ');
+         alert(`Logro desbloqueado: ${titles}`);
+       }
+
        if (result.weeklyAdjustment && Object.keys(result.weeklyAdjustment).length > 0) {
          const msgs = Object.entries(result.weeklyAdjustment)
            .map(([m, a]: [string, any]) => `${m}: ${a.message}`)

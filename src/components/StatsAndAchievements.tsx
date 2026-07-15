@@ -4,14 +4,11 @@ import {
   Target,
   Calendar,
   Flame,
-  Star,
   TrendingUp,
   Award,
   Dumbbell,
   CheckCircle2,
   ArrowLeft,
-  Crown,
-  Medal,
   Clock,
   Layers,
 } from 'lucide-react';
@@ -21,6 +18,9 @@ import { AppEyebrow } from './ui/AppPrimitives';
 import { fetchRecentSessions, type RecentSessionRow } from '../utils/recentSessions';
 import { db } from '../firebase';
 import { pickMotivationalPhraseForDate } from '../utils/motivationalPhrases';
+import { fetchGamificationSummary } from '../api/gamification';
+import type { AchievementView, GamificationSummary } from '../types/gamification';
+import { achievementIcon } from '../utils/achievementIcons';
 
 interface HistorySession {
   id: string;
@@ -39,6 +39,7 @@ interface HistorySession {
 
 interface StatsAndAchievementsProps {
   userId: string;
+  authToken: string;
   seedSessions?: RecentSessionRow[];
   userProfile: {
     createdAt?: string;
@@ -69,6 +70,19 @@ interface Achievement {
   unlockedDate?: string;
   progress?: number;
   target?: number;
+}
+
+function mapAchievementView(row: AchievementView): Achievement {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    icon: achievementIcon(row.id),
+    unlocked: row.unlocked,
+    unlockedDate: row.unlockedAt ?? undefined,
+    progress: row.progress,
+    target: row.target,
+  };
 }
 
 function mapRow(row: RecentSessionRow): HistorySession {
@@ -103,6 +117,7 @@ function sessionDate(session: HistorySession): Date | null {
 
 const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   userId,
+  authToken,
   seedSessions = [],
   userProfile,
   onClose,
@@ -112,6 +127,8 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
     seedSessions.filter((s) => s.completed !== false).map(mapRow),
   );
   const [loadingHistory, setLoadingHistory] = useState(seedSessions.length === 0);
+  const [loadingGamification, setLoadingGamification] = useState(true);
+  const [gamification, setGamification] = useState<GamificationSummary | null>(null);
   const [activeSection, setActiveSection] = useState<'stats' | 'celebrations'>(initialSection);
 
   useEffect(() => {
@@ -145,21 +162,47 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
     };
   }, [userId, seedSessions]);
 
+  useEffect(() => {
+    if (!authToken) return;
+    let cancelled = false;
+
+    const loadGamification = async () => {
+      setLoadingGamification(true);
+      try {
+        const summary = await fetchGamificationSummary(authToken);
+        if (!cancelled && summary) setGamification(summary);
+      } catch (err) {
+        console.warn('No se pudo cargar gamificación:', err);
+      } finally {
+        if (!cancelled) setLoadingGamification(false);
+      }
+    };
+
+    void loadGamification();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, userId]);
+
   const stats = useMemo(() => {
     const datedSessions = history
       .map((s) => ({ session: s, date: sessionDate(s) }))
       .filter((row): row is { session: HistorySession; date: Date } => row.date != null)
       .sort((a, b) => b.date.getTime() - a.date.getTime());
 
-    const totalSessions = datedSessions.length;
-
     const activeDayKeys = new Set(
       datedSessions.map(({ date }) => format(date, 'yyyy-MM-dd')),
     );
-    const activeDays = activeDayKeys.size;
 
-    let currentStreak = 0;
-    if (datedSessions.length > 0) {
+    const totalSessions =
+      gamification?.counters.lifetimeSessionsCompleted ?? datedSessions.length;
+
+    const activeDays =
+      gamification?.counters.lifetimeActiveDays ?? activeDayKeys.size;
+
+    let currentStreak =
+      gamification?.counters.currentStreakDays ?? 0;
+    if (!gamification && datedSessions.length > 0) {
       const uniqueDays = [...activeDayKeys].sort().reverse();
       const todayKey = format(new Date(), 'yyyy-MM-dd');
       const yesterdayKey = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
@@ -174,7 +217,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       }
     }
 
-    let weeksCompleted = 0;
+    const weeksCompleted = gamification?.counters.lifetimeWeeksPerfect ?? 0;
     let currentWeekProgress = 0;
     let currentWeekTarget = 0;
     let currentWeekMessage = '';
@@ -196,7 +239,6 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         const weekNum = microcycle.week;
         const planned = microcycle.sessions.length;
         const done = sessionsByWeek[weekNum] || 0;
-        if (done >= planned) weeksCompleted++;
 
         if (weekNum === mesocycle.currentWeek) {
           currentWeekProgress = done;
@@ -210,10 +252,8 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       });
     }
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentCount = datedSessions.filter(({ date }) => date >= thirtyDaysAgo).length;
-    const monthsCompleted = recentCount >= 14 ? 1 : 0;
+    const monthsCompleted =
+      (gamification?.counters.lifetimeSessionsCompleted ?? totalSessions) >= 14 ? 1 : 0;
 
     const lastSessionDate = datedSessions[0]?.date ?? null;
 
@@ -227,32 +267,28 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       currentWeekTarget,
       currentWeekMessage,
       lastSessionDate,
+      seasonPoints: gamification?.counters.seasonPoints ?? 0,
     };
-  }, [history, userProfile.currentMesocycle]);
+  }, [history, userProfile.currentMesocycle, gamification]);
 
   const achievements: Achievement[] = useMemo(() => {
-    const firstDate = history.length
-      ? [...history]
-          .map((s) => sessionDate(s))
-          .filter(Boolean)
-          .sort((a, b) => (a!.getTime() - b!.getTime()))[0]
-          ?.toISOString()
-      : undefined;
+    if (gamification?.achievements?.length) {
+      return gamification.achievements.map(mapAchievementView);
+    }
 
     return [
       {
         id: 'first-session',
         title: 'Primera sesión',
         description: 'Completaste tu primera sesión de entrenamiento',
-        icon: <Dumbbell className="w-7 h-7" />,
+        icon: achievementIcon('first-session'),
         unlocked: stats.totalSessions >= 1,
-        unlockedDate: firstDate,
       },
       {
         id: 'first-week',
         title: 'Primera semana',
         description: 'Completaste todas las sesiones programadas en una semana',
-        icon: <Calendar className="w-7 h-7" />,
+        icon: achievementIcon('first-week'),
         unlocked: stats.weeksCompleted >= 1,
         progress: stats.currentWeekProgress,
         target: stats.currentWeekTarget || 4,
@@ -261,7 +297,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         id: 'first-month',
         title: 'Primer mesociclo',
         description: 'Completaste al menos el 80% de sesiones en los últimos 30 días',
-        icon: <Trophy className="w-7 h-7" />,
+        icon: achievementIcon('first-month'),
         unlocked: stats.monthsCompleted >= 1,
         progress: Math.min(stats.totalSessions, 14),
         target: 14,
@@ -270,7 +306,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         id: 'streak-7',
         title: 'Racha de 7 días',
         description: 'Mantuviste una racha de 7 días activos',
-        icon: <Flame className="w-7 h-7" />,
+        icon: achievementIcon('streak-7'),
         unlocked: stats.currentStreak >= 7,
         progress: Math.min(stats.currentStreak, 7),
         target: 7,
@@ -279,7 +315,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         id: 'dedication',
         title: 'Dedicación',
         description: 'Completaste 10 sesiones de entrenamiento',
-        icon: <Star className="w-7 h-7" />,
+        icon: achievementIcon('dedication'),
         unlocked: stats.totalSessions >= 10,
         progress: Math.min(stats.totalSessions, 10),
         target: 10,
@@ -288,7 +324,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         id: 'warrior',
         title: 'Guerrero del fitness',
         description: 'Completaste 25 sesiones de entrenamiento',
-        icon: <Medal className="w-7 h-7" />,
+        icon: achievementIcon('warrior'),
         unlocked: stats.totalSessions >= 25,
         progress: Math.min(stats.totalSessions, 25),
         target: 25,
@@ -297,7 +333,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         id: 'legend',
         title: 'Leyenda del gimnasio',
         description: 'Completaste 50 sesiones de entrenamiento',
-        icon: <Crown className="w-7 h-7" />,
+        icon: achievementIcon('legend'),
         unlocked: stats.totalSessions >= 50,
         progress: Math.min(stats.totalSessions, 50),
         target: 50,
@@ -306,17 +342,19 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         id: 'consistency',
         title: 'Consistencia',
         description: 'Entrenaste en 10 días distintos',
-        icon: <TrendingUp className="w-7 h-7" />,
+        icon: achievementIcon('consistency'),
         unlocked: stats.activeDays >= 10,
         progress: Math.min(stats.activeDays, 10),
         target: 10,
       },
     ];
-  }, [stats, history]);
+  }, [stats, gamification]);
 
   const unlockedAchievements = achievements.filter((a) => a.unlocked);
   const lockedAchievements = achievements.filter((a) => !a.unlocked);
-  const nextGoal = lockedAchievements[0];
+  const nextGoal = gamification?.nextAchievement
+    ? mapAchievementView(gamification.nextAchievement)
+    : lockedAchievements[0];
   const motivationalMessage = pickMotivationalPhraseForDate(
     stats.lastSessionDate?.toISOString() ?? userProfile.lastWorkoutDate,
   );
@@ -492,7 +530,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
             </section>
           ) : (
             <>
-              {loadingHistory ? (
+              {loadingHistory || loadingGamification ? (
                 <p className="text-sm text-zinc-500 py-6 text-center">Calculando tu progreso…</p>
               ) : (
                 <>
@@ -521,6 +559,9 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                     {thisWeekCount > 0 && (
                       <p className="text-xs text-lime-400/90 mt-4 pt-4 border-t border-lime-500/10">
                         {thisWeekCount} {thisWeekCount === 1 ? 'sesión' : 'sesiones'} esta semana
+                        {stats.seasonPoints > 0 && (
+                          <span className="text-zinc-500"> · {stats.seasonPoints} pts temporada</span>
+                        )}
                       </p>
                     )}
                   </div>

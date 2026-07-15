@@ -54,6 +54,8 @@ export const API_ENDPOINTS = {
   // Usuario
   USER_PROFILE: `${API_BASE_URL}/api/user/profile`,
   USER_PROFILE_SAVE: `${API_BASE_URL}/api/profile/save`,
+
+  GAMIFICATION_SUMMARY: `${API_BASE_URL}/api/gamification/summary`,
   
   // Otros endpoints que puedas necesitar
   ANALYTICS: `${API_BASE_URL}/api/analytics`,
