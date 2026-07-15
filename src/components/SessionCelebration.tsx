@@ -3,6 +3,8 @@ import { Download, Share2, Sparkles } from 'lucide-react';
 import { AppPrimaryButton, AppShell } from './ui/AppPrimitives';
 import { downloadPngFromElement, sharePngFromElement } from '../utils/shareCard';
 
+import { pickMotivationalPhrase } from '../utils/motivationalPhrases';
+
 export interface SessionCelebrationData {
   sessionFocus: string;
   durationLabel: string;
@@ -11,14 +13,6 @@ export interface SessionCelebrationData {
   muscles?: string[];
 }
 
-const PHRASES = [
-  'La constancia construye lo que la motivación inicia.',
-  'Hoy diste un paso más hacia tu mejor versión.',
-  'Cada sesión cuenta. Esta también.',
-  'El progreso no grita, pero se nota.',
-  'Entrenaste con intención. Eso es lo que importa.',
-  'Tu yo del futuro te lo agradece.',
-];
 
 interface SessionCelebrationProps {
   data: SessionCelebrationData;
@@ -28,7 +22,7 @@ interface SessionCelebrationProps {
 export default function SessionCelebration({ data, onDone }: SessionCelebrationProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState<'download' | 'share' | null>(null);
-  const phrase = useMemo(() => PHRASES[Math.floor(Math.random() * PHRASES.length)], []);
+  const phrase = useMemo(() => pickMotivationalPhrase(), []);
 
   const muscleLine =
     data.muscles && data.muscles.length > 0

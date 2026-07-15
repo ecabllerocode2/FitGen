@@ -931,7 +931,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     userProfile={{
                         createdAt: userProfile.createdAt ?? userProfile.lastWorkoutDate ?? new Date().toISOString(),
                         lastWorkoutDate: userProfile.lastWorkoutDate,
-                        _history: userProfile._history as Record<string, { feedback?: { completedAt?: string } }> | undefined,
                         currentMesocycle: userProfile.currentMesocycle ? {
                             currentWeek: userProfile.currentMesocycle.currentWeek,
                             progress: userProfile.currentMesocycle.progress || 0,

@@ -21,9 +21,9 @@ export function isSessionForToday(
   const generatedAt = session.generatedAt ?? session.meta?.generatedAt;
   if (generatedAt) {
     try {
-      if (isSameDay(parseISO(generatedAt), today)) return true;
+      return isSameDay(parseISO(generatedAt), today);
     } catch {
-      // fall through to dayOfWeek check
+      return false;
     }
   }
 
