@@ -2,8 +2,13 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { type User, signOut, type Auth } from 'firebase/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Firestore, doc, onSnapshot, updateDoc } from 'firebase/firestore';
-import { format, differenceInCalendarWeeks, isSameDay, parseISO } from 'date-fns';
+import { format, differenceInCalendarWeeks } from 'date-fns';
 import { isSessionForToday } from '../utils/sessionDay';
+import {
+  completedScheduledSessionToday,
+  subscribeRecentSessions,
+  type RecentSessionRow,
+} from '../utils/recentSessions';
 import { es } from 'date-fns/locale';
 import {
     AlertCircle,
@@ -89,6 +94,8 @@ interface UserProfile {
     name?: string;
     createdAt?: string;
     lastWorkoutDate?: string;
+    lastCompletedDayOfWeek?: string;
+    lastCompletedWeekNumber?: number;
     _history?: Record<string, unknown>;
 }
 interface DashboardProps {
@@ -216,6 +223,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     const prevHasSessionRef = useRef<boolean | null>(null);
     const sessionGenerationStartedAt = useRef<number>(0);
 
+    const [recentSessions, setRecentSessions] = useState<RecentSessionRow[]>([]);
+
     // A. Suscripción a Firestore (Lógica inalterada)
     useEffect(() => {
         if (!user) return;
@@ -232,6 +241,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             setLoading(false);
         });
         return () => unsubscribe();
+    }, [user, db]);
+
+    useEffect(() => {
+        if (!user) return;
+        return subscribeRecentSessions(db, user.uid, setRecentSessions, 10);
     }, [user, db]);
 
     useEffect(() => {
@@ -337,11 +351,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         );
 
         const completedToday = Boolean(
-            userProfile.lastWorkoutDate &&
-            isSameDay(parseISO(userProfile.lastWorkoutDate), today) &&
             todaysSession &&
-            !isSessionReady &&
-            !isPlannedRest
+            !isPlannedRest &&
+            !sessionIsForToday &&
+            (
+                completedScheduledSessionToday(
+                    recentSessions,
+                    today,
+                    todayNameLower,
+                    currentWeekCalc,
+                ) ||
+                (
+                    userProfile.lastCompletedDayOfWeek?.toLowerCase() === todayNameLower &&
+                    (userProfile.lastCompletedWeekNumber == null ||
+                        userProfile.lastCompletedWeekNumber === currentWeekCalc) &&
+                    userProfile.lastWorkoutDate &&
+                    new Date(userProfile.lastWorkoutDate).toDateString() === today.toDateString()
+                )
+            ),
         );
 
         return {
@@ -362,7 +389,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             isEvaluationPending, // <--- AÑADIDO
             allMicrocycles: mesocycle.mesocyclePlan.microcycles // <--- AÑADIDO para vista de mesociclo completo
         };
-    }, [userProfile]);
+    }, [userProfile, recentSessions]);
 
     useEffect(() => {
         if (dashboardState?.currentWeek) {

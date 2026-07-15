@@ -19,7 +19,8 @@ import {
 import { format, differenceInDays, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppEyebrow } from './ui/AppPrimitives';
-import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
+import { fetchRecentSessions, type RecentSessionRow } from '../utils/recentSessions';
+import { db } from '../firebase';
 import { pickMotivationalPhraseForDate } from '../utils/motivationalPhrases';
 
 interface HistorySession {
@@ -34,14 +35,7 @@ interface HistorySession {
     muscles?: string[];
   };
   celebrationCardUrl?: string | null;
-  celebrationSummary?: {
-    sessionFocus?: string;
-    durationLabel?: string;
-    exerciseCount?: number;
-    totalSets?: number;
-    muscles?: string[];
-    completedAt?: string;
-  } | null;
+  celebrationSummary?: RecentSessionRow['celebrationSummary'];
 }
 
 interface StatsAndAchievementsProps {
@@ -76,6 +70,23 @@ interface Achievement {
   target?: number;
 }
 
+function mapRow(row: RecentSessionRow): HistorySession {
+  return {
+    id: row.id,
+    sessionFocus: row.sessionFocus ?? 'Entrenamiento',
+    completedAt: row.completedAt ?? row.archivedAt ?? null,
+    weekNumber: row.weekNumber,
+    summary: {
+      durationLabel: row.summary?.duracionEstimada ?? row.celebrationSummary?.durationLabel ?? '—',
+      exerciseCount: row.summary?.ejerciciosTotales ?? row.celebrationSummary?.exerciseCount ?? 0,
+      totalSets: row.summary?.seriesTotales ?? row.celebrationSummary?.totalSets ?? 0,
+      muscles: row.summary?.musculosTrabajos ?? row.celebrationSummary?.muscles ?? [],
+    },
+    celebrationCardUrl: row.celebrationCardUrl ?? null,
+    celebrationSummary: row.celebrationSummary ?? undefined,
+  };
+}
+
 function sessionDate(session: HistorySession): Date | null {
   const raw =
     session.completedAt ??
@@ -107,11 +118,8 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       try {
         const user = getAuth().currentUser;
         if (!user) return;
-        const token = await user.getIdToken();
-        const res = await authenticatedFetch(`${API_ENDPOINTS.SESSION_HISTORY}?limit=40`, token);
-        if (!res.ok) return;
-        const data = await res.json();
-        setHistory(data.sessions ?? []);
+        const rows = await fetchRecentSessions(db, user.uid, 40);
+        setHistory(rows.filter((s) => s.completed !== false).map(mapRow));
       } catch (err) {
         console.warn('No se pudo cargar historial:', err);
       } finally {
