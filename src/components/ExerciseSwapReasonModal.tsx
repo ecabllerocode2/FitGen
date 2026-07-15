@@ -8,8 +8,9 @@ interface ExerciseSwapReasonModalProps {
   open: boolean;
   exerciseName: string;
   equipmentTags?: string[];
+  showContinuityOption?: boolean;
   onClose: () => void;
-  onConfirm: (reason: SwapReason, excludeEquipment: boolean) => void;
+  onConfirm: (reason: SwapReason, excludeEquipment: boolean, useAsContinuity: boolean) => void;
   loading?: boolean;
 }
 
@@ -17,12 +18,14 @@ export default function ExerciseSwapReasonModal({
   open,
   exerciseName,
   equipmentTags = [],
+  showContinuityOption = false,
   onClose,
   onConfirm,
   loading = false,
 }: ExerciseSwapReasonModalProps) {
   const [reason, setReason] = useState<SwapReason>('preference');
   const [excludeEquipment, setExcludeEquipment] = useState(true);
+  const [useAsContinuity, setUseAsContinuity] = useState(true);
 
   if (!open) return null;
 
@@ -77,9 +80,26 @@ export default function ExerciseSwapReasonModal({
             />
             <span>
               <span className="block text-sm font-medium text-white">Prefiero otro ejercicio</span>
-              <span className="block text-xs text-zinc-500 mt-0.5">Solo para esta sesión</span>
+              <span className="block text-xs text-zinc-500 mt-0.5">Cambiar por uno equivalente</span>
             </span>
           </label>
+
+          {showContinuityOption && (
+            <label className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useAsContinuity}
+                onChange={(e) => setUseAsContinuity(e.target.checked)}
+                className="mt-0.5 accent-lime-500"
+              />
+              <span className="text-xs text-zinc-400 leading-relaxed">
+                <span className="block text-sm font-medium text-zinc-200 mb-0.5">
+                  Usar este ejercicio en continuidad
+                </span>
+                Las próximas sesiones de este foco usarán el nuevo ejercicio en lugar del original.
+              </span>
+            </label>
+          )}
 
           {reason === 'unavailable' && hasEquipment && (
             <label className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 cursor-pointer">
@@ -108,7 +128,7 @@ export default function ExerciseSwapReasonModal({
           <AppPrimaryButton
             type="button"
             disabled={loading}
-            onClick={() => onConfirm(reason, excludeEquipment)}
+            onClick={() => onConfirm(reason, excludeEquipment, useAsContinuity)}
           >
             {loading ? 'Buscando…' : 'Confirmar cambio'}
           </AppPrimaryButton>

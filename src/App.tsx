@@ -12,6 +12,7 @@ import ProfileOnboarding from './components/ProfileOnboarding';
 import Dashboard from './components/Dashboard';
 import WorkoutOverview from './components/WorkoutOverviewV3';
 import WorkoutPlayer from './components/WorkoutPlayer';
+import { canPlayCurrentSession } from './utils/sessionDay';
 import WorkoutCelebrationPage from './components/WorkoutCelebrationPage';
 import MesocycleEvaluate from './components/MesocycleEvaluate';
 import ExerciseExclusionsScreen, { type ExercisePreferences } from './components/ExerciseExclusionsScreen';
@@ -253,6 +254,8 @@ const App: FC = () => {
         !userProfile.currentMesocycle &&
         mesocycleRequiredPaths.includes(location.pathname);
 
+    const canPlaySession = userProfile ? canPlayCurrentSession(userProfile) : false;
+
     if (currentStatus === 'approved' && user && userProfile && authServices) {
         if (needsMesocycleRedirect) {
             return <Navigate to="/" replace />;
@@ -277,7 +280,7 @@ const App: FC = () => {
 
                 {/* 2. VISTA GENERAL DE ENTRENAMIENTO (Resumen) */}
                 <Route path="/workout/today" element={
-                    userProfile?.currentSession ? (
+                    canPlaySession ? (
                         <WorkoutOverview session={userProfile.currentSession as GeneratedSession} />
                     ) : (
                         <Navigate to="/" replace />
@@ -286,7 +289,7 @@ const App: FC = () => {
 
                 {/* 3. PLAYER DE ENTRENAMIENTO (Paso a paso) */}
                 <Route path="/workout/player" element={
-                    userProfile?.currentSession ? (
+                    canPlaySession ? (
                         <WorkoutPlayer session={userProfile.currentSession as GeneratedSession} />
                     ) : (
                         <Navigate to="/" replace />

@@ -4,6 +4,7 @@ import type { User } from 'firebase/auth';
 import { AlertTriangle } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import MesocycleGenerationLoader from './MesocycleGenerationLoader';
+import LevelUpCelebration from './LevelUpCelebration';
 import type { MesocycleGenerationProfile } from '../utils/splitGenerationContext';
 import {
   AppBackButton,
@@ -72,6 +73,13 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
   const [error, setError] = useState<string | null>(null);
   const [generateApiDone, setGenerateApiDone] = useState(false);
   const [loaderSequenceDone, setLoaderSequenceDone] = useState(false);
+  const [levelUpData, setLevelUpData] = useState<{
+    celebrationTitle: string;
+    celebrationMessage: string;
+    newLevel: string;
+    previousLevel: string;
+  } | null>(null);
+  const [showLevelUpModal, setShowLevelUpModal] = useState(false);
 
   const isBusy = useMemo(() => status === 'evaluating' || status === 'generating', [status]);
   const isLast = step === STEPS.length - 1;
@@ -80,9 +88,7 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
   useEffect(() => {
     if (status !== 'generating' || !generateApiDone || !loaderSequenceDone) return;
     setStatus('success');
-    const timer = setTimeout(() => navigate('/'), 1500);
-    return () => clearTimeout(timer);
-  }, [status, generateApiDone, loaderSequenceDone, navigate]);
+  }, [status, generateApiDone, loaderSequenceDone]);
 
   const handlePainSelect = (value: string) => {
     setPainAreas((prevAreas) => {
@@ -133,7 +139,11 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
         throw new Error(errorMessage);
       }
 
-      await evaluationResponse.json();
+      const evaluationData = await evaluationResponse.json();
+      if (evaluationData.levelUpgrade?.shouldShowCelebration) {
+        setLevelUpData(evaluationData.levelUpgrade);
+        setShowLevelUpModal(true);
+      }
 
       setStatus('generating');
       setLoaderSequenceDone(false);
@@ -198,18 +208,33 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
 
   if (status === 'success') {
     return (
-      <AppShell>
-        <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-          <AppHero
-            eyebrow="Mesociclo"
-            title="¡Nuevo bloque listo!"
-            body="Tu plan ya incluye los ajustes de volumen según tu feedback."
+      <>
+        <AppShell>
+          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+            <AppHero
+              eyebrow="Mesociclo"
+              title="¡Nuevo bloque listo!"
+              body="Tu plan ya incluye los ajustes de volumen según tu feedback."
+            />
+          </div>
+          <AppFixedFooter>
+            <AppPrimaryButton onClick={() => navigate('/')}>Ir al dashboard</AppPrimaryButton>
+          </AppFixedFooter>
+        </AppShell>
+
+        {showLevelUpModal && levelUpData && (
+          <LevelUpCelebration
+            isOpen={showLevelUpModal}
+            onClose={() => setShowLevelUpModal(false)}
+            data={{
+              celebrationTitle: levelUpData.celebrationTitle,
+              celebrationMessage: levelUpData.celebrationMessage,
+              newLevel: levelUpData.newLevel,
+              previousLevel: levelUpData.previousLevel,
+            }}
           />
-        </div>
-        <AppFixedFooter>
-          <AppPrimaryButton onClick={() => navigate('/')}>Ir al dashboard</AppPrimaryButton>
-        </AppFixedFooter>
-      </AppShell>
+        )}
+      </>
     );
   }
 

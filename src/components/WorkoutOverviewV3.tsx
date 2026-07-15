@@ -350,6 +350,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
     exerciseId: string,
     reason: SwapReason,
     excludeEquipment: boolean,
+    useAsContinuity: boolean,
     stationIndex: number,
     exerciseIndex: number,
   ) => {
@@ -359,7 +360,12 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
     const token = await user.getIdToken();
     const response = await authenticatedFetch(API_ENDPOINTS.SESSION_SWAP_EXERCISE, token, {
       method: 'POST',
-      body: JSON.stringify({ exerciseIdToReplace: exerciseId, reason, excludeEquipment }),
+      body: JSON.stringify({
+        exerciseIdToReplace: exerciseId,
+        reason,
+        excludeEquipment,
+        useAsContinuity,
+      }),
     });
     const data = await response.json();
     if (!response.ok || !data.success) {
@@ -379,7 +385,11 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
     }
   };
 
-  const handleConfirmSwap = async (reason: SwapReason, excludeEquipment: boolean) => {
+  const handleConfirmSwap = async (
+    reason: SwapReason,
+    excludeEquipment: boolean,
+    useAsContinuity: boolean,
+  ) => {
     if (!swapTarget) return;
     setSwappingId(swapTarget.exerciseId);
     try {
@@ -390,6 +400,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           swapTarget.exerciseId,
           reason,
           excludeEquipment,
+          useAsContinuity,
           swapTarget.stationIndex ?? 0,
           swapTarget.exerciseIndex ?? 0,
         );
@@ -596,6 +607,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
         open={swapTarget !== null}
         exerciseName={swapTarget?.name ?? ''}
         equipmentTags={swapTarget?.equipment ?? []}
+        showContinuityOption={swapTarget?.kind === 'main'}
         onClose={() => setSwapTarget(null)}
         onConfirm={handleConfirmSwap}
         loading={swappingId !== null}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { type User, signOut, type Auth } from 'firebase/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Firestore, doc, onSnapshot } from 'firebase/firestore';
+import { Firestore, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { format, differenceInCalendarWeeks, isSameDay, parseISO } from 'date-fns';
+import { isSessionForToday } from '../utils/sessionDay';
 import { es } from 'date-fns/locale';
 import {
     AlertCircle,
@@ -70,6 +71,10 @@ interface CurrentSessionData {
         generatedAt: string;
     };
     completed?: boolean;
+    generatedAt?: string;
+    dayOfWeek?: string;
+    weekNumber?: number;
+    sessionFocus?: string;
 }
 interface UserProfile {
     profileData?: {
@@ -230,6 +235,28 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     }, [user, db]);
 
     useEffect(() => {
+        if (!user || !userProfile?.currentSession) return;
+        const today = new Date();
+        const todayNameLower = format(today, 'eeee', { locale: es });
+        const mesocycle = userProfile.currentMesocycle;
+        let currentWeekCalc = 1;
+        if (mesocycle?.startDate) {
+            const startString = String(mesocycle.startDate).split('T')[0];
+            const start = new Date(`${startString}T00:00:00`);
+            if (!Number.isNaN(start.getTime())) {
+                currentWeekCalc = differenceInCalendarWeeks(today, start, { weekStartsOn: 1 }) + 1;
+            }
+        }
+        const stale =
+            !userProfile.currentSession.completed &&
+            !isSessionForToday(userProfile.currentSession, today, todayNameLower, currentWeekCalc);
+        if (!stale) return;
+        updateDoc(doc(db, 'users', user.uid), { currentSession: null }).catch((err) => {
+            console.warn('No se pudo descartar sesión vencida:', err);
+        });
+    }, [user, userProfile?.currentSession, userProfile?.currentMesocycle?.startDate, db]);
+
+    useEffect(() => {
         const notice = (location.state as { profileUpdate?: { message?: string } } | null)?.profileUpdate?.message;
         if (notice) {
             setProfileUpdateNotice(notice);
@@ -296,11 +323,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         const todayScheduleEntry = weeklySchedule.find((d: DayContext) => String(d.day).toLowerCase() === todayNameLower);
         const isPlannedRest = todayScheduleEntry ? (todayScheduleEntry.canTrain === false) : false;
 
-        let isSessionReady = false;
-        if (userProfile.currentSession && !userProfile.currentSession.completed) {
-            // Si hay una sesión guardada y no está completada, consideramos que está lista
-            isSessionReady = true;
-        }
+        const sessionIsForToday = isSessionForToday(
+            userProfile.currentSession,
+            today,
+            todayNameLower,
+            currentWeekCalc,
+        );
+        let isSessionReady = sessionIsForToday;
+        const hasStaleSession = Boolean(
+            userProfile.currentSession &&
+            !userProfile.currentSession.completed &&
+            !sessionIsForToday,
+        );
 
         const completedToday = Boolean(
             userProfile.lastWorkoutDate &&
@@ -320,6 +354,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             isPlannedRest,
             mesocycleGoal: mesocycle.mesocyclePlan.mesocycleGoal,
             isSessionReady,
+            hasStaleSession,
+            staleSessionFocus: hasStaleSession
+                ? userProfile.currentSession?.sessionFocus
+                : undefined,
             completedToday,
             isEvaluationPending, // <--- AÑADIDO
             allMicrocycles: mesocycle.mesocyclePlan.microcycles // <--- AÑADIDO para vista de mesociclo completo
@@ -435,6 +473,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
             const payload = {
                 userId: user.uid, // El backend espera 'userId'
+                referenceDate: new Date().toISOString(),
                 timezone,
                 
                 // Índices opcionales
@@ -614,6 +653,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         mesocycleGoal, 
         isSessionReady,
         completedToday,
+        hasStaleSession,
+        staleSessionFocus,
         isEvaluationPending // <--- Usamos aquí
     } = dashboardState;
 
@@ -730,13 +771,21 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                                     </DashboardPrimaryButton>
                                 </div>
                             ) : (
-                                <DashboardPrimaryButton
-                                    variant="ghost"
-                                    onClick={() => openFeedbackModal(false)}
-                                    disabled={generatingSession}
-                                >
-                                    Generar rutina
-                                </DashboardPrimaryButton>
+                                <div className="flex flex-col gap-3 w-full max-w-sm mx-auto">
+                                    {hasStaleSession && (
+                                        <p className="text-sm text-zinc-500 text-center leading-relaxed">
+                                            Tenías una rutina pendiente
+                                            {staleSessionFocus ? ` (${staleSessionFocus})` : ''} de otro día.
+                                            Genera la de hoy para continuar.
+                                        </p>
+                                    )}
+                                    <DashboardPrimaryButton
+                                        onClick={() => openFeedbackModal(false)}
+                                        disabled={generatingSession}
+                                    >
+                                        Generar rutina de hoy
+                                    </DashboardPrimaryButton>
+                                </div>
                             )}
                         </DashboardHero>
                     )}
@@ -877,10 +926,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             )}
             
             {/* 📊 Modal de Estadísticas y Logros */}
-            {showStatsModal && userProfile && userProfile.createdAt && (
+            {showStatsModal && userProfile && (
                 <StatsAndAchievements
                     userProfile={{
-                        createdAt: userProfile.createdAt,
+                        createdAt: userProfile.createdAt ?? userProfile.lastWorkoutDate ?? new Date().toISOString(),
                         lastWorkoutDate: userProfile.lastWorkoutDate,
                         _history: userProfile._history as Record<string, { feedback?: { completedAt?: string } }> | undefined,
                         currentMesocycle: userProfile.currentMesocycle ? {

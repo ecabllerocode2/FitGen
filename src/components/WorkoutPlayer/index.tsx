@@ -19,10 +19,12 @@ import {
   BookOpen,
   RefreshCw,
   RotateCcw,
+  List,
 } from 'lucide-react';
 import type { GeneratedSession } from '../../types/session';
 import { normalizeSession } from '../../utils/sessionNormalizer';
 import ExerciseSwapReasonModal, { type SwapReason } from '../ExerciseSwapReasonModal';
+import WorkoutSessionPlanModal from '../WorkoutSessionPlanModal';
 import { storePendingCelebration } from '../WorkoutCelebrationPage';
 import type { SessionCelebrationData } from '../SessionCelebration';
 import {
@@ -303,6 +305,10 @@ const getExerciseDescription = (ex: FlexibleExercise): string | undefined => {
 
 // Detectar si el ejercicio tiene duración en tiempo (no reps)
 const getExerciseDurationInSeconds = (ex: FlexibleExercise): number | null => {
+  if ((ex as any).isRampSet) return null;
+  const repsField = ex.reps ?? ex.prescripcion?.reps;
+  if (repsField && !ex.duracion && !ex.tiempo) return null;
+
   const duracion = ex.duracion || ex.tiempo || ex.prescripcion?.repsOTiempo;
   if (!duracion || typeof duracion !== 'string') return null;
   
@@ -705,6 +711,7 @@ interface RestScreenProps {
     weightPlaceholder?: string;
   } | null;
   onLogSubmit: (data: SetLog) => void;
+  onOpenPlan?: () => void;
 }
 
 const RestScreen: React.FC<RestScreenProps> = ({
@@ -717,12 +724,14 @@ const RestScreen: React.FC<RestScreenProps> = ({
   alarmActive,
   onDismissAlarm,
   pendingLogContext,
-  onLogSubmit
+  onLogSubmit,
+  onOpenPlan,
 }) => {
   const [weight, setWeight] = useState<string>('');
   const [reps, setReps] = useState<string>('');
   const [rir, setRir] = useState<string>('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const defaultsRef = useRef({ reps: '', weight: '', rir: '' });
 
   useEffect(() => {
     if (!pendingLogContext) {
@@ -730,24 +739,47 @@ const RestScreen: React.FC<RestScreenProps> = ({
       return;
     }
     setHasSubmitted(false);
-    setReps(pendingLogContext.defaultReps?.toString() ?? '');
-    setWeight(
+    const defaultReps = pendingLogContext.defaultReps?.toString() ?? '';
+    const defaultWeight =
       pendingLogContext.defaultWeight != null
         ? String(pendingLogContext.defaultWeight)
-        : pendingLogContext.weightPlaceholder ?? '',
-    );
+        : pendingLogContext.weightPlaceholder ?? '';
+    defaultsRef.current = { reps: defaultReps, weight: defaultWeight, rir: '' };
+    setReps(defaultReps);
+    setWeight(defaultWeight);
     setRir('');
   }, [pendingLogContext]);
 
+  const clearIfDefault = (
+    field: 'reps' | 'weight' | 'rir',
+    value: string,
+    setter: (v: string) => void,
+  ) => {
+    if (value === defaultsRef.current[field]) setter('');
+  };
+
+  const resolveFieldValue = (
+    field: 'reps' | 'weight' | 'rir',
+    value: string,
+    fallback: string | number | null | undefined,
+  ) => {
+    if (value !== '') {
+      const parsed = field === 'weight' ? parseFloat(value) : parseInt(value, 10);
+      return Number.isNaN(parsed) ? fallback : parsed;
+    }
+    if (fallback == null || fallback === '') return fallback;
+    return typeof fallback === 'number' ? fallback : parseInt(String(fallback), 10);
+  };
+
   const submitWithDefaults = () => {
     if (!pendingLogContext) return true;
-    const repsNum = parseInt(reps, 10);
+    const repsNum = resolveFieldValue('reps', reps, pendingLogContext.defaultReps) as number;
     let weightNum: number | null = null;
     if (!pendingLogContext.isBodyweight) {
-      weightNum = weight !== '' ? parseFloat(weight) : pendingLogContext.defaultWeight ?? null;
+      weightNum = resolveFieldValue('weight', weight, pendingLogContext.defaultWeight ?? null) as number | null;
     }
     onLogSubmit({
-      reps: Number.isNaN(repsNum) ? pendingLogContext.defaultReps : repsNum,
+      reps: typeof repsNum === 'number' && !Number.isNaN(repsNum) ? repsNum : pendingLogContext.defaultReps,
       weight: weightNum,
       rir: pendingLogContext.isLastSet && rir !== '' ? parseInt(rir, 10) : undefined,
     });
@@ -758,17 +790,15 @@ const RestScreen: React.FC<RestScreenProps> = ({
   const validateAndSubmit = () => {
      if (!pendingLogContext) return true;
      
-     if (!reps && reps !== '0') {
+     if (!reps && reps !== '0' && pendingLogContext.defaultReps == null) {
          alert('Por favor indica las repeticiones.');
          return false;
      }
 
-     if (pendingLogContext.isTimed && !/^\d+$/.test(reps)) {
+     if (pendingLogContext.isTimed && reps !== '' && !/^\d+$/.test(reps)) {
         alert('Por favor indica la duración en segundos (solo números).');
         return false;
      }
-
-     const repsNum = parseInt(reps, 10);
      
      let weightNum: number | null = null;
      if (!pendingLogContext.isBodyweight) {
@@ -776,7 +806,7 @@ const RestScreen: React.FC<RestScreenProps> = ({
             alert('Por favor indica el peso usado.');
             return false;
         }
-        weightNum = weight !== '' ? parseFloat(weight) : pendingLogContext.defaultWeight ?? null;
+        weightNum = resolveFieldValue('weight', weight, pendingLogContext.defaultWeight ?? null) as number | null;
      }
 
      let rirNum: number | undefined = undefined;
@@ -785,11 +815,11 @@ const RestScreen: React.FC<RestScreenProps> = ({
             alert('Por favor indica el RIR de la última serie.');
             return false;
         }
-        rirNum = parseInt(rir, 10);
+        rirNum = rir !== '' ? parseInt(rir, 10) : undefined;
      }
 
      onLogSubmit({
-       reps: repsNum,
+       reps: resolveFieldValue('reps', reps, pendingLogContext.defaultReps) as number,
        weight: weightNum,
        rir: rirNum
      });
@@ -834,6 +864,7 @@ const RestScreen: React.FC<RestScreenProps> = ({
                    <input 
                      type="number" 
                      value={weight}
+                     onFocus={() => clearIfDefault('weight', weight, setWeight)}
                      onChange={e => setWeight(e.target.value)}
                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-center text-white font-semibold focus:border-lime-500/50 outline-none"
                      placeholder={pendingLogContext.weightPlaceholder || 'kg'}
@@ -845,6 +876,7 @@ const RestScreen: React.FC<RestScreenProps> = ({
                    <input 
                      type="number" 
                      value={reps}
+                     onFocus={() => clearIfDefault('reps', reps, setReps)}
                      onChange={e => setReps(e.target.value)}
                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-center text-white font-semibold focus:border-lime-500/50 outline-none"
                    />
@@ -912,6 +944,16 @@ const RestScreen: React.FC<RestScreenProps> = ({
       <div className="text-center w-full max-w-sm">
         <AppEyebrow>Descanso</AppEyebrow>
         <p className="text-sm text-zinc-500 mt-3">Recupera antes de la siguiente serie</p>
+        {onOpenPlan && (
+          <button
+            type="button"
+            onClick={onOpenPlan}
+            className="mt-3 inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-white transition-colors"
+          >
+            <List className="w-4 h-4" />
+            Ver rutina completa
+          </button>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center w-full">
@@ -1016,6 +1058,7 @@ interface ExerciseScreenProps {
   onPrescribedWeightChange?: (kg: number | null) => void;
   onSwap?: () => void;
   isSwapping?: boolean;
+  onOpenPlan?: () => void;
 }
 
 function parsePrescribedKg(ex: FlexibleExercise): number | null {
@@ -1058,10 +1101,12 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   onPrescribedWeightChange,
   onSwap,
   isSwapping = false,
+  onOpenPlan,
 }) => {
-  const [showDescription, setShowDescription] = useState(false);
+  const [showDescription, setShowDescription] = useState(true);
   const [activeTooltip, setActiveTooltip] = useState<'peso' | null>(null);
   const [localWeight, setLocalWeight] = useState('');
+  const defaultWeightRef = useRef('');
   
   const name = getExerciseName(exercise);
   const corrections = getExerciseCorrections(exercise);
@@ -1074,7 +1119,9 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
 
   useEffect(() => {
     const initial = prescribedWeightKg ?? parsedWeight;
-    setLocalWeight(initial != null ? String(initial) : '');
+    const initialStr = initial != null ? String(initial) : '';
+    defaultWeightRef.current = initialStr;
+    setLocalWeight(initialStr);
   }, [exercise.id, prescribedWeightKg, parsedWeight]);
 
   const phaseLabels: Record<string, string> = {
@@ -1093,6 +1140,16 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
           </button>
           
           <div className="flex items-center gap-2">
+            {onOpenPlan && (
+              <button
+                type="button"
+                onClick={onOpenPlan}
+                className="p-2 rounded-full hover:bg-zinc-800/80 transition-colors"
+                aria-label="Ver rutina completa"
+              >
+                <List className="w-4 h-4 text-zinc-500" />
+              </button>
+            )}
             {type === 'warmup' && onSwap && (
               <button
                 type="button"
@@ -1153,10 +1210,20 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
                   step="0.5"
                   min="0"
                   value={localWeight}
+                  onFocus={() => {
+                    if (localWeight === defaultWeightRef.current) setLocalWeight('');
+                  }}
                   onChange={(e) => {
                     setLocalWeight(e.target.value);
                     const n = parseFloat(e.target.value);
                     onPrescribedWeightChange?.(Number.isNaN(n) ? null : n);
+                  }}
+                  onBlur={() => {
+                    if (!localWeight && defaultWeightRef.current) {
+                      setLocalWeight(defaultWeightRef.current);
+                      const n = parseFloat(defaultWeightRef.current);
+                      onPrescribedWeightChange?.(Number.isNaN(n) ? null : n);
+                    }
                   }}
                   placeholder="kg"
                   className="w-24 bg-zinc-900/80 border border-zinc-700 rounded-xl px-3 py-2 text-2xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-lime-500/50"
@@ -1310,11 +1377,15 @@ const buildCelebrationData = (session: GeneratedSession): SessionCelebrationData
 const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, onComplete, onExit }) => {
   const navigate = useNavigate();
   const [session, setSession] = useState(() => normalizeSession(initialSession) || initialSession);
-  const [swappingWarmup, setSwappingWarmup] = useState(false);
+  const [swappingExerciseId, setSwappingExerciseId] = useState<string | null>(null);
+  const [showSessionPlan, setShowSessionPlan] = useState(false);
   const [swapTarget, setSwapTarget] = useState<{
     exerciseId: string;
     name: string;
     equipment: string[];
+    scope: 'warmup' | 'main';
+    stationIndex?: number;
+    exerciseIndex?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -1884,25 +1955,82 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
     if (currentExercise?.type !== 'warmup') return;
     const ex = currentExercise.exercise;
     setSwapTarget({
-      exerciseId: ex.id,
+      exerciseId: ex.id ?? (ex as any).exerciseId ?? '',
       name: getExerciseName(ex),
       equipment: Array.isArray(ex.equipo) ? ex.equipo : [],
+      scope: 'warmup',
     });
   }, [currentExercise]);
 
-  const handleConfirmWarmupSwap = async (reason: SwapReason, excludeEquipment: boolean) => {
+  const handlePlanSwapExercise = useCallback((
+    exerciseId: string,
+    name: string,
+    stationIndex: number,
+    exerciseIndex: number,
+  ) => {
+    const mainBlocks = getMainBlocks();
+    const ex = mainBlocks[stationIndex]?.ejercicios?.[exerciseIndex] as FlexibleExercise | undefined;
+    setSwapTarget({
+      exerciseId,
+      name,
+      equipment: Array.isArray(ex?.equipo) ? ex.equipo : [],
+      scope: 'main',
+      stationIndex,
+      exerciseIndex,
+    });
+  }, [getMainBlocks]);
+
+  const refreshCurrentExerciseFromSession = useCallback((
+    updatedSession: GeneratedSession,
+    replacedId: string,
+  ) => {
+    if (!currentExercise) return;
+    const normalized = normalizeSession(updatedSession) || updatedSession;
+
+    if (currentExercise.type === 'warmup') {
+      const idx = warmupIndex;
+      const updated = normalized.warmup?.[idx] as FlexibleExercise | undefined;
+      if (updated && (updated.id === replacedId || currentExercise.exercise.id === replacedId)) {
+        setCurrentExercise({ type: 'warmup', exercise: updated });
+      }
+      return;
+    }
+
+    if (currentExercise.type === 'main') {
+      const blocks = (normalized.mainBlock as any)?.bloques ?? [];
+      const stationIdx = currentExercise.stationIndex ?? 0;
+      const exIdx = currentExercise.exerciseIndex ?? mainExerciseIndex;
+      const updated = blocks[stationIdx]?.ejercicios?.[exIdx] as FlexibleExercise | undefined;
+      if (updated) {
+        setCurrentExercise({
+          ...currentExercise,
+          exercise: updated,
+        });
+      }
+    }
+  }, [currentExercise, warmupIndex, mainExerciseIndex]);
+
+  const handleConfirmSwap = async (
+    reason: SwapReason,
+    excludeEquipment: boolean,
+    useAsContinuity: boolean,
+  ) => {
     if (!swapTarget) return;
-    setSwappingWarmup(true);
+    setSwappingExerciseId(swapTarget.exerciseId);
     try {
       const user = getAuth().currentUser;
       if (!user) throw new Error('Error de autenticación');
       const token = await user.getIdToken();
-      const response = await authenticatedFetch(API_ENDPOINTS.SESSION_SWAP_WARMUP, token, {
+      const endpoint = swapTarget.scope === 'warmup'
+        ? API_ENDPOINTS.SESSION_SWAP_WARMUP
+        : API_ENDPOINTS.SESSION_SWAP_EXERCISE;
+      const response = await authenticatedFetch(endpoint, token, {
         method: 'POST',
         body: JSON.stringify({
           exerciseIdToReplace: swapTarget.exerciseId,
           reason,
           excludeEquipment,
+          useAsContinuity: swapTarget.scope === 'main' ? useAsContinuity : false,
         }),
       });
       const data = await response.json();
@@ -1910,17 +2038,15 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
         throw new Error(data.error ?? 'No se encontró alternativa');
       }
       if (data.session) {
-        setSession(normalizeSession(data.session) || (data.session as GeneratedSession));
-        const updated = (normalizeSession(data.session) || data.session as GeneratedSession).warmup?.[warmupIndex] as FlexibleExercise | undefined;
-        if (updated) {
-          setCurrentExercise({ type: 'warmup', exercise: updated });
-        }
+        const normalized = normalizeSession(data.session) || (data.session as GeneratedSession);
+        setSession(normalized);
+        refreshCurrentExerciseFromSession(normalized, swapTarget.exerciseId);
       }
       setSwapTarget(null);
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Error al cambiar ejercicio');
     } finally {
-      setSwappingWarmup(false);
+      setSwappingExerciseId(null);
     }
   };
 
@@ -2058,6 +2184,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
           onDismissAlarm={handleDismissAlarm}
           pendingLogContext={pendingLogContext}
           onLogSubmit={handleLogSubmit}
+          onOpenPlan={() => setShowSessionPlan(true)}
         />
       ) : currentExercise ? (
         <ExerciseScreen
@@ -2088,7 +2215,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
             }
           }}
           onSwap={currentExercise.type === 'warmup' ? handleWarmupSwapRequest : undefined}
-          isSwapping={swappingWarmup}
+          isSwapping={swappingExerciseId === currentExercise.exercise.id}
+          onOpenPlan={() => setShowSessionPlan(true)}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center">
@@ -2103,10 +2231,20 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
       open={swapTarget !== null}
       exerciseName={swapTarget?.name ?? ''}
       equipmentTags={swapTarget?.equipment ?? []}
+      showContinuityOption={swapTarget?.scope === 'main'}
       onClose={() => setSwapTarget(null)}
-      onConfirm={handleConfirmWarmupSwap}
-      loading={swappingWarmup}
+      onConfirm={handleConfirmSwap}
+      loading={swappingExerciseId !== null}
     />
+
+    {showSessionPlan && (
+      <WorkoutSessionPlanModal
+        session={session}
+        onClose={() => setShowSessionPlan(false)}
+        onSwapExercise={handlePlanSwapExercise}
+        swappingId={swappingExerciseId}
+      />
+    )}
     </>
   );
 };

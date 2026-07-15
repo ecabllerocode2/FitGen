@@ -81,30 +81,30 @@ export default function SessionCelebration({ data, onDone }: SessionCelebrationP
           </div>
 
           <p className="text-2xl font-bold text-white leading-snug mb-2">¡Sesión completada!</p>
-          <p className="text-sm text-zinc-400 leading-relaxed mb-6">{phrase}</p>
+          <p className="text-sm text-zinc-400 leading-relaxed mb-6" data-celebration-phrase>{phrase}</p>
 
           <div className="h-px bg-zinc-800 mb-5" />
 
           <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 mb-1">Hoy</p>
-          <p className="text-lg font-semibold text-white mb-4">{data.sessionFocus}</p>
+          <p className="text-lg font-semibold text-white mb-4" data-celebration-focus>{data.sessionFocus}</p>
 
           <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="rounded-2xl bg-zinc-900/80 ring-1 ring-zinc-800/80 px-3 py-3 text-center">
-              <p className="text-lg font-bold text-lime-400 tabular-nums">{data.durationLabel}</p>
+              <p className="text-lg font-bold text-lime-400 tabular-nums" data-celebration-stat>{data.durationLabel}</p>
               <p className="text-[10px] text-zinc-500 mt-0.5">duración</p>
             </div>
             <div className="rounded-2xl bg-zinc-900/80 ring-1 ring-zinc-800/80 px-3 py-3 text-center">
-              <p className="text-lg font-bold text-white tabular-nums">{data.exerciseCount}</p>
+              <p className="text-lg font-bold text-white tabular-nums" data-celebration-stat>{data.exerciseCount}</p>
               <p className="text-[10px] text-zinc-500 mt-0.5">ejercicios</p>
             </div>
             <div className="rounded-2xl bg-zinc-900/80 ring-1 ring-zinc-800/80 px-3 py-3 text-center">
-              <p className="text-lg font-bold text-white tabular-nums">{data.totalSets}</p>
+              <p className="text-lg font-bold text-white tabular-nums" data-celebration-stat>{data.totalSets}</p>
               <p className="text-[10px] text-zinc-500 mt-0.5">series</p>
             </div>
           </div>
 
           {muscleLine && (
-            <p className="text-xs text-zinc-500 text-center leading-relaxed">{muscleLine}</p>
+            <p className="text-xs text-zinc-500 text-center leading-relaxed" data-celebration-muscles>{muscleLine}</p>
           )}
         </div>
 

@@ -16,6 +16,9 @@ function mapExerciseFields(ex: any) {
     sets: ex.sets,
     reps: ex.repRange ?? ex.reps,
     restSeconds: ex.restSeconds,
+    descripcion: ex.descripcion,
+    correcciones: ex.correcciones,
+    instrucciones: ex.instrucciones,
     loadMode: ex.loadMode,
     isBodyweight: ex.isBodyweight ?? ex.loadMode === 'bodyweight',
     prescribedLoadKg: ex.prescribedLoadKg,
@@ -115,13 +118,17 @@ export function normalizeSession(raw: any): GeneratedSession | null {
       ...item,
       id: item.id ?? item.exerciseId,
       nombre: item.nombre ?? item.name,
-      duracion: item.duracion ?? (item.durationSeconds ? `${item.durationSeconds} seg` : item.reps),
+      duracion: item.isRampSet
+        ? undefined
+        : item.duracion ?? (item.durationSeconds ? `${item.durationSeconds} seg` : item.reps),
       faseRAMP: item.faseRAMP ?? item.phase,
       patronMovimiento: item.patronMovimiento ?? item.movementPattern,
       imageUrl: item.imageUrl ?? item.url_img_0 ?? null,
       imageUrl2: item.imageUrl2 ?? item.url_img_1 ?? null,
       url_img_0: item.url_img_0 ?? item.imageUrl ?? null,
       url_img_1: item.url_img_1 ?? item.imageUrl2 ?? null,
+      descripcion: item.descripcion ?? item.instrucciones,
+      correcciones: item.correcciones,
     }));
   }
 

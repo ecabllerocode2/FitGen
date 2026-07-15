@@ -113,9 +113,15 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   const stats = useMemo(() => {
     const history = userProfile._history || {};
     const historyArray = Object.values(history);
-    const totalSessions = historyArray.length;
-    const createdDate = parseISO(userProfile.createdAt);
-    const daysSinceJoined = differenceInDays(new Date(), createdDate);
+    const celebrationSessions = celebrations.map((c) => ({
+      feedback: { completedAt: c.celebrationSummary.completedAt ?? new Date().toISOString() },
+    }));
+    const allSessions = historyArray.length > 0 ? historyArray : celebrationSessions;
+    const totalSessions = Math.max(historyArray.length, celebrations.length);
+    const createdDate = userProfile.createdAt
+      ? parseISO(userProfile.createdAt)
+      : new Date();
+    const daysSinceJoined = Math.max(0, differenceInDays(new Date(), createdDate));
     
     // Calcular racha actual
     let currentStreak = 0;
@@ -124,7 +130,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       const daysSinceLastWorkout = differenceInDays(new Date(), lastWorkout);
       if (daysSinceLastWorkout <= 2) {
         // Contar sesiones consecutivas
-        const sortedSessions = historyArray
+        const sortedSessions = allSessions
           .sort((a, b) => 
             new Date(b.feedback?.completedAt || 0).getTime() - 
             new Date(a.feedback?.completedAt || 0).getTime()
@@ -163,7 +169,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         // Agrupar sesiones por semana
         const sessionsByWeek: Record<number, number> = {};
         
-        historyArray.forEach((session) => {
+        allSessions.forEach((session) => {
           const sessionDate = session.feedback?.completedAt 
             ? parseISO(session.feedback.completedAt) 
             : null;
@@ -209,7 +215,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const recentSessions = historyArray.filter((session) => {
+    const recentSessions = allSessions.filter((session) => {
       const sessionDate = session.feedback?.completedAt 
         ? parseISO(session.feedback.completedAt) 
         : null;
@@ -235,13 +241,15 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       currentWeekTarget,
       currentWeekMessage,
     };
-  }, [userProfile]);
+  }, [userProfile, celebrations]);
 
   // Definir logros/insignias
   const achievements: Achievement[] = useMemo(() => {
-    const firstSessionDate = userProfile._history 
-      ? Object.values(userProfile._history)[0]?.feedback?.completedAt || undefined
-      : undefined;
+    const firstSessionDate =
+      celebrations[celebrations.length - 1]?.celebrationSummary.completedAt ??
+      (userProfile._history
+        ? Object.values(userProfile._history)[0]?.feedback?.completedAt
+        : undefined);
 
     return [
       {
@@ -314,7 +322,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         target: 30,
       },
     ];
-  }, [stats, userProfile._history]);
+  }, [stats, userProfile._history, celebrations]);
 
   const unlockedAchievements = achievements.filter(a => a.unlocked);
   const lockedAchievements = achievements.filter(a => !a.unlocked);
