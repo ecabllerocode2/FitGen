@@ -9,8 +9,6 @@ import {
   Dumbbell,
   CheckCircle2,
   ArrowLeft,
-  Clock,
-  Layers,
 } from 'lucide-react';
 import { format, differenceInDays, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -21,6 +19,13 @@ import { pickMotivationalPhraseForDate } from '../utils/motivationalPhrases';
 import { fetchGamificationSummary } from '../api/gamification';
 import type { AchievementView, GamificationSummary } from '../types/gamification';
 import { achievementIcon } from '../utils/achievementIcons';
+import {
+  downloadCelebrationPng,
+  shareCelebrationPng,
+  renderCelebrationCardCanvas,
+  isCelebrationCardExpired,
+  type CelebrationCardSnapshot,
+} from '../utils/shareCard';
 
 interface HistorySession {
   id: string;
@@ -34,6 +39,7 @@ interface HistorySession {
     muscles?: string[];
   };
   celebrationCardUrl?: string | null;
+  celebrationCardExpiresAt?: string | null;
   celebrationSummary?: RecentSessionRow['celebrationSummary'];
 }
 
@@ -98,6 +104,7 @@ function mapRow(row: RecentSessionRow): HistorySession {
       muscles: row.summary?.musculosTrabajos ?? row.celebrationSummary?.muscles ?? [],
     },
     celebrationCardUrl: row.celebrationCardUrl ?? null,
+    celebrationCardExpiresAt: row.celebrationCardExpiresAt ?? null,
     celebrationSummary: row.celebrationSummary ?? undefined,
   };
 }
@@ -113,6 +120,27 @@ function sessionDate(session: HistorySession): Date | null {
   } catch {
     return null;
   }
+}
+
+function historyToSnapshot(item: HistorySession): CelebrationCardSnapshot {
+  const summary = item.celebrationSummary ?? item.summary;
+  return {
+    sessionFocus: item.sessionFocus ?? 'Entrenamiento',
+    durationLabel: summary?.durationLabel ?? '—',
+    exerciseCount: summary?.exerciseCount ?? 0,
+    totalSets: summary?.totalSets ?? 0,
+    muscles: summary?.muscles?.slice(0, 4).join(' · '),
+  };
+}
+
+function resolveCardPreviewUrl(item: HistorySession): string {
+  if (
+    item.celebrationCardUrl &&
+    !isCelebrationCardExpired(item.celebrationCardExpiresAt)
+  ) {
+    return item.celebrationCardUrl;
+  }
+  return renderCelebrationCardCanvas(historyToSnapshot(item));
 }
 
 const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
@@ -416,7 +444,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
           {activeSection === 'celebrations' ? (
             <section className="space-y-4">
               <p className="text-sm text-zinc-400 leading-relaxed">
-                Historial de sesiones completadas. Las tarjetas con imagen aparecen cuando el almacenamiento está activo.
+                Historial de sesiones completadas. Puedes descargar o compartir la tarjeta PNG de cada sesión.
               </p>
 
               {loadingHistory ? (
@@ -434,7 +462,11 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                     const completed = sessionDate(item);
                     const summary = item.celebrationSummary ?? item.summary;
                     const focus = item.sessionFocus ?? 'Entrenamiento';
-                    const cardUrl = item.celebrationCardUrl;
+                    const cardSnapshot = historyToSnapshot(item);
+                    const previewUrl = resolveCardPreviewUrl(item);
+                    const hasStoredCard =
+                      Boolean(item.celebrationCardUrl) &&
+                      !isCelebrationCardExpired(item.celebrationCardExpiresAt);
                     const completedLabel = completed
                       ? format(completed, "EEEE d MMM · HH:mm", { locale: es })
                       : null;
@@ -444,84 +476,73 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                         key={item.id}
                         className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden"
                       >
-                        {cardUrl ? (
-                          <img
-                            src={cardUrl}
-                            alt={`Resumen de ${focus}`}
-                            className="w-full aspect-[4/5] object-cover bg-zinc-950"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="px-4 pt-4 pb-2">
-                            <p className="text-[10px] uppercase tracking-[0.18em] text-lime-500/70 mb-2">
-                              Sesión completada
-                            </p>
-                            <p className="text-lg font-semibold text-white">{focus}</p>
+                        <img
+                          src={previewUrl}
+                          alt={`Resumen de ${focus}`}
+                          className="w-full aspect-[4/5] object-cover bg-zinc-950"
+                          loading="lazy"
+                        />
+                        <div className="p-4 space-y-3 border-t border-zinc-800/80">
+                          <div>
+                            <p className="text-sm font-semibold text-white">{focus}</p>
                             {completedLabel && (
-                              <p className="text-xs text-zinc-500 mt-1 capitalize">{completedLabel}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5 capitalize">{completedLabel}</p>
                             )}
-                            <div className="grid grid-cols-3 gap-2 mt-4">
-                              <div className="rounded-xl bg-zinc-950/80 ring-1 ring-zinc-800 px-2 py-2 text-center">
-                                <Clock className="w-3.5 h-3.5 text-zinc-500 mx-auto mb-1" />
-                                <p className="text-sm font-semibold text-white tabular-nums">
-                                  {summary?.durationLabel ?? '—'}
-                                </p>
-                              </div>
-                              <div className="rounded-xl bg-zinc-950/80 ring-1 ring-zinc-800 px-2 py-2 text-center">
-                                <Dumbbell className="w-3.5 h-3.5 text-zinc-500 mx-auto mb-1" />
-                                <p className="text-sm font-semibold text-white tabular-nums">
-                                  {summary?.exerciseCount ?? 0}
-                                </p>
-                              </div>
-                              <div className="rounded-xl bg-zinc-950/80 ring-1 ring-zinc-800 px-2 py-2 text-center">
-                                <Layers className="w-3.5 h-3.5 text-zinc-500 mx-auto mb-1" />
-                                <p className="text-sm font-semibold text-white tabular-nums">
-                                  {summary?.totalSets ?? 0}
-                                </p>
-                              </div>
+                            {!hasStoredCard && (
+                              <p className="text-[10px] text-zinc-600 mt-1">
+                                Tarjeta generada desde tu resumen de sesión
+                              </p>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="rounded-xl bg-zinc-950/80 ring-1 ring-zinc-800 px-2 py-2 text-center">
+                              <p className="text-sm font-semibold text-white tabular-nums">
+                                {summary?.durationLabel ?? '—'}
+                              </p>
+                              <p className="text-[10px] text-zinc-600">duración</p>
+                            </div>
+                            <div className="rounded-xl bg-zinc-950/80 ring-1 ring-zinc-800 px-2 py-2 text-center">
+                              <p className="text-sm font-semibold text-white tabular-nums">
+                                {summary?.exerciseCount ?? 0}
+                              </p>
+                              <p className="text-[10px] text-zinc-600">ejercicios</p>
+                            </div>
+                            <div className="rounded-xl bg-zinc-950/80 ring-1 ring-zinc-800 px-2 py-2 text-center">
+                              <p className="text-sm font-semibold text-white tabular-nums">
+                                {summary?.totalSets ?? 0}
+                              </p>
+                              <p className="text-[10px] text-zinc-600">series</p>
                             </div>
                           </div>
-                        )}
-                        {cardUrl && (
-                          <div className="p-4 space-y-3 border-t border-zinc-800/80">
-                            <div>
-                              <p className="text-sm font-semibold text-white">{focus}</p>
-                              {completedLabel && (
-                                <p className="text-xs text-zinc-500 mt-0.5 capitalize">{completedLabel}</p>
-                              )}
-                            </div>
-                            <div className="flex gap-2">
-                              <a
-                                href={cardUrl}
-                                download={`fitgen-${item.id}.png`}
-                                className="flex-1 text-center rounded-xl border border-zinc-700 py-2.5 text-xs font-medium text-zinc-200 hover:border-zinc-600"
-                              >
-                                Descargar
-                              </a>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    if (navigator.share) {
-                                      await navigator.share({
-                                        title: 'FitGen — Sesión completada',
-                                        text: `Completé ${focus} con FitGen.`,
-                                        url: cardUrl,
-                                      });
-                                    } else {
-                                      window.open(cardUrl, '_blank');
-                                    }
-                                  } catch {
-                                    /* cancelled */
-                                  }
-                                }}
-                                className="flex-1 rounded-xl border border-zinc-700 py-2.5 text-xs font-medium text-zinc-200 hover:border-zinc-600"
-                              >
-                                Compartir
-                              </button>
-                            </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                downloadCelebrationPng(cardSnapshot, `fitgen-${item.id}.png`)
+                              }
+                              className="flex-1 text-center rounded-xl border border-zinc-700 py-2.5 text-xs font-medium text-zinc-200 hover:border-zinc-600"
+                            >
+                              Descargar PNG
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await shareCelebrationPng(
+                                    cardSnapshot,
+                                    'FitGen — Sesión completada',
+                                    `Completé ${focus} con FitGen.`,
+                                  );
+                                } catch {
+                                  /* cancelled */
+                                }
+                              }}
+                              className="flex-1 rounded-xl border border-zinc-700 py-2.5 text-xs font-medium text-zinc-200 hover:border-zinc-600"
+                            >
+                              Compartir
+                            </button>
                           </div>
-                        )}
+                        </div>
                       </article>
                     );
                   })}

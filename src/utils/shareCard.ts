@@ -238,3 +238,33 @@ export async function sharePngFromElement(element: HTMLElement, title: string, t
 
   await downloadPngFromElement(element, 'fitgen-sesion.png');
 }
+
+export function downloadCelebrationPng(data: CelebrationCardSnapshot, filename: string) {
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = renderCelebrationCardCanvas(data);
+  link.click();
+}
+
+export async function shareCelebrationPng(
+  data: CelebrationCardSnapshot,
+  title: string,
+  text: string,
+) {
+  const dataUrl = renderCelebrationCardCanvas(data);
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const file = new File([blob], 'fitgen-sesion.png', { type: 'image/png' });
+
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ title, text, files: [file] });
+    return;
+  }
+
+  downloadCelebrationPng(data, 'fitgen-sesion.png');
+}
+
+export function isCelebrationCardExpired(expiresAt?: string | null): boolean {
+  if (!expiresAt) return false;
+  return new Date(expiresAt).getTime() <= Date.now();
+}

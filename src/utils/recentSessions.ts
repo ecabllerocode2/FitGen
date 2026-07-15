@@ -23,6 +23,7 @@ export interface RecentSessionRow {
     musculosTrabajos?: string[];
   };
   celebrationCardUrl?: string;
+  celebrationCardExpiresAt?: string;
   celebrationSummary?: {
     sessionFocus?: string;
     durationLabel?: string;
