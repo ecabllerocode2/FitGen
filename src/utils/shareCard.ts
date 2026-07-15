@@ -1,6 +1,6 @@
 /** Share card PNG generation — canvas-based, mobile-friendly download/share. */
 
-import { formatTotalWeightKg } from './sessionWeight';
+import { formatVolumeKg } from './sessionWeight';
 
 export type ShareCardAspect = '4:5' | '9:16';
 
@@ -290,7 +290,7 @@ function renderDesignShareCard(
   drawHeaderBadges(ctx, width, pad, aspect);
 
   const dateLabel = formatCompletedLabel(data.completedAt);
-  const weightLabel = formatTotalWeightKg(data.totalWeightKg ?? null);
+  const weightLabel = formatVolumeKg(data.totalWeightKg ?? null);
   const centerY = aspect === '9:16' ? height * 0.36 : height * 0.34;
 
   ctx.textAlign = 'center';
@@ -314,7 +314,7 @@ function renderDesignShareCard(
     ctx.fillText(weightLabel, width / 2, centerY + 72);
     ctx.fillStyle = '#71717a';
     ctx.font = '600 12px system-ui, -apple-system, sans-serif';
-    ctx.fillText('movidos en total', width / 2, centerY + 98);
+    ctx.fillText('de volumen total', width / 2, centerY + 98);
   }
 
   const tilesY = weightLabel ? centerY + 130 : centerY + 48;
@@ -370,7 +370,7 @@ function renderPhotoOverlayShareCard(
   ctx.fillText('Entrenamiento completado con FitGen', pad, footerY);
 
   const dateLabel = formatCompletedLabel(data.completedAt);
-  const weightLabel = formatTotalWeightKg(data.totalWeightKg ?? null);
+  const weightLabel = formatVolumeKg(data.totalWeightKg ?? null);
   const bullets = buildBullets(data);
   const panelStart = height * (aspect === '9:16' ? 0.48 : 0.45);
 
@@ -401,7 +401,7 @@ function renderPhotoOverlayShareCard(
   if (weightLabel) {
     ctx.fillStyle = '#a3e635';
     ctx.font = 'bold 24px system-ui, -apple-system, sans-serif';
-    ctx.fillText(`${weightLabel} movidos`, pad, y + 24);
+    ctx.fillText(`${weightLabel} de volumen`, pad, y + 24);
     y += weightHeight;
   }
 

@@ -290,7 +290,14 @@ const App: FC = () => {
                 {/* 3. PLAYER DE ENTRENAMIENTO (Paso a paso) */}
                 <Route path="/workout/player" element={
                     canPlaySession ? (
-                        <WorkoutPlayer session={userProfile.currentSession as GeneratedSession} />
+                        <WorkoutPlayer
+                            session={userProfile.currentSession as GeneratedSession}
+                            bodyWeightKg={
+                                userProfile.profileData?.currentWeightKg ??
+                                userProfile.profileData?.initialWeight ??
+                                null
+                            }
+                        />
                     ) : (
                         <Navigate to="/" replace />
                     )

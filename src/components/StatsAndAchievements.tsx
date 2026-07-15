@@ -20,7 +20,7 @@ import { fetchGamificationSummary } from '../api/gamification';
 import type { AchievementView, GamificationSummary } from '../types/gamification';
 import { achievementIcon } from '../utils/achievementIcons';
 import SessionShareCard from './SessionShareCard';
-import { computeTotalWeightKg } from '../utils/sessionWeight';
+import { computeMainBlockVolumeKg, resolveProfileBodyWeightKg } from '../utils/sessionWeight';
 import type { ShareCardData } from '../utils/shareCard';
 
 interface HistorySession {
@@ -59,7 +59,11 @@ interface StatsAndAchievementsProps {
       };
       startDate?: string;
     };
-    profileData?: { name?: string };
+    profileData?: {
+      name?: string;
+      currentWeightKg?: number;
+      initialWeight?: number;
+    };
   };
   onClose: () => void;
   initialSection?: 'stats' | 'celebrations';
@@ -125,12 +129,19 @@ function sessionDate(session: HistorySession): Date | null {
   }
 }
 
-function historyToShareData(item: HistorySession): ShareCardData {
+function historyToShareData(
+  item: HistorySession,
+  bodyWeightKg?: number | null,
+): ShareCardData {
   const summary = item.celebrationSummary ?? item.summary;
+  const volumeBodyWeight =
+    (summary as { volumeBodyWeightKg?: number } | undefined)?.volumeBodyWeightKg ??
+    bodyWeightKg ??
+    null;
   const totalWeightKg =
     item.celebrationSummary?.totalWeightKg ??
     summary?.totalWeightKg ??
-    computeTotalWeightKg(item.performance);
+    computeMainBlockVolumeKg(item.performance, volumeBodyWeight);
 
   return {
     sessionFocus: item.sessionFocus ?? 'Entrenamiento',
@@ -162,6 +173,10 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   const [loadingGamification, setLoadingGamification] = useState(true);
   const [gamification, setGamification] = useState<GamificationSummary | null>(null);
   const [activeSection, setActiveSection] = useState<'stats' | 'celebrations'>(initialSection);
+  const profileBodyWeightKg = useMemo(
+    () => resolveProfileBodyWeightKg(userProfile?.profileData),
+    [userProfile?.profileData],
+  );
 
   useEffect(() => {
     setActiveSection(initialSection);
@@ -465,7 +480,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                   {history.map((item) => {
                     const completed = sessionDate(item);
                     const focus = item.sessionFocus ?? 'Entrenamiento';
-                    const shareData = historyToShareData(item);
+                    const shareData = historyToShareData(item, profileBodyWeightKg);
                     const completedLabel = completed
                       ? format(completed, "EEEE d MMM · HH:mm", { locale: es })
                       : null;

@@ -27,7 +27,7 @@ import ExerciseSwapReasonModal, { type SwapReason } from '../ExerciseSwapReasonM
 import WorkoutSessionPlanModal from '../WorkoutSessionPlanModal';
 import { storePendingCelebration } from '../WorkoutCelebrationPage';
 import type { SessionCelebrationData } from '../SessionCelebration';
-import { computeTotalWeightFromLogs } from '../../utils/sessionWeight';
+import { computeMainBlockVolumeFromLogs } from '../../utils/sessionWeight';
 import {
   AppEyebrow,
   AppFixedFooter,
@@ -1346,6 +1346,7 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
 
 interface WorkoutPlayerProps {
   session: GeneratedSession;
+  bodyWeightKg?: number | null;
   onComplete?: () => void;
   onExit?: () => void;
 }
@@ -1375,7 +1376,12 @@ const buildCelebrationData = (session: GeneratedSession): SessionCelebrationData
   };
 };
 
-const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, onComplete, onExit }) => {
+const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
+  session: initialSession,
+  bodyWeightKg = null,
+  onComplete,
+  onExit,
+}) => {
   const navigate = useNavigate();
   const [session, setSession] = useState(() => normalizeSession(initialSession) || initialSession);
   const [swappingExerciseId, setSwappingExerciseId] = useState<string | null>(null);
@@ -2062,6 +2068,10 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
        const buildExercisePerformance = (ex: FlexibleExercise, logs: SetLog[]) => ({
          exerciseId: ex.id,
          exerciseName: getExerciseName(ex),
+         isBodyweight: isBodyweightExercise(ex),
+         loadMode: (ex as any).loadMode,
+         movementPattern: (ex as any).movementPattern ?? (ex as any).patronMovimiento,
+         patronMovimiento: (ex as any).patronMovimiento ?? (ex as any).movementPattern,
          sets: logs.map((log, idx) => ({
            setNumber: idx + 1,
            reps: log.reps,
@@ -2073,18 +2083,33 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
        });
 
        let exercises: any[] = [];
+       let mainBlockForVolume: Array<{ exerciseId?: string; id?: string }> = [];
 
        if (Array.isArray(session.mainBlock) && (session.mainBlock as any[])[0]?.exerciseId) {
+         mainBlockForVolume = session.mainBlock as any[];
          exercises = (session.mainBlock as any[])
            .map((ex: any) => {
              const logs = exerciseLogs[ex.exerciseId] || [];
-             return logs.length ? buildExercisePerformance({ id: ex.exerciseId, nombre: ex.exerciseName } as FlexibleExercise, logs) : null;
+             return logs.length
+               ? buildExercisePerformance(
+                   {
+                     id: ex.exerciseId,
+                     nombre: ex.exerciseName,
+                     movementPattern: ex.movementPattern,
+                     patronMovimiento: ex.patronMovimiento,
+                     loadMode: ex.loadMode,
+                     isBodyweight: ex.isBodyweight,
+                   } as FlexibleExercise,
+                   logs,
+                 )
+               : null;
            })
            .filter(Boolean);
        } else {
          const mainBlocks = (session.mainBlock as any)?.bloques || [];
          exercises = mainBlocks.flatMap((station: any) => {
            const ejercicios = station.ejercicios || [];
+           mainBlockForVolume.push(...ejercicios);
            return ejercicios.map((ex: FlexibleExercise) => {
              const logs = exerciseLogs[ex.id] || [];
              return logs.length ? buildExercisePerformance(ex, logs) : null;
@@ -2131,7 +2156,12 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
 
        const totalWeightKg =
          result.celebrationSummary?.totalWeightKg ??
-         computeTotalWeightFromLogs(exerciseLogs);
+         computeMainBlockVolumeFromLogs(
+           mainBlockForVolume,
+           exerciseLogs,
+           (ex) => isBodyweightExercise(ex as FlexibleExercise),
+           bodyWeightKg,
+         );
 
        const celebrationPayload = {
          data: result.celebrationSummary
