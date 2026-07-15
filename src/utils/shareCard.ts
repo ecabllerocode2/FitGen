@@ -116,8 +116,6 @@ function formatCompletedLabel(iso?: string): string | null {
 
 function buildBullets(data: ShareCardData): string[] {
   const bullets: string[] = [];
-  const weightLabel = formatTotalWeightKg(data.totalWeightKg ?? null);
-  if (weightLabel) bullets.push(`${weightLabel} movidos en total`);
   bullets.push(`${data.exerciseCount} ejercicios · ${data.totalSets} series`);
   if (data.durationLabel && data.durationLabel !== '—') {
     bullets.push(`${data.durationLabel} de entrenamiento`);
@@ -128,22 +126,59 @@ function buildBullets(data: ShareCardData): string[] {
   return bullets;
 }
 
-function drawBullets(
+function measureWrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  lineHeight: number,
+): number {
+  const words = text.split(/\s+/);
+  let line = '';
+  let lines = 1;
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines += 1;
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  return lines * lineHeight;
+}
+
+function drawBottomScrim(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  panelStartRatio: number,
+) {
+  const panelStart = height * panelStartRatio;
+  const gradient = ctx.createLinearGradient(0, panelStart - 48, 0, height);
+  gradient.addColorStop(0, 'rgba(9, 9, 11, 0)');
+  gradient.addColorStop(0.25, 'rgba(9, 9, 11, 0.72)');
+  gradient.addColorStop(1, 'rgba(9, 9, 11, 0.96)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, panelStart - 48, width, height - panelStart + 48);
+  return panelStart;
+}
+
+function drawBulletsDown(
   ctx: CanvasRenderingContext2D,
   bullets: string[],
   x: number,
   startY: number,
   maxWidth: number,
-) {
+): number {
   let y = startY;
   for (const bullet of bullets) {
     ctx.fillStyle = '#a3e635';
     ctx.beginPath();
-    ctx.arc(x + 4, y - 4, 3, 0, Math.PI * 2);
+    ctx.arc(x + 5, y + 6, 3.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#e4e4e7';
-    ctx.font = '500 15px system-ui, -apple-system, sans-serif';
-    y = wrapText(ctx, bullet, x + 16, y, maxWidth - 16, 22) + 14;
+    ctx.font = '500 14px system-ui, -apple-system, sans-serif';
+    y = wrapText(ctx, bullet, x + 18, y + 12, maxWidth - 18, 20) + 10;
   }
   return y;
 }
@@ -174,7 +209,8 @@ export async function renderShareCardCanvas(
   }
 
   const pad = 28;
-  const contentBottom = height - pad;
+  const maxTextWidth = width - pad * 2;
+  const panelStart = drawBottomScrim(ctx, width, height, aspect === '9:16' ? 0.48 : 0.45);
 
   ctx.fillStyle = '#84cc16';
   ctx.font = '700 11px system-ui, -apple-system, sans-serif';
@@ -186,34 +222,53 @@ export async function renderShareCardCanvas(
   ctx.fillText(aspect === '9:16' ? 'STORY' : 'FEED', width - pad, pad + 12);
   ctx.textAlign = 'left';
 
-  const dateLabel = formatCompletedLabel(data.completedAt);
-  let cursorY = contentBottom;
-
-  ctx.fillStyle = '#71717a';
+  const footerY = height - 22;
+  ctx.fillStyle = 'rgba(132, 204, 22, 0.9)';
   ctx.font = '600 11px system-ui, -apple-system, sans-serif';
+  ctx.fillText('Entrenamiento completado con FitGen', pad, footerY);
+
+  const dateLabel = formatCompletedLabel(data.completedAt);
+  const weightLabel = formatTotalWeightKg(data.totalWeightKg ?? null);
+  const bullets = buildBullets(data);
+
+  ctx.font = 'bold 26px system-ui, -apple-system, sans-serif';
+  const titleHeight = measureWrapText(ctx, data.sessionFocus, maxTextWidth, 32);
+  ctx.font = '500 13px system-ui, -apple-system, sans-serif';
+  const phraseHeight = data.phrase
+    ? measureWrapText(ctx, data.phrase, maxTextWidth, 18) + 12
+    : 0;
+  const weightHeight = weightLabel ? 36 : 0;
+  const bulletHeight = bullets.length * 28 + 8;
+  const dateHeight = dateLabel ? 20 : 0;
+
+  const contentHeight = dateHeight + titleHeight + 12 + weightHeight + bulletHeight + phraseHeight + 16;
+  let y = Math.max(panelStart + 16, footerY - contentHeight - 8);
+
   if (dateLabel) {
-    ctx.fillText(dateLabel.toUpperCase(), pad, cursorY);
-    cursorY -= 22;
+    ctx.fillStyle = '#71717a';
+    ctx.font = '600 10px system-ui, -apple-system, sans-serif';
+    ctx.fillText(dateLabel.toUpperCase(), pad, y + 12);
+    y += dateHeight;
   }
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
-  cursorY = wrapText(ctx, data.sessionFocus, pad, cursorY, width - pad * 2, 34);
-  cursorY -= 8;
+  ctx.font = 'bold 26px system-ui, -apple-system, sans-serif';
+  y = wrapText(ctx, data.sessionFocus, pad, y + 28, maxTextWidth, 32) + 10;
 
-  ctx.fillStyle = '#a1a1aa';
-  ctx.font = '500 14px system-ui, -apple-system, sans-serif';
-  if (data.phrase) {
-    cursorY = wrapText(ctx, data.phrase, pad, cursorY, width - pad * 2, 20);
-    cursorY -= 12;
+  if (weightLabel) {
+    ctx.fillStyle = '#a3e635';
+    ctx.font = 'bold 24px system-ui, -apple-system, sans-serif';
+    ctx.fillText(`${weightLabel} movidos`, pad, y + 24);
+    y += weightHeight;
   }
 
-  const bullets = buildBullets(data);
-  cursorY = drawBullets(ctx, bullets, pad, cursorY, width - pad * 2);
+  y = drawBulletsDown(ctx, bullets, pad, y + 4, maxTextWidth);
 
-  ctx.fillStyle = 'rgba(132, 204, 22, 0.9)';
-  ctx.font = '600 12px system-ui, -apple-system, sans-serif';
-  ctx.fillText('Entrenamiento completado con FitGen', pad, height - 14);
+  if (data.phrase) {
+    ctx.fillStyle = '#71717a';
+    ctx.font = 'italic 13px system-ui, -apple-system, sans-serif';
+    wrapText(ctx, data.phrase, pad, y + 16, maxTextWidth, 18);
+  }
 
   return canvas.toDataURL('image/png');
 }
