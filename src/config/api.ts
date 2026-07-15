@@ -28,6 +28,7 @@ export const API_ENDPOINTS = {
   SESSION_CELEBRATION_CARD: `${API_BASE_URL}/api/session/celebration-card`,
   SESSION_CELEBRATIONS: `${API_BASE_URL}/api/session/celebrations`,
   SESSION_HISTORY: `${API_BASE_URL}/api/session/history`,
+  SESSION_DISCARD_STALE: `${API_BASE_URL}/api/session/discard-stale`,
   SESSION_SWAP_EXERCISE: `${API_BASE_URL}/api/session/swap-exercise`,
   SESSION_SWAP_WARMUP: `${API_BASE_URL}/api/session/swap-warmup-exercise`,
   EXERCISE_PREFERENCES: `${API_BASE_URL}/api/profile/exercise-preferences`,

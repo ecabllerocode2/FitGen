@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { type User, signOut, type Auth } from 'firebase/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Firestore, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { Firestore, doc, onSnapshot } from 'firebase/firestore';
 import { format, differenceInCalendarWeeks } from 'date-fns';
 import { isSessionForToday } from '../utils/sessionDay';
 import {
@@ -265,10 +265,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             !userProfile.currentSession.completed &&
             !isSessionForToday(userProfile.currentSession, today, todayNameLower, currentWeekCalc);
         if (!stale) return;
-        updateDoc(doc(db, 'users', user.uid), { currentSession: null }).catch((err) => {
-            console.warn('No se pudo descartar sesión vencida:', err);
-        });
-    }, [user, userProfile?.currentSession, userProfile?.currentMesocycle?.startDate, db]);
+        void (async () => {
+            try {
+                const token = await user.getIdToken();
+                await authenticatedFetch(API_ENDPOINTS.SESSION_DISCARD_STALE, token, {
+                    method: 'POST',
+                    body: JSON.stringify({ referenceDate: new Date().toISOString() }),
+                });
+            } catch (err) {
+                console.warn('No se pudo descartar sesión vencida:', err);
+            }
+        })();
+    }, [user, userProfile?.currentSession, userProfile?.currentMesocycle?.startDate]);
 
     useEffect(() => {
         const notice = (location.state as { profileUpdate?: { message?: string } } | null)?.profileUpdate?.message;
