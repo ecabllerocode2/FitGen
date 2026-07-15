@@ -19,13 +19,9 @@ import { pickMotivationalPhraseForDate } from '../utils/motivationalPhrases';
 import { fetchGamificationSummary } from '../api/gamification';
 import type { AchievementView, GamificationSummary } from '../types/gamification';
 import { achievementIcon } from '../utils/achievementIcons';
-import {
-  downloadCelebrationPng,
-  shareCelebrationPng,
-  renderCelebrationCardCanvas,
-  isCelebrationCardExpired,
-  type CelebrationCardSnapshot,
-} from '../utils/shareCard';
+import SessionShareCard from './SessionShareCard';
+import { computeTotalWeightKg } from '../utils/sessionWeight';
+import type { ShareCardData } from '../utils/shareCard';
 
 interface HistorySession {
   id: string;
@@ -36,8 +32,10 @@ interface HistorySession {
     durationLabel?: string;
     exerciseCount?: number;
     totalSets?: number;
+    totalWeightKg?: number;
     muscles?: string[];
   };
+  performance?: unknown;
   celebrationCardUrl?: string | null;
   celebrationCardExpiresAt?: string | null;
   celebrationSummary?: RecentSessionRow['celebrationSummary'];
@@ -101,8 +99,13 @@ function mapRow(row: RecentSessionRow): HistorySession {
       durationLabel: row.summary?.duracionEstimada ?? row.celebrationSummary?.durationLabel ?? '—',
       exerciseCount: row.summary?.ejerciciosTotales ?? row.celebrationSummary?.exerciseCount ?? 0,
       totalSets: row.summary?.seriesTotales ?? row.celebrationSummary?.totalSets ?? 0,
+      totalWeightKg:
+        row.summary?.totalWeightKg ??
+        row.celebrationSummary?.totalWeightKg ??
+        undefined,
       muscles: row.summary?.musculosTrabajos ?? row.celebrationSummary?.muscles ?? [],
     },
+    performance: row.performance,
     celebrationCardUrl: row.celebrationCardUrl ?? null,
     celebrationCardExpiresAt: row.celebrationCardExpiresAt ?? null,
     celebrationSummary: row.celebrationSummary ?? undefined,
@@ -122,25 +125,26 @@ function sessionDate(session: HistorySession): Date | null {
   }
 }
 
-function historyToSnapshot(item: HistorySession): CelebrationCardSnapshot {
+function historyToShareData(item: HistorySession): ShareCardData {
   const summary = item.celebrationSummary ?? item.summary;
+  const totalWeightKg =
+    item.celebrationSummary?.totalWeightKg ??
+    summary?.totalWeightKg ??
+    computeTotalWeightKg(item.performance);
+
   return {
     sessionFocus: item.sessionFocus ?? 'Entrenamiento',
     durationLabel: summary?.durationLabel ?? '—',
     exerciseCount: summary?.exerciseCount ?? 0,
     totalSets: summary?.totalSets ?? 0,
-    muscles: summary?.muscles?.slice(0, 4).join(' · '),
+    totalWeightKg,
+    muscles: summary?.muscles ?? [],
+    phrase: pickMotivationalPhraseForDate(
+      item.completedAt ?? item.celebrationSummary?.completedAt ?? undefined,
+    ),
+    completedAt: item.completedAt ?? item.celebrationSummary?.completedAt ?? undefined,
+    aspect: '4:5',
   };
-}
-
-function resolveCardPreviewUrl(item: HistorySession): string {
-  if (
-    item.celebrationCardUrl &&
-    !isCelebrationCardExpired(item.celebrationCardExpiresAt)
-  ) {
-    return item.celebrationCardUrl;
-  }
-  return renderCelebrationCardCanvas(historyToSnapshot(item));
 }
 
 const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
@@ -444,7 +448,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
           {activeSection === 'celebrations' ? (
             <section className="space-y-4">
               <p className="text-sm text-zinc-400 leading-relaxed">
-                Historial de sesiones completadas. Puedes descargar o compartir la tarjeta PNG de cada sesión.
+                Historial de sesiones. Añade una foto opcional, elige formato Feed o Story, y comparte tu tarjeta.
               </p>
 
               {loadingHistory ? (
@@ -460,13 +464,8 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                 <div className="space-y-3">
                   {history.map((item) => {
                     const completed = sessionDate(item);
-                    const summary = item.celebrationSummary ?? item.summary;
                     const focus = item.sessionFocus ?? 'Entrenamiento';
-                    const cardSnapshot = historyToSnapshot(item);
-                    const previewUrl = resolveCardPreviewUrl(item);
-                    const hasStoredCard =
-                      Boolean(item.celebrationCardUrl) &&
-                      !isCelebrationCardExpired(item.celebrationCardExpiresAt);
+                    const shareData = historyToShareData(item);
                     const completedLabel = completed
                       ? format(completed, "EEEE d MMM · HH:mm", { locale: es })
                       : null;
@@ -474,75 +473,20 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                     return (
                       <article
                         key={item.id}
-                        className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden"
+                        className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden p-4 space-y-4"
                       >
-                        <img
-                          src={previewUrl}
-                          alt={`Resumen de ${focus}`}
-                          className="w-full aspect-[4/5] object-cover bg-zinc-950"
-                          loading="lazy"
-                        />
-                        <div className="p-4 space-y-3 border-t border-zinc-800/80">
-                          <div>
-                            <p className="text-sm font-semibold text-white">{focus}</p>
-                            {completedLabel && (
-                              <p className="text-xs text-zinc-500 mt-0.5 capitalize">{completedLabel}</p>
-                            )}
-                            {!hasStoredCard && (
-                              <p className="text-[10px] text-zinc-600 mt-1">
-                                Tarjeta generada desde tu resumen de sesión
-                              </p>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="rounded-xl bg-zinc-950/80 ring-1 ring-zinc-800 px-2 py-2 text-center">
-                              <p className="text-sm font-semibold text-white tabular-nums">
-                                {summary?.durationLabel ?? '—'}
-                              </p>
-                              <p className="text-[10px] text-zinc-600">duración</p>
-                            </div>
-                            <div className="rounded-xl bg-zinc-950/80 ring-1 ring-zinc-800 px-2 py-2 text-center">
-                              <p className="text-sm font-semibold text-white tabular-nums">
-                                {summary?.exerciseCount ?? 0}
-                              </p>
-                              <p className="text-[10px] text-zinc-600">ejercicios</p>
-                            </div>
-                            <div className="rounded-xl bg-zinc-950/80 ring-1 ring-zinc-800 px-2 py-2 text-center">
-                              <p className="text-sm font-semibold text-white tabular-nums">
-                                {summary?.totalSets ?? 0}
-                              </p>
-                              <p className="text-[10px] text-zinc-600">series</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                downloadCelebrationPng(cardSnapshot, `fitgen-${item.id}.png`)
-                              }
-                              className="flex-1 text-center rounded-xl border border-zinc-700 py-2.5 text-xs font-medium text-zinc-200 hover:border-zinc-600"
-                            >
-                              Descargar PNG
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                try {
-                                  await shareCelebrationPng(
-                                    cardSnapshot,
-                                    'FitGen — Sesión completada',
-                                    `Completé ${focus} con FitGen.`,
-                                  );
-                                } catch {
-                                  /* cancelled */
-                                }
-                              }}
-                              className="flex-1 rounded-xl border border-zinc-700 py-2.5 text-xs font-medium text-zinc-200 hover:border-zinc-600"
-                            >
-                              Compartir
-                            </button>
-                          </div>
+                        <div>
+                          <p className="text-sm font-semibold text-white">{focus}</p>
+                          {completedLabel && (
+                            <p className="text-xs text-zinc-500 mt-0.5 capitalize">{completedLabel}</p>
+                          )}
                         </div>
+                        <SessionShareCard
+                          data={shareData}
+                          showPhotoOptions
+                          showAspectToggle
+                          compact
+                        />
                       </article>
                     );
                   })}

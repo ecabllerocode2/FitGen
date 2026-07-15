@@ -1,44 +1,47 @@
-/** Export a DOM node to PNG data URL (no external deps). */
+/** Share card PNG generation — canvas-based, mobile-friendly download/share. */
 
-export interface CelebrationCardSnapshot {
+import { formatTotalWeightKg } from './sessionWeight';
+
+export type ShareCardAspect = '4:5' | '9:16';
+
+export interface ShareCardData {
   sessionFocus: string;
   durationLabel: string;
   exerciseCount: number;
   totalSets: number;
-  muscles?: string;
+  totalWeightKg?: number | null;
+  muscles?: string[];
   phrase?: string;
+  completedAt?: string;
+  photoDataUrl?: string | null;
+  aspect?: ShareCardAspect;
 }
 
-function inlineComputedStyles(source: Element, target: Element) {
-  if (!(source instanceof HTMLElement) || !(target instanceof HTMLElement)) return;
-  const computed = window.getComputedStyle(source);
-  for (const key of computed) {
-    target.style.setProperty(key, computed.getPropertyValue(key));
-  }
-  const sourceChildren = source.children;
-  const targetChildren = target.children;
-  for (let i = 0; i < sourceChildren.length; i++) {
-    inlineComputedStyles(sourceChildren[i], targetChildren[i]);
-  }
+/** @deprecated use ShareCardData */
+export type CelebrationCardSnapshot = ShareCardData;
+
+const DIMENSIONS: Record<ShareCardAspect, { width: number; height: number }> = {
+  '4:5': { width: 540, height: 675 },
+  '9:16': { width: 540, height: 960 },
+};
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
 }
 
-function readCelebrationSnapshot(element: HTMLElement): CelebrationCardSnapshot | null {
-  if (!element.hasAttribute('data-celebration-card')) return null;
-  const focusEl = element.querySelector('[data-celebration-focus]');
-  const phraseEl = element.querySelector('[data-celebration-phrase]');
-  const statEls = element.querySelectorAll('[data-celebration-stat]');
-  const musclesEl = element.querySelector('[data-celebration-muscles]');
-  return {
-    sessionFocus: focusEl?.textContent?.trim() ?? 'Entrenamiento',
-    phrase: phraseEl?.textContent?.trim(),
-    durationLabel: statEls[0]?.textContent?.trim() ?? '—',
-    exerciseCount: Number(statEls[1]?.textContent?.trim() ?? 0),
-    totalSets: Number(statEls[2]?.textContent?.trim() ?? 0),
-    muscles: musclesEl?.textContent?.trim(),
-  };
-}
-
-function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
+function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+) {
   const words = text.split(/\s+/);
   let line = '';
   let cursorY = y;
@@ -56,9 +59,101 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
   return cursorY;
 }
 
-export function renderCelebrationCardCanvas(data: CelebrationCardSnapshot, scale = 2): string {
-  const width = 360;
-  const height = 480;
+function drawCoverImage(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  width: number,
+  height: number,
+) {
+  const scale = Math.max(width / img.width, height / img.height);
+  const sw = width / scale;
+  const sh = height / scale;
+  const sx = (img.width - sw) / 2;
+  const sy = (img.height - sh) / 2;
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, width, height);
+}
+
+function drawBrandGradient(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const gradient = ctx.createLinearGradient(0, height * 0.35, 0, height);
+  gradient.addColorStop(0, 'rgba(9, 9, 11, 0.05)');
+  gradient.addColorStop(0.45, 'rgba(9, 9, 11, 0.55)');
+  gradient.addColorStop(1, 'rgba(9, 9, 11, 0.94)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  const accent = ctx.createLinearGradient(0, 0, width, height);
+  accent.addColorStop(0, 'rgba(132, 204, 22, 0.08)');
+  accent.addColorStop(1, 'rgba(132, 204, 22, 0)');
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, 0, width, height);
+}
+
+function drawPlainBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, '#18181b');
+  bg.addColorStop(0.55, '#09090b');
+  bg.addColorStop(1, '#0a0a0a');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = 'rgba(132, 204, 22, 0.25)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
+}
+
+function formatCompletedLabel(iso?: string): string | null {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleDateString('es-MX', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+    });
+  } catch {
+    return null;
+  }
+}
+
+function buildBullets(data: ShareCardData): string[] {
+  const bullets: string[] = [];
+  const weightLabel = formatTotalWeightKg(data.totalWeightKg ?? null);
+  if (weightLabel) bullets.push(`${weightLabel} movidos en total`);
+  bullets.push(`${data.exerciseCount} ejercicios · ${data.totalSets} series`);
+  if (data.durationLabel && data.durationLabel !== '—') {
+    bullets.push(`${data.durationLabel} de entrenamiento`);
+  }
+  if (data.muscles?.length) {
+    bullets.push(data.muscles.slice(0, 4).join(' · '));
+  }
+  return bullets;
+}
+
+function drawBullets(
+  ctx: CanvasRenderingContext2D,
+  bullets: string[],
+  x: number,
+  startY: number,
+  maxWidth: number,
+) {
+  let y = startY;
+  for (const bullet of bullets) {
+    ctx.fillStyle = '#a3e635';
+    ctx.beginPath();
+    ctx.arc(x + 4, y - 4, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e4e4e7';
+    ctx.font = '500 15px system-ui, -apple-system, sans-serif';
+    y = wrapText(ctx, bullet, x + 16, y, maxWidth - 16, 22) + 14;
+  }
+  return y;
+}
+
+export async function renderShareCardCanvas(
+  data: ShareCardData,
+  scale = 2,
+): Promise<string> {
+  const aspect = data.aspect ?? '4:5';
+  const { width, height } = DIMENSIONS[aspect];
   const canvas = document.createElement('canvas');
   canvas.width = width * scale;
   canvas.height = height * scale;
@@ -66,12 +161,78 @@ export function renderCelebrationCardCanvas(data: CelebrationCardSnapshot, scale
   if (!ctx) throw new Error('Canvas no disponible');
   ctx.scale(scale, scale);
 
-  ctx.fillStyle = '#09090b';
-  ctx.fillRect(0, 0, width, height);
+  if (data.photoDataUrl) {
+    try {
+      const photo = await loadImage(data.photoDataUrl);
+      drawCoverImage(ctx, photo, width, height);
+      drawBrandGradient(ctx, width, height);
+    } catch {
+      drawPlainBackground(ctx, width, height);
+    }
+  } else {
+    drawPlainBackground(ctx, width, height);
+  }
 
-  ctx.strokeStyle = '#27272a';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
+  const pad = 28;
+  const contentBottom = height - pad;
+
+  ctx.fillStyle = '#84cc16';
+  ctx.font = '700 11px system-ui, -apple-system, sans-serif';
+  ctx.fillText('FITGEN', pad, pad + 12);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(163, 230, 53, 0.85)';
+  ctx.font = '600 10px system-ui, -apple-system, sans-serif';
+  ctx.fillText(aspect === '9:16' ? 'STORY' : 'FEED', width - pad, pad + 12);
+  ctx.textAlign = 'left';
+
+  const dateLabel = formatCompletedLabel(data.completedAt);
+  let cursorY = contentBottom;
+
+  ctx.fillStyle = '#71717a';
+  ctx.font = '600 11px system-ui, -apple-system, sans-serif';
+  if (dateLabel) {
+    ctx.fillText(dateLabel.toUpperCase(), pad, cursorY);
+    cursorY -= 22;
+  }
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
+  cursorY = wrapText(ctx, data.sessionFocus, pad, cursorY, width - pad * 2, 34);
+  cursorY -= 8;
+
+  ctx.fillStyle = '#a1a1aa';
+  ctx.font = '500 14px system-ui, -apple-system, sans-serif';
+  if (data.phrase) {
+    cursorY = wrapText(ctx, data.phrase, pad, cursorY, width - pad * 2, 20);
+    cursorY -= 12;
+  }
+
+  const bullets = buildBullets(data);
+  cursorY = drawBullets(ctx, bullets, pad, cursorY, width - pad * 2);
+
+  ctx.fillStyle = 'rgba(132, 204, 22, 0.9)';
+  ctx.font = '600 12px system-ui, -apple-system, sans-serif';
+  ctx.fillText('Entrenamiento completado con FitGen', pad, height - 14);
+
+  return canvas.toDataURL('image/png');
+}
+
+export async function renderShareCardPreviewUrl(data: ShareCardData): Promise<string> {
+  return renderShareCardCanvas(data, 2);
+}
+
+/** Sync legacy renderer — plain card without photo. */
+export function renderCelebrationCardCanvas(data: ShareCardData, scale = 2): string {
+  const aspect = data.aspect ?? '4:5';
+  const { width, height } = DIMENSIONS[aspect];
+  const canvas = document.createElement('canvas');
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas no disponible');
+  ctx.scale(scale, scale);
+  drawPlainBackground(ctx, width, height);
 
   ctx.fillStyle = '#84cc16';
   ctx.font = '600 10px system-ui, sans-serif';
@@ -83,62 +244,107 @@ export function renderCelebrationCardCanvas(data: CelebrationCardSnapshot, scale
 
   ctx.fillStyle = '#a1a1aa';
   ctx.font = '14px system-ui, sans-serif';
-  if (data.phrase) {
-    wrapText(ctx, data.phrase, 24, 98, width - 48, 20);
-  }
-
-  ctx.strokeStyle = '#27272a';
-  ctx.beginPath();
-  ctx.moveTo(24, 140);
-  ctx.lineTo(width - 24, 140);
-  ctx.stroke();
-
-  ctx.fillStyle = '#52525b';
-  ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('HOY', 24, 164);
+  if (data.phrase) wrapText(ctx, data.phrase, 24, 98, width - 48, 20);
 
   ctx.fillStyle = '#ffffff';
   ctx.font = '600 18px system-ui, sans-serif';
-  wrapText(ctx, data.sessionFocus, 24, 188, width - 48, 22);
+  wrapText(ctx, data.sessionFocus, 24, 160, width - 48, 22);
 
-  const stats = [
-    { label: 'duración', value: data.durationLabel },
-    { label: 'ejercicios', value: String(data.exerciseCount) },
-    { label: 'series', value: String(data.totalSets) },
-  ];
-  const boxW = (width - 48 - 16) / 3;
-  stats.forEach((stat, i) => {
-    const bx = 24 + i * (boxW + 8);
-    const by = 230;
-    ctx.fillStyle = '#18181b';
-    ctx.beginPath();
-    ctx.roundRect(bx, by, boxW, 64, 12);
-    ctx.fill();
-    ctx.strokeStyle = '#27272a';
-    ctx.stroke();
-    ctx.fillStyle = i === 0 ? '#a3e635' : '#ffffff';
-    ctx.font = 'bold 18px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(stat.value, bx + boxW / 2, by + 30);
-    ctx.fillStyle = '#71717a';
-    ctx.font = '10px system-ui, sans-serif';
-    ctx.fillText(stat.label, bx + boxW / 2, by + 50);
-  });
-  ctx.textAlign = 'left';
-
-  if (data.muscles) {
-    ctx.fillStyle = '#71717a';
-    ctx.font = '12px system-ui, sans-serif';
-    wrapText(ctx, data.muscles, 24, 320, width - 48, 18);
+  const weightLabel = formatTotalWeightKg(data.totalWeightKg ?? null);
+  if (weightLabel) {
+    ctx.fillStyle = '#a3e635';
+    ctx.font = 'bold 20px system-ui, sans-serif';
+    ctx.fillText(weightLabel, 24, 210);
   }
 
   return canvas.toDataURL('image/png');
 }
 
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const response = await fetch(dataUrl);
+  return response.blob();
+}
+
+async function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function downloadShareCardPng(data: ShareCardData, filename: string) {
+  const dataUrl = await renderShareCardCanvas(data, 2);
+  const blob = await dataUrlToBlob(dataUrl);
+  await triggerBlobDownload(blob, filename);
+}
+
+export async function shareShareCardPng(data: ShareCardData) {
+  const dataUrl = await renderShareCardCanvas(data, 2);
+  const blob = await dataUrlToBlob(dataUrl);
+  const file = new File([blob], 'fitgen-sesion.png', { type: 'image/png' });
+
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ files: [file] });
+    return;
+  }
+
+  await triggerBlobDownload(blob, 'fitgen-sesion.png');
+}
+
+export async function downloadCelebrationPng(data: ShareCardData, filename: string) {
+  await downloadShareCardPng(data, filename);
+}
+
+export async function shareCelebrationPng(data: ShareCardData) {
+  await shareShareCardPng(data);
+}
+
+export function isCelebrationCardExpired(expiresAt?: string | null): boolean {
+  if (!expiresAt) return false;
+  return new Date(expiresAt).getTime() <= Date.now();
+}
+
+function readCelebrationSnapshot(element: HTMLElement): ShareCardData | null {
+  if (!element.hasAttribute('data-celebration-card')) return null;
+  const focusEl = element.querySelector('[data-celebration-focus]');
+  const phraseEl = element.querySelector('[data-celebration-phrase]');
+  const statEls = element.querySelectorAll('[data-celebration-stat]');
+  const musclesEl = element.querySelector('[data-celebration-muscles]');
+  const weightEl = element.querySelector('[data-celebration-weight]');
+  return {
+    sessionFocus: focusEl?.textContent?.trim() ?? 'Entrenamiento',
+    phrase: phraseEl?.textContent?.trim(),
+    durationLabel: statEls[0]?.textContent?.trim() ?? '—',
+    exerciseCount: Number(statEls[1]?.textContent?.trim() ?? 0),
+    totalSets: Number(statEls[2]?.textContent?.trim() ?? 0),
+    totalWeightKg: weightEl ? Number(weightEl.textContent?.replace(/\D/g, '') || 0) : null,
+    muscles: musclesEl?.textContent?.trim()?.split(' · '),
+    aspect: '4:5',
+  };
+}
+
+function inlineComputedStyles(source: Element, target: Element) {
+  if (!(source instanceof HTMLElement) || !(target instanceof HTMLElement)) return;
+  const computed = window.getComputedStyle(source);
+  for (const key of computed) {
+    target.style.setProperty(key, computed.getPropertyValue(key));
+  }
+  const sourceChildren = source.children;
+  const targetChildren = target.children;
+  for (let i = 0; i < sourceChildren.length; i++) {
+    inlineComputedStyles(sourceChildren[i], targetChildren[i]);
+  }
+}
+
 export async function elementToPngDataUrl(element: HTMLElement, scale = 2): Promise<string> {
   const celebration = readCelebrationSnapshot(element);
   if (celebration) {
-    return renderCelebrationCardCanvas(celebration, scale);
+    return renderShareCardCanvas(celebration, scale);
   }
 
   const rect = element.getBoundingClientRect();
@@ -174,97 +380,28 @@ export async function elementToPngDataUrl(element: HTMLElement, scale = 2): Prom
     ctx.drawImage(img, 0, 0, width, height);
     return canvas.toDataURL('image/png');
   } catch {
-    return renderFallbackCard(element, width, height, scale);
+    return renderCelebrationCardCanvas(
+      { sessionFocus: 'Entrenamiento', durationLabel: '—', exerciseCount: 0, totalSets: 0 },
+      scale,
+    );
   }
-}
-
-function renderFallbackCard(
-  element: HTMLElement,
-  width: number,
-  height: number,
-  scale: number,
-): string {
-  const snapshot = readCelebrationSnapshot(element);
-  if (snapshot) return renderCelebrationCardCanvas(snapshot, scale);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = width * scale;
-  canvas.height = height * scale;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas no disponible');
-  ctx.scale(scale, scale);
-  ctx.fillStyle = '#09090b';
-  ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = '#84cc16';
-  ctx.font = 'bold 14px system-ui, sans-serif';
-  ctx.fillText('FitGen', 24, 36);
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 22px system-ui, sans-serif';
-  const title = element.querySelector('p')?.textContent ?? '¡Sesión completada!';
-  ctx.fillText(title.slice(0, 40), 24, 72);
-  ctx.fillStyle = '#a1a1aa';
-  ctx.font = '14px system-ui, sans-serif';
-  ctx.fillText('Entrenamiento completado con FitGen', 24, 100);
-  return canvas.toDataURL('image/png');
-}
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
 }
 
 export async function downloadPngFromElement(element: HTMLElement, filename: string) {
   const dataUrl = await elementToPngDataUrl(element);
-  const link = document.createElement('a');
-  link.download = filename;
-  link.href = dataUrl;
-  link.click();
+  const blob = await dataUrlToBlob(dataUrl);
+  await triggerBlobDownload(blob, filename);
 }
 
-export async function sharePngFromElement(element: HTMLElement, title: string, text: string) {
+export async function sharePngFromElement(element: HTMLElement) {
   const dataUrl = await elementToPngDataUrl(element);
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
+  const blob = await dataUrlToBlob(dataUrl);
   const file = new File([blob], 'fitgen-sesion.png', { type: 'image/png' });
 
   if (navigator.share && navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ title, text, files: [file] });
+    await navigator.share({ files: [file] });
     return;
   }
 
-  await downloadPngFromElement(element, 'fitgen-sesion.png');
-}
-
-export function downloadCelebrationPng(data: CelebrationCardSnapshot, filename: string) {
-  const link = document.createElement('a');
-  link.download = filename;
-  link.href = renderCelebrationCardCanvas(data);
-  link.click();
-}
-
-export async function shareCelebrationPng(
-  data: CelebrationCardSnapshot,
-  title: string,
-  text: string,
-) {
-  const dataUrl = renderCelebrationCardCanvas(data);
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
-  const file = new File([blob], 'fitgen-sesion.png', { type: 'image/png' });
-
-  if (navigator.share && navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ title, text, files: [file] });
-    return;
-  }
-
-  downloadCelebrationPng(data, 'fitgen-sesion.png');
-}
-
-export function isCelebrationCardExpired(expiresAt?: string | null): boolean {
-  if (!expiresAt) return false;
-  return new Date(expiresAt).getTime() <= Date.now();
+  await triggerBlobDownload(blob, 'fitgen-sesion.png');
 }

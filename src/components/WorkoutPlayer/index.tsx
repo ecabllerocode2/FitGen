@@ -27,6 +27,7 @@ import ExerciseSwapReasonModal, { type SwapReason } from '../ExerciseSwapReasonM
 import WorkoutSessionPlanModal from '../WorkoutSessionPlanModal';
 import { storePendingCelebration } from '../WorkoutCelebrationPage';
 import type { SessionCelebrationData } from '../SessionCelebration';
+import { computeTotalWeightFromLogs } from '../../utils/sessionWeight';
 import {
   AppEyebrow,
   AppFixedFooter,
@@ -2128,6 +2129,10 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
          return;
        }
 
+       const totalWeightKg =
+         result.celebrationSummary?.totalWeightKg ??
+         computeTotalWeightFromLogs(exerciseLogs);
+
        const celebrationPayload = {
          data: result.celebrationSummary
            ? {
@@ -2135,7 +2140,9 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ session: initialSession, 
                durationLabel: result.celebrationSummary.durationLabel,
                exerciseCount: result.celebrationSummary.exerciseCount,
                totalSets: result.celebrationSummary.totalSets,
+               totalWeightKg,
                muscles: result.celebrationSummary.muscles,
+               completedAt: new Date().toISOString(),
              }
            : buildCelebrationData(session),
          archivedSessionId: result.archivedSessionId ?? null,

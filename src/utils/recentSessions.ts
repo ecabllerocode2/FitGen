@@ -20,8 +20,10 @@ export interface RecentSessionRow {
     duracionEstimada?: string;
     ejerciciosTotales?: number;
     seriesTotales?: number;
+    totalWeightKg?: number;
     musculosTrabajos?: string[];
   };
+  performance?: unknown;
   celebrationCardUrl?: string;
   celebrationCardExpiresAt?: string;
   celebrationSummary?: {
@@ -29,6 +31,7 @@ export interface RecentSessionRow {
     durationLabel?: string;
     exerciseCount?: number;
     totalSets?: number;
+    totalWeightKg?: number;
     muscles?: string[];
     completedAt?: string;
   };

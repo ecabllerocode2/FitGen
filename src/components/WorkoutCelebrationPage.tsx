@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import SessionCelebration, { type SessionCelebrationData } from './SessionCelebration';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
-import { elementToPngDataUrl } from '../utils/shareCard';
+import { renderShareCardCanvas } from '../utils/shareCard';
+import { pickMotivationalPhrase } from '../utils/motivationalPhrases';
 
 const STORAGE_KEY = 'fitgen.pendingCelebration';
 
@@ -48,15 +49,22 @@ export default function WorkoutCelebrationPage() {
     if (!payload?.archivedSessionId || uploadedRef.current) return;
 
     const uploadCard = async () => {
-      const card = document.querySelector('[data-celebration-card]') as HTMLElement | null;
-      if (!card) return;
-
       uploadedRef.current = true;
       try {
         const user = getAuth().currentUser;
         if (!user) return;
         const token = await user.getIdToken();
-        const imageBase64 = await elementToPngDataUrl(card);
+        const imageBase64 = await renderShareCardCanvas({
+          sessionFocus: payload.data.sessionFocus,
+          durationLabel: payload.data.durationLabel,
+          exerciseCount: payload.data.exerciseCount,
+          totalSets: payload.data.totalSets,
+          totalWeightKg: payload.data.totalWeightKg,
+          muscles: payload.data.muscles,
+          phrase: pickMotivationalPhrase(),
+          completedAt: payload.data.completedAt ?? new Date().toISOString(),
+          aspect: '4:5',
+        });
         await authenticatedFetch(API_ENDPOINTS.SESSION_CELEBRATION_CARD, token, {
           method: 'POST',
           body: JSON.stringify({
@@ -69,9 +77,9 @@ export default function WorkoutCelebrationPage() {
       }
     };
 
-    const timer = window.setTimeout(uploadCard, 600);
+    const timer = window.setTimeout(uploadCard, 800);
     return () => window.clearTimeout(timer);
-  }, [payload?.archivedSessionId]);
+  }, [payload?.archivedSessionId, payload?.data]);
 
   if (!payload) return null;
 
