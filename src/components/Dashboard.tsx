@@ -23,6 +23,7 @@ import ProfileMenu from './ProfileMenu';
 import LevelUpCelebration from './LevelUpCelebration';
 import StatsAndAchievements, { type HubTab } from './StatsAndAchievements';
 import ProgressArenaCard from './gamification/ProgressArenaCard';
+import { resolveAvatarAppearance } from '../utils/avatarAppearanceStorage';
 import MesocycleGenerationLoader from './MesocycleGenerationLoader';
 import {
     DashboardEyebrow,
@@ -475,6 +476,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     // C. Acciones
     const userName = userProfile?.profileData?.name || userProfile?.name || 'Atleta';
 
+    const avatarAppearance = useMemo(
+        () => resolveAvatarAppearance(
+            userProfile?.profileData?.gender as string | undefined,
+            user.uid,
+        ),
+        [userProfile?.profileData?.gender, user.uid],
+    );
+
     const handleLogout = async () => {
         try { await signOut(auth); } catch (e) { console.error(e); }
     };
@@ -792,7 +801,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         seasonPoints={gamificationSummary?.counters.seasonPoints ?? 0}
                         currentStreak={gamificationSummary?.counters.currentStreakDays ?? 0}
                         unlockedAchievements={gamificationSummary?.unlockedCount ?? 0}
-                        seasonId={gamificationSummary?.counters.currentSeasonId}
+                        totalSessions={gamificationSummary?.counters.lifetimeSessionsCompleted ?? 0}
+                        avatarBaseStage={gamificationSummary?.avatar.baseStage ?? 0}
+                        avatarAppearance={avatarAppearance}
                         onOpen={() => openProgressHub('home')}
                     />
                 </div>

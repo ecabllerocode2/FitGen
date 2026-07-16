@@ -1,10 +1,16 @@
 // vite.config.ts
+import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@fitgen/visual': path.resolve(__dirname, 'packages/fitgen-visual/src'),
+    },
+  },
   plugins: [
     react(), 
     tailwindcss(),

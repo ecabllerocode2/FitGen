@@ -24,6 +24,12 @@ import HubAchievementsTab from './gamification/HubAchievementsTab';
 import HubSeasonTab from './gamification/HubSeasonTab';
 import HubSessionsTab, { buildSessionHistoryItem } from './gamification/HubSessionsTab';
 import HubRankingTab from './gamification/HubRankingTab';
+import type { AvatarAppearance } from '@fitgen/visual';
+import {
+  profileGenderToAvatarGender,
+  resolveAvatarAppearance,
+  saveAvatarAppearance,
+} from '../utils/avatarAppearanceStorage';
 
 export type HubTab = 'home' | 'achievements' | 'season' | 'sessions' | 'ranking';
 
@@ -65,6 +71,7 @@ interface StatsAndAchievementsProps {
     };
     profileData?: {
       name?: string;
+      gender?: string;
       currentWeightKg?: number;
       initialWeight?: number;
     };
@@ -207,6 +214,9 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   const [activeTab, setActiveTab] = useState<HubTab>(() =>
     resolveInitialTab(initialSection, initialTab),
   );
+  const [avatarAppearance, setAvatarAppearance] = useState<AvatarAppearance>(() =>
+    resolveAvatarAppearance(userProfile.profileData?.gender, userId),
+  );
   const profileBodyWeightKg = useMemo(
     () => resolveProfileBodyWeightKg(userProfile?.profileData),
     [userProfile?.profileData],
@@ -215,6 +225,10 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   useEffect(() => {
     setActiveTab(resolveInitialTab(initialSection, initialTab));
   }, [initialSection, initialTab]);
+
+  useEffect(() => {
+    setAvatarAppearance(resolveAvatarAppearance(userProfile.profileData?.gender, userId));
+  }, [userProfile.profileData?.gender, userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -555,6 +569,16 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                   lastSessionDate={stats.lastSessionDate}
                   motivationalMessage={motivationalMessage}
                   currentWeekMessage={stats.currentWeekMessage}
+                  avatarBaseStage={gamification?.avatar.baseStage ?? 0}
+                  avatarAppearance={avatarAppearance}
+                  onAvatarAppearanceChange={(next) => {
+                    setAvatarAppearance(next);
+                    const profileGender = profileGenderToAvatarGender(userProfile.profileData?.gender);
+                    saveAvatarAppearance(next, {
+                      userId,
+                      genderOverride: next.gender !== profileGender ? next.gender : null,
+                    });
+                  }}
                   nextGoal={nextGoal ?? null}
                   onGoAchievements={() => setActiveTab('achievements')}
                   onGoSeason={() => setActiveTab('season')}

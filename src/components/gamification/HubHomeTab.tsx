@@ -1,7 +1,8 @@
 import { Calendar, Flame, TrendingUp, Award, Dumbbell } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import FitCoinIcon from './FitCoinIcon';
+import type { AvatarAppearance } from '@fitgen/visual';
+import { AvatarPreview, FitCoin } from '@fitgen/visual';
 import { formatFitCoins } from '../../utils/gamificationDisplay';
 
 type HubHomeTabProps = {
@@ -17,6 +18,9 @@ type HubHomeTabProps = {
   lastSessionDate: Date | null;
   motivationalMessage: string;
   currentWeekMessage: string;
+  avatarBaseStage: number;
+  avatarAppearance: AvatarAppearance;
+  onAvatarAppearanceChange: (next: AvatarAppearance) => void;
   nextGoal: {
     title: string;
     description: string;
@@ -41,6 +45,9 @@ export default function HubHomeTab({
   lastSessionDate,
   motivationalMessage,
   currentWeekMessage,
+  avatarBaseStage,
+  avatarAppearance,
+  onAvatarAppearanceChange,
   nextGoal,
   onGoAchievements,
   onGoSeason,
@@ -49,18 +56,35 @@ export default function HubHomeTab({
     <div className="space-y-5">
       <div className="relative overflow-hidden rounded-2xl border border-lime-500/25 bg-gradient-to-br from-lime-500/15 via-zinc-900 to-zinc-950 p-5">
         <div className="pointer-events-none absolute -top-12 right-0 h-32 w-32 rounded-full bg-lime-400/10 blur-3xl" />
-        <p className="text-[10px] uppercase tracking-[0.24em] text-lime-400/90 font-semibold">
-          Bienvenido a tu arena
-        </p>
-        <h3 className="text-2xl font-bold text-white mt-2">{athleteName.split(' ')[0]}</h3>
-        <p className="text-sm text-zinc-400 mt-1">
-          Cada sesión suma FitCoins y puntos de temporada. Sigue entrenando para subir en el ranking.
-        </p>
+
+        <div className="flex items-start gap-4">
+          <AvatarPreview
+            appearance={avatarAppearance}
+            completedSessions={totalSessions}
+            baseStage={avatarBaseStage}
+            size={120}
+            showLabel
+            className="shrink-0"
+          />
+          <div className="flex-1 min-w-0 pt-1">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-lime-400/90 font-semibold">
+              Bienvenido a tu arena
+            </p>
+            <h3 className="text-2xl font-bold text-white mt-2">{athleteName.split(' ')[0]}</h3>
+            <p className="text-sm text-zinc-400 mt-1">
+              Tu avatar evoluciona con cada sesión. Arrastra para rotarlo.
+            </p>
+          </div>
+          <div className="shrink-0 flex flex-col items-center gap-1 pt-1">
+            <FitCoin size={52} variant="hero" spin />
+            <span className="text-[9px] uppercase tracking-wider text-lime-400/80 font-semibold">FitCoin</span>
+          </div>
+        </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-lime-500/20 bg-zinc-950/60 px-4 py-3">
             <div className="flex items-center gap-2">
-              <FitCoinIcon size={18} />
+              <FitCoin size={18} />
               <span className="text-[10px] uppercase tracking-wider text-lime-400 font-semibold">FitCoins</span>
             </div>
             <p className="text-3xl font-bold text-white tabular-nums mt-2">{formatFitCoins(fitCoins)}</p>
@@ -78,6 +102,24 @@ export default function HubHomeTab({
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-3 font-semibold">
+          Personaliza tu avatar
+        </p>
+        <AvatarPreview
+          appearance={avatarAppearance}
+          completedSessions={totalSessions}
+          baseStage={avatarBaseStage}
+          size={88}
+          showLabel={false}
+          showCustomizer
+          onAppearanceChange={onAvatarAppearanceChange}
+        />
+        <p className="text-[10px] text-zinc-600 mt-3 text-center">
+          Vista previa local · se guardará en tu perfil en una fase posterior
+        </p>
       </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
