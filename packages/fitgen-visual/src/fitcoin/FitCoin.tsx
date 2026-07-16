@@ -16,7 +16,7 @@ export default function FitCoin({
   className,
   spin = true,
 }: FitCoinProps) {
-  if (variant === 'hero' || size >= 40) {
+  if (variant === 'hero') {
     return <FitCoinZdogCanvas size={size} spin={spin} className={className} />;
   }
   return <FitCoinSvg size={size} className={className} />;

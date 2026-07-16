@@ -1,4 +1,4 @@
-import { Calendar, Flame, TrendingUp, Award, Dumbbell } from 'lucide-react';
+import { Calendar, Flame, TrendingUp, Award, Dumbbell, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { AvatarAppearance } from '@fitgen/visual';
@@ -20,7 +20,6 @@ type HubHomeTabProps = {
   currentWeekMessage: string;
   avatarBaseStage: number;
   avatarAppearance: AvatarAppearance;
-  onAvatarAppearanceChange: (next: AvatarAppearance) => void;
   nextGoal: {
     title: string;
     description: string;
@@ -47,7 +46,6 @@ export default function HubHomeTab({
   currentWeekMessage,
   avatarBaseStage,
   avatarAppearance,
-  onAvatarAppearanceChange,
   nextGoal,
   onGoAchievements,
   onGoSeason,
@@ -62,7 +60,7 @@ export default function HubHomeTab({
             appearance={avatarAppearance}
             completedSessions={totalSessions}
             baseStage={avatarBaseStage}
-            size={120}
+            size={100}
             showLabel
             className="shrink-0"
           />
@@ -72,19 +70,15 @@ export default function HubHomeTab({
             </p>
             <h3 className="text-2xl font-bold text-white mt-2">{athleteName.split(' ')[0]}</h3>
             <p className="text-sm text-zinc-400 mt-1">
-              Tu avatar evoluciona con cada sesión. Arrastra para rotarlo.
+              Tu avatar evoluciona con cada sesión completada.
             </p>
-          </div>
-          <div className="shrink-0 flex flex-col items-center gap-1 pt-1">
-            <FitCoin size={52} variant="hero" spin />
-            <span className="text-[9px] uppercase tracking-wider text-lime-400/80 font-semibold">FitCoin</span>
           </div>
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-lime-500/20 bg-zinc-950/60 px-4 py-3">
             <div className="flex items-center gap-2">
-              <FitCoin size={18} />
+              <FitCoin size={16} variant="ui" />
               <span className="text-[10px] uppercase tracking-wider text-lime-400 font-semibold">FitCoins</span>
             </div>
             <p className="text-3xl font-bold text-white tabular-nums mt-2">{formatFitCoins(fitCoins)}</p>
@@ -105,21 +99,20 @@ export default function HubHomeTab({
       </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-        <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-3 font-semibold">
-          Personaliza tu avatar
-        </p>
-        <AvatarPreview
-          appearance={avatarAppearance}
-          completedSessions={totalSessions}
-          baseStage={avatarBaseStage}
-          size={88}
-          showLabel={false}
-          showCustomizer
-          onAppearanceChange={onAvatarAppearanceChange}
-        />
-        <p className="text-[10px] text-zinc-600 mt-3 text-center">
-          Vista previa local · se guardará en tu perfil en una fase posterior
-        </p>
+        <div className="flex items-start gap-3">
+          <Sparkles className="w-4 h-4 text-lime-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1 font-semibold">
+              Personalización de avatar
+            </p>
+            <p className="text-sm text-zinc-300 leading-relaxed">
+              Próximamente podrás personalizar piel, cabello, outfits y skins con FitCoins.
+            </p>
+            <p className="text-xs text-zinc-500 mt-2">
+              Por ahora usamos el avatar por defecto según tu perfil (hombre/mujer).
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">

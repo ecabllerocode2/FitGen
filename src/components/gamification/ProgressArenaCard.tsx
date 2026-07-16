@@ -61,7 +61,7 @@ export default function ProgressArenaCard({
         </div>
 
         <div className="flex items-start justify-center gap-8 sm:gap-12">
-          <StatItem label="FitCoins" value={formatFitCoins(fitCoins)} icon={<FitCoin size={14} />} />
+          <StatItem label="FitCoins" value={formatFitCoins(fitCoins)} icon={<FitCoin size={14} variant="ui" />} />
           <StatItem label="Puntos" value={formatFitCoins(seasonPoints)} />
           <StatItem label="Racha" value={`${currentStreak}d`} accent />
         </div>

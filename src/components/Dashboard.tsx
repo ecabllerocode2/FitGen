@@ -23,6 +23,7 @@ import ProfileMenu from './ProfileMenu';
 import LevelUpCelebration from './LevelUpCelebration';
 import StatsAndAchievements, { type HubTab } from './StatsAndAchievements';
 import ProgressArenaCard from './gamification/ProgressArenaCard';
+import AdminUsersPanel from './admin/AdminUsersPanel';
 import { resolveAvatarAppearance } from '../utils/avatarAppearanceStorage';
 import MesocycleGenerationLoader from './MesocycleGenerationLoader';
 import {
@@ -212,6 +213,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     
     // Estado para el modal de estadísticas
     const [showStatsModal, setShowStatsModal] = useState(false);
+    const [showAdminPanel, setShowAdminPanel] = useState(false);
     const [statsInitialTab, setStatsInitialTab] = useState<HubTab>('home');
     const [gamificationSummary, setGamificationSummary] = useState<GamificationSummary | null>(null);
     
@@ -679,8 +681,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                 <header className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] flex justify-end">
                     <ProfileMenu
                         userName={userName}
+                        userId={user.uid}
                         onLogout={handleLogout}
                         onNavigateToProfile={handleNavigateToProfile}
+                        onOpenAdmin={() => setShowAdminPanel(true)}
                     />
                 </header>
                 <div className="flex-1 flex flex-col items-center justify-center px-8">
@@ -782,8 +786,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         </DashboardIconButton>
                         <ProfileMenu
                             userName={userName}
+                            userId={user.uid}
                             onLogout={handleLogout}
                             onNavigateToProfile={handleNavigateToProfile}
+                            onOpenAdmin={() => setShowAdminPanel(true)}
                         />
                     </div>
                 </div>
@@ -1009,7 +1015,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                 />
             )}
             
-            {/* 📊 Modal de Estadísticas y Logros */}
             {showStatsModal && userProfile && authToken && (
                 <StatsAndAchievements
                     userId={user.uid}
@@ -1028,6 +1033,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     }}
                     initialTab={statsInitialTab}
                     onClose={() => setShowStatsModal(false)}
+                />
+            )}
+
+            {showAdminPanel && authToken && (
+                <AdminUsersPanel
+                    authToken={authToken}
+                    onClose={() => setShowAdminPanel(false)}
                 />
             )}
             

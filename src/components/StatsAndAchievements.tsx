@@ -26,9 +26,7 @@ import HubSessionsTab, { buildSessionHistoryItem } from './gamification/HubSessi
 import HubRankingTab from './gamification/HubRankingTab';
 import type { AvatarAppearance } from '@fitgen/visual';
 import {
-  profileGenderToAvatarGender,
   resolveAvatarAppearance,
-  saveAvatarAppearance,
 } from '../utils/avatarAppearanceStorage';
 
 export type HubTab = 'home' | 'achievements' | 'season' | 'sessions' | 'ranking';
@@ -571,14 +569,6 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                   currentWeekMessage={stats.currentWeekMessage}
                   avatarBaseStage={gamification?.avatar.baseStage ?? 0}
                   avatarAppearance={avatarAppearance}
-                  onAvatarAppearanceChange={(next) => {
-                    setAvatarAppearance(next);
-                    const profileGender = profileGenderToAvatarGender(userProfile.profileData?.gender);
-                    saveAvatarAppearance(next, {
-                      userId,
-                      genderOverride: next.gender !== profileGender ? next.gender : null,
-                    });
-                  }}
                   nextGoal={nextGoal ?? null}
                   onGoAchievements={() => setActiveTab('achievements')}
                   onGoSeason={() => setActiveTab('season')}

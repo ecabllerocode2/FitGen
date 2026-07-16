@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Scale, User as UserIcon, ChevronDown, Ban } from 'lucide-react';
+import { LogOut, Scale, User as UserIcon, ChevronDown, Ban, Shield } from 'lucide-react';
+import { isAdminUser } from '../constants/admin';
 
 interface ProfileMenuProps {
     userName: string;
+    userId?: string;
     onLogout: () => void;
     onNavigateToProfile: () => void;
+    onOpenAdmin?: () => void;
 }
 
-const ProfileMenu: React.FC<ProfileMenuProps> = ({ userName, onLogout, onNavigateToProfile }) => {
+const ProfileMenu: React.FC<ProfileMenuProps> = ({
+    userName,
+    userId,
+    onLogout,
+    onNavigateToProfile,
+    onOpenAdmin,
+}) => {
     const navigate = useNavigate();
     const [isOpen, setIsOpen] = useState(false);
 
@@ -48,6 +57,13 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userName, onLogout, onNavigat
         navigate('/settings/exclusions');
         setIsOpen(false);
     };
+
+    const handleAdminClick = () => {
+        onOpenAdmin?.();
+        setIsOpen(false);
+    };
+
+    const showAdmin = isAdminUser(userId);
 
     // Usar solo el primer nombre en el botón para ahorrar espacio
     const displayUserName = userName.split(' ')[0];
@@ -94,6 +110,16 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userName, onLogout, onNavigat
                             <Ban className="w-4 h-4" />
                             Ejercicios excluidos
                         </button>
+                        {showAdmin && (
+                            <button
+                                onClick={handleAdminClick}
+                                className="w-full text-left px-4 py-2.5 text-sm text-lime-400/90 hover:text-lime-300 hover:bg-zinc-900 flex items-center gap-3 transition-colors"
+                                role="menuitem"
+                            >
+                                <Shield className="w-4 h-4" />
+                                Panel de usuarios
+                            </button>
+                        )}
                         <button
                             onClick={handleLogoutClick}
                             className="w-full text-left px-4 py-2.5 text-sm text-zinc-500 hover:text-red-400 hover:bg-zinc-900 flex items-center gap-3 transition-colors"
