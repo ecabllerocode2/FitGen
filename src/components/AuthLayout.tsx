@@ -2,6 +2,7 @@ import { useState, type FC } from 'react';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
+  sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
   type Auth 
@@ -20,6 +21,7 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [resetSent, setResetSent] = useState(false);
     const [passwordTouched, setPasswordTouched] = useState(false);
 
     const passwordRules = (pw: string) => {
@@ -47,6 +49,31 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
             const firebaseError = e as any;
             let errorMessage = 'Error con Google Sign-In. Intenta de nuevo.';
             if (firebaseError.code === 'auth/popup-closed-by-user') errorMessage = 'Has cerrado la ventana antes de completar el inicio con Google.';
+            setError(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handlePasswordReset = async () => {
+        if (!email.trim()) {
+            setError('Introduce tu email para recuperar la contraseña.');
+            return;
+        }
+        setError(null);
+        setResetSent(false);
+        setIsLoading(true);
+        try {
+            await sendPasswordResetEmail(auth, email.trim());
+            setResetSent(true);
+        } catch (e) {
+            const firebaseError = e as { code?: string };
+            let errorMessage = 'No se pudo enviar el correo de recuperación.';
+            if (firebaseError.code === 'auth/user-not-found') {
+                errorMessage = 'No encontramos una cuenta con ese email.';
+            } else if (firebaseError.code === 'auth/invalid-email') {
+                errorMessage = 'El email no es válido.';
+            }
             setError(errorMessage);
         } finally {
             setIsLoading(false);
@@ -190,6 +217,25 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
                                     </ul>
                                 )}
                             </div>
+
+                            {isLogin && (
+                                <div className="flex justify-end mt-2">
+                                    <button
+                                        type="button"
+                                        onClick={handlePasswordReset}
+                                        disabled={isLoading}
+                                        className="text-xs text-lime-400/90 hover:text-lime-300 disabled:opacity-50"
+                                    >
+                                        ¿Olvidaste tu contraseña?
+                                    </button>
+                                </div>
+                            )}
+
+                            {resetSent && (
+                                <p className="text-xs text-lime-300 mt-2">
+                                    Revisa tu correo para restablecer la contraseña.
+                                </p>
+                            )}
                         </div>
 
                         {!isLogin && (
@@ -227,14 +273,14 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
                     <div className="flex items-center justify-center gap-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800">
                         <button
                             type="button"
-                            onClick={() => { setIsLogin(true); setError(null); }}
+                            onClick={() => { setIsLogin(true); setError(null); setResetSent(false); }}
                             className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${isLogin ? 'bg-lime-500 text-zinc-900' : 'text-zinc-500'}`}
                         >
                             Acceder
                         </button>
                         <button
                             type="button"
-                            onClick={() => { setIsLogin(false); setError(null); }}
+                            onClick={() => { setIsLogin(false); setError(null); setResetSent(false); }}
                             className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${!isLogin ? 'bg-lime-500 text-zinc-900' : 'text-zinc-500'}`}
                         >
                             Registrarme

@@ -1,9 +1,27 @@
 import type { GeneratedSession } from '../types/session';
+import { formatLoadLabel, resolveLoadConvention } from './loadConvention';
+
+function buildPesoLabel(ex: any): string | undefined {
+  if (ex.loadMode === 'bodyweight' || ex.isBodyweight === true) return undefined;
+  const convention = resolveLoadConvention(ex);
+  if (ex.loadMode === 'exploratory' && ex.prescribedLoadKg == null) {
+    return formatLoadLabel(ex.suggestedLoadKg, convention, { approximate: true, exploratory: !ex.suggestedLoadKg }) ?? 'Exploratorio';
+  }
+  if (ex.prescribedLoadKg != null) {
+    return formatLoadLabel(ex.prescribedLoadKg, convention) ?? undefined;
+  }
+  if (ex.suggestedLoadKg != null) {
+    return formatLoadLabel(ex.suggestedLoadKg, convention, { approximate: true }) ?? undefined;
+  }
+  if (ex.loadMode === 'exploratory') return 'Exploratorio';
+  return ex.peso;
+}
 
 function mapExerciseFields(ex: any) {
   const imageUrl = ex.imageUrl ?? ex.url_img_0 ?? ex.imagenUrl ?? null;
   const imageUrl2 = ex.imageUrl2 ?? ex.url_img_1 ?? null;
-  return {
+  const loadConvention = ex.loadConvention ?? resolveLoadConvention(ex);
+  const mapped = {
     ...ex,
     id: ex.exerciseId ?? ex.id,
     nombre: ex.exerciseName ?? ex.nombre ?? ex.name,
@@ -20,19 +38,11 @@ function mapExerciseFields(ex: any) {
     correcciones: ex.correcciones,
     instrucciones: ex.instrucciones,
     loadMode: ex.loadMode,
+    loadConvention,
     isBodyweight: ex.isBodyweight ?? ex.loadMode === 'bodyweight',
     prescribedLoadKg: ex.prescribedLoadKg,
     suggestedLoadKg: ex.suggestedLoadKg,
-    peso:
-      ex.loadMode === 'bodyweight' || ex.isBodyweight === true
-        ? undefined
-        : ex.prescribedLoadKg != null
-          ? `${ex.prescribedLoadKg} kg`
-          : ex.suggestedLoadKg != null
-            ? `~${ex.suggestedLoadKg} kg`
-            : ex.loadMode === 'exploratory'
-              ? 'Exploratorio'
-              : ex.peso,
+    peso: buildPesoLabel({ ...ex, loadConvention }),
     prescripcion: ex.prescripcion ?? {
       series: ex.sets,
       reps: ex.repRange ?? ex.reps,
@@ -42,6 +52,7 @@ function mapExerciseFields(ex: any) {
       tempo: ex.tempo,
     },
   };
+  return mapped;
 }
 
 function mapCooldownExercise(ex: any) {
@@ -56,6 +67,9 @@ function mapCooldownExercise(ex: any) {
     url_img_0: imageUrl,
     url_img_1: ex.imageUrl2 ?? ex.url_img_1 ?? null,
     musculoObjetivo: ex.musculoObjetivo ?? ex.muscleGroup,
+    descripcion: ex.descripcion,
+    instrucciones: ex.instrucciones ?? ex.descripcion,
+    correcciones: ex.correcciones,
   };
 }
 

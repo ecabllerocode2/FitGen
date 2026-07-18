@@ -25,10 +25,19 @@ import type { GeneratedSession } from '../../types/session';
 import { normalizeSession } from '../../utils/sessionNormalizer';
 import ExerciseSwapReasonModal, { type SwapReason } from '../ExerciseSwapReasonModal';
 import WorkoutSessionPlanModal from '../WorkoutSessionPlanModal';
-import { storePendingCelebration } from '../WorkoutCelebrationPage';
+import { storePendingCelebration, type PendingCelebration } from '../WorkoutCelebrationPage';
 import type { SessionCelebrationData } from '../SessionCelebration';
 import { storePendingAchievementUnlocks } from '../gamification/AchievementUnlockModal';
 import { computeMainBlockVolumeFromLogs } from '../../utils/sessionWeight';
+import {
+  clearWorkoutPersistence,
+  enqueueCompletion,
+  getCompletionQueue,
+  loadExerciseLogs,
+  removeFromQueue,
+  saveExerciseLogs,
+} from '../../utils/workoutOfflineQueue';
+import { formatLoadLabel, getWeightInputLabel, resolveLoadConvention } from '../../utils/loadConvention';
 import {
   AppEyebrow,
   AppFixedFooter,
@@ -504,27 +513,31 @@ const InfoTooltip: React.FC<InfoTooltipProps> = ({ title, content, isOpen, onClo
 interface SessionFeedbackFormProps {
   onSubmit: (feedback: SessionFeedback) => void;
   isSubmitting: boolean;
+  syncNotice?: string | null;
+  onRetrySync?: () => void;
 }
 
-const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({ onSubmit, isSubmitting }) => {
+const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({
+  onSubmit,
+  isSubmitting,
+  syncNotice,
+  onRetrySync,
+}) => {
   const [step, setStep] = useState(0);
   const [pumpQuality, setPumpQuality] = useState(3);
   const [sorenessTiming, setSorenessTiming] = useState<SessionFeedback['sorenessTiming']>('sanó a tiempo');
   const [perceivedWorkload, setPerceivedWorkload] = useState(3);
-  const [jointPain, setJointPain] = useState(false);
-  const [jointPainZone, setJointPainZone] = useState('');
 
   const steps = ['Pump', 'Recuperación', 'Carga'];
   const isLast = step === steps.length - 1;
-  const progress = ((step + 1) / (steps.length + (jointPain ? 1 : 0) + 1)) * 100;
+  const progress = ((step + 1) / (steps.length + 1)) * 100;
 
   const handleSubmit = () => {
     onSubmit({
       pumpQuality,
       sorenessTiming,
       perceivedWorkload,
-      jointPain,
-      jointPainZone: jointPain ? jointPainZone : undefined,
+      jointPain: false,
     });
   };
 
@@ -582,7 +595,7 @@ const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({ onSubmit, isS
             <AppEyebrow>Dificultad</AppEyebrow>
             <h2 className="text-2xl font-bold text-white mt-4 mb-4">¿Cómo de dura fue la sesión?</h2>
             <p className="text-sm text-zinc-500 mb-6">1 = muy fácil · 5 = al límite</p>
-            <div className="flex flex-col gap-2 mb-6">
+            <div className="flex flex-col gap-2">
               {[1, 2, 3, 4, 5].map((v) => (
                 <AppOptionButton key={v} selected={perceivedWorkload === v} onClick={() => setPerceivedWorkload(v)} compact>
                   <div className="flex items-center gap-3">
@@ -592,27 +605,26 @@ const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({ onSubmit, isS
                 </AppOptionButton>
               ))}
             </div>
-            <label className="flex items-center gap-3 text-sm text-zinc-400 py-3 border-t border-zinc-800">
-              <input
-                type="checkbox"
-                checked={jointPain}
-                onChange={(e) => setJointPain(e.target.checked)}
-                className="rounded border-zinc-700 bg-zinc-950"
-              />
-              Tuve dolor articular
-            </label>
-            {jointPain && (
-              <input
-                type="text"
-                value={jointPainZone}
-                onChange={(e) => setJointPainZone(e.target.value)}
-                placeholder="Zona (ej. hombro)"
-                className="mt-2 w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-lime-500/50"
-              />
-            )}
           </>
         )}
       </div>
+
+      {syncNotice && (
+        <div className="px-6 pb-4 max-w-sm mx-auto w-full">
+          <div className="rounded-xl border border-amber-800/80 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
+            <p>{syncNotice}</p>
+            {onRetrySync && (
+              <button
+                type="button"
+                onClick={onRetrySync}
+                className="mt-2 text-xs font-semibold text-lime-300 hover:text-lime-200"
+              >
+                Reintentar sincronización
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <AppFixedFooter>
         <div className="max-w-sm mx-auto space-y-3">
@@ -711,6 +723,7 @@ interface RestScreenProps {
     defaultReps: number;
     defaultWeight?: number | null;
     weightPlaceholder?: string;
+    weightLabel?: string;
   } | null;
   onLogSubmit: (data: SetLog) => void;
   onOpenPlan?: () => void;
@@ -862,7 +875,9 @@ const RestScreen: React.FC<RestScreenProps> = ({
             <div className="flex gap-3 mb-3">
                {!pendingLogContext.isBodyweight && (
                  <div className="flex-1">
-                   <label className="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider mb-1 block">Peso (kg)</label>
+                   <label className="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider mb-1 block">
+                     {pendingLogContext.weightLabel ?? 'Peso (kg)'}
+                   </label>
                    <input 
                      type="number" 
                      value={weight}
@@ -1115,7 +1130,8 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   const description = getExerciseDescription(exercise);
   const reps = getExerciseReps(exercise);
   const parsedWeight = parsePrescribedKg(exercise);
-  const weight = exercise.peso ?? (parsedWeight != null ? `${parsedWeight} kg` : undefined);
+  const loadConvention = resolveLoadConvention(exercise);
+  const weight = exercise.peso ?? (parsedWeight != null ? formatLoadLabel(parsedWeight, loadConvention) ?? undefined : undefined);
   const isExploratory = weight === 'Exploratorio' || (exercise as any).loadMode === 'exploratory';
   const duracion = exercise.duracion || exercise.tiempo;
 
@@ -1426,6 +1442,105 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
   const [weightOverrides, setWeightOverrides] = useState<Record<string, number>>({});
   const [pendingLogContext, setPendingLogContext] = useState<RestScreenProps['pendingLogContext']>(null);
   const [isSubmittingSession, setIsSubmittingSession] = useState(false);
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const clientCompletionIdRef = useRef(
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `completion-${Date.now()}`,
+  );
+  const sessionStorageId = session.id ?? (session as { sessionId?: string }).sessionId ?? 'active';
+
+  useEffect(() => {
+    const saved = loadExerciseLogs(sessionStorageId);
+    if (saved && Object.keys(saved).length > 0) {
+      setExerciseLogs(saved as ExerciseLogs);
+    }
+  }, [sessionStorageId]);
+
+  useEffect(() => {
+    if (Object.keys(exerciseLogs).length > 0) {
+      saveExerciseLogs(sessionStorageId, exerciseLogs);
+    }
+  }, [exerciseLogs, sessionStorageId]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const processCompletionResponse = useCallback((
+    result: Record<string, any>,
+    celebrationPayload: PendingCelebration,
+  ) => {
+    if (result.gamificationDelta?.newAchievements?.length) {
+      storePendingAchievementUnlocks(result.gamificationDelta.newAchievements);
+    }
+
+    if (result.weeklyAdjustment && Object.keys(result.weeklyAdjustment).length > 0) {
+      const msgs = Object.entries(result.weeklyAdjustment)
+        .map(([m, a]: [string, any]) => `${m}: ${a.message}`)
+        .join('\n');
+      alert(`Ajuste semanal aplicado:\n${msgs}`);
+    }
+
+    if (result.requiresEvaluation) {
+      alert('Tu mesociclo terminó. Completa la evaluación en el inicio.');
+      navigate('/mesocycle/evaluate', { replace: true });
+      return;
+    }
+
+    storePendingCelebration(celebrationPayload);
+    onComplete?.();
+    navigate('/workout/celebration', { state: celebrationPayload, replace: true });
+  }, [navigate, onComplete]);
+
+  const flushPendingCompletions = useCallback(async () => {
+    const user = getAuth().currentUser;
+    if (!user || !navigator.onLine) return false;
+
+    const token = await user.getIdToken();
+    let syncedCurrent = false;
+
+    for (const item of getCompletionQueue()) {
+      try {
+        const response = await authenticatedFetch(API_ENDPOINTS.SESSION_COMPLETE, token, {
+          method: 'POST',
+          body: JSON.stringify(item.payload),
+        });
+        if (!response.ok) continue;
+
+        const result = await response.json();
+        removeFromQueue(item.clientCompletionId);
+
+        if (item.sessionId === sessionStorageId) {
+          clearWorkoutPersistence(sessionStorageId);
+          processCompletionResponse(result, {
+            data: item.celebrationFallback,
+            archivedSessionId: result.archivedSessionId ?? null,
+          });
+          syncedCurrent = true;
+          setSyncNotice(null);
+        }
+      } catch {
+        // Keep queued item for a later retry.
+      }
+    }
+
+    return syncedCurrent;
+  }, [processCompletionResponse, sessionStorageId]);
+
+  useEffect(() => {
+    if (!isOffline) {
+      void flushPendingCompletions();
+    }
+  }, [isOffline, flushPendingCompletions]);
   
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const exerciseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1864,14 +1979,16 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     if (!currentExercise || !currentExercise.exercise.id) return;
     
     setExerciseLogs(prev => {
-      const exId = currentExercise.exercise.id;
+      const exId = currentExercise.exercise.id as string;
       const currentLogs = prev[exId] || [];
-      return {
+      const next = {
         ...prev,
-        [exId]: [...currentLogs, data]
+        [exId]: [...currentLogs, data],
       };
+      saveExerciseLogs(sessionStorageId, next);
+      return next;
     });
-  }, [currentExercise]);
+  }, [currentExercise, sessionStorageId]);
 
   const handleWeightOverride = useCallback((exerciseId: string, kg: number | null) => {
     setWeightOverrides((prev) => {
@@ -1907,6 +2024,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
       const parsedKg = parsePrescribedKg(ex);
       const defaultWeight = overrideKg ?? parsedKg;
       const bodyweight = isBodyweightExercise(ex);
+      const loadConvention = resolveLoadConvention(ex);
 
       setPendingLogContext({
          exerciseName: getExerciseName(ex),
@@ -1916,6 +2034,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
          defaultReps: isTimed ? (duration as number) : parseDefaultReps(ex),
          defaultWeight: bodyweight ? null : defaultWeight,
          weightPlaceholder: bodyweight ? undefined : (defaultWeight != null ? String(defaultWeight) : undefined),
+         weightLabel: bodyweight ? undefined : getWeightInputLabel(loadConvention),
       });
 
       if (currentExercise.setNumber === totalSets) {
@@ -2060,6 +2179,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
 
   const handleFinishSession = async (feedback: SessionFeedback) => {
     setIsSubmittingSession(true);
+    setSyncNotice(null);
     try {
        const user = getAuth().currentUser;
        if (!user) throw new Error("No user authenticated");
@@ -2071,6 +2191,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
          exerciseName: getExerciseName(ex),
          isBodyweight: isBodyweightExercise(ex),
          loadMode: (ex as any).loadMode,
+         loadConvention: (ex as any).loadConvention ?? resolveLoadConvention(ex),
          movementPattern: (ex as any).movementPattern ?? (ex as any).patronMovimiento,
          patronMovimiento: (ex as any).patronMovimiento ?? (ex as any).movementPattern,
          sets: logs.map((log, idx) => ({
@@ -2099,6 +2220,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
                      movementPattern: ex.movementPattern,
                      patronMovimiento: ex.patronMovimiento,
                      loadMode: ex.loadMode,
+                     loadConvention: ex.loadConvention,
                      isBodyweight: ex.isBodyweight,
                    } as FlexibleExercise,
                    logs,
@@ -2118,10 +2240,42 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
          });
        }
 
-       const payload = {
-         sessionFeedback: feedback,
-         performanceData: { exercises }
+       const totalWeightKg =
+         computeMainBlockVolumeFromLogs(
+           mainBlockForVolume,
+           exerciseLogs,
+           (ex) => isBodyweightExercise(ex as FlexibleExercise),
+           bodyWeightKg,
+         );
+
+       const celebrationFallback: SessionCelebrationData = {
+         sessionFocus: session.sessionFocus ?? 'Entrenamiento',
+         durationLabel: session.summary?.duracionEstimada ?? '—',
+         exerciseCount: session.summary?.ejerciciosTotales ?? 0,
+         totalSets: session.summary?.seriesTotales ?? 0,
+         totalWeightKg,
+         muscles: session.summary?.musculosTrabajos ?? (session as { sessionMuscles?: string[] }).sessionMuscles ?? [],
+         completedAt: new Date().toISOString(),
        };
+
+       const payload = {
+         clientCompletionId: clientCompletionIdRef.current,
+         sessionFeedback: feedback,
+         performanceData: { exercises },
+       };
+
+       enqueueCompletion({
+         clientCompletionId: clientCompletionIdRef.current,
+         sessionId: sessionStorageId,
+         payload,
+         celebrationFallback,
+         queuedAt: new Date().toISOString(),
+       });
+
+       if (!navigator.onLine) {
+         setSyncNotice('Sesión guardada localmente. Se sincronizará al recuperar conexión.');
+         return;
+       }
 
        const response = await authenticatedFetch(API_ENDPOINTS.SESSION_COMPLETE, token, {
            method: 'POST',
@@ -2134,32 +2288,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
        }
        
        const result = await response.json();
-
-       if (result.gamificationDelta?.newAchievements?.length) {
-         storePendingAchievementUnlocks(result.gamificationDelta.newAchievements);
-       }
-
-       if (result.weeklyAdjustment && Object.keys(result.weeklyAdjustment).length > 0) {
-         const msgs = Object.entries(result.weeklyAdjustment)
-           .map(([m, a]: [string, any]) => `${m}: ${a.message}`)
-           .join('\n');
-         alert(`Ajuste semanal aplicado:\n${msgs}`);
-       }
-
-       if (result.requiresEvaluation) {
-         alert('Tu mesociclo terminó. Completa la evaluación en el inicio.');
-         navigate('/mesocycle/evaluate', { replace: true });
-         return;
-       }
-
-       const totalWeightKg =
-         result.celebrationSummary?.totalWeightKg ??
-         computeMainBlockVolumeFromLogs(
-           mainBlockForVolume,
-           exerciseLogs,
-           (ex) => isBodyweightExercise(ex as FlexibleExercise),
-           bodyWeightKg,
-         );
+       removeFromQueue(clientCompletionIdRef.current);
+       clearWorkoutPersistence(sessionStorageId);
 
        const celebrationPayload = {
          data: result.celebrationSummary
@@ -2168,22 +2298,33 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
                durationLabel: result.celebrationSummary.durationLabel,
                exerciseCount: result.celebrationSummary.exerciseCount,
                totalSets: result.celebrationSummary.totalSets,
-               totalWeightKg,
+               totalWeightKg: result.celebrationSummary.totalWeightKg ?? totalWeightKg,
                muscles: result.celebrationSummary.muscles,
                completedAt: new Date().toISOString(),
              }
            : buildCelebrationData(session),
          archivedSessionId: result.archivedSessionId ?? null,
        };
-       storePendingCelebration(celebrationPayload);
-       onComplete?.();
-       navigate('/workout/celebration', { state: celebrationPayload, replace: true });
+
+       processCompletionResponse(result, celebrationPayload);
 
     } catch (error) {
         console.error('Error saving session:', error);
-        alert('Error al guardar sesión: ' + (error as Error).message);
+        setSyncNotice('No se pudo sincronizar. La sesión quedó guardada localmente para reintentar.');
     } finally {
         setIsSubmittingSession(false);
+    }
+  };
+
+  const handleRetrySync = async () => {
+    setIsSubmittingSession(true);
+    try {
+      const synced = await flushPendingCompletions();
+      if (!synced && !navigator.onLine) {
+        setSyncNotice('Sin conexión. La sesión sigue guardada localmente.');
+      }
+    } finally {
+      setIsSubmittingSession(false);
     }
   };
 
@@ -2203,12 +2344,19 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
       <SessionFeedbackForm 
         onSubmit={handleFinishSession}
         isSubmitting={isSubmittingSession}
+        syncNotice={syncNotice}
+        onRetrySync={handleRetrySync}
       />
     );
   }
 
   return (
     <>
+    {isOffline && (
+      <div className="fixed top-0 inset-x-0 z-50 bg-amber-950/95 border-b border-amber-800 px-4 py-2 text-center text-xs text-amber-100">
+        Sin conexión — tus series se guardan localmente
+      </div>
+    )}
     <AppShell>
       {isResting ? (
         <RestScreen

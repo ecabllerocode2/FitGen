@@ -17,6 +17,7 @@ import type { GeneratedSession } from '../types/session';
 import { normalizeSession } from '../utils/sessionNormalizer';
 import { estimateSessionDuration } from '../utils/estimateWorkoutDuration';
 import { markSessionReviewed } from '../utils/sessionReviewContext';
+import { formatLoadLabel, resolveLoadConvention } from '../utils/loadConvention';
 import ExerciseSwapReasonModal, { type SwapReason } from './ExerciseSwapReasonModal';
 import {
   AppAccordion,
@@ -110,10 +111,11 @@ const getExerciseReps = (ex: FlexibleExercise): string => {
 const formatExerciseLoad = (ex: FlexibleExercise): string | null => {
   if ((ex as any).isBodyweight === true || (ex as any).loadMode === 'bodyweight') return 'Peso corporal';
   if (ex.peso) return ex.peso;
+  const convention = resolveLoadConvention(ex);
   const prescribed = (ex as any).prescribedLoadKg;
   const suggested = (ex as any).suggestedLoadKg ?? ex.prescripcion?.pesoSugerido;
-  if (typeof prescribed === 'number') return `${prescribed} kg`;
-  if (typeof suggested === 'number') return `~${suggested} kg`;
+  if (typeof prescribed === 'number') return formatLoadLabel(prescribed, convention);
+  if (typeof suggested === 'number') return formatLoadLabel(suggested, convention, { approximate: true });
   if ((ex as any).loadMode === 'exploratory' || suggested === 'Exploratorio') return 'Exploratorio';
   return null;
 };
@@ -301,6 +303,11 @@ const CooldownExerciseRow = ({ exercise }: { exercise: FlexibleExercise }) => {
         </p>
         {exercise.musculoObjetivo && (
           <span className="text-xs bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">{exercise.musculoObjetivo}</span>
+        )}
+        {(exercise.instrucciones || exercise.descripcion) && (
+          <p className="text-xs text-zinc-500 line-clamp-2 mt-1">
+            {exercise.instrucciones ?? exercise.descripcion}
+          </p>
         )}
       </div>
     </div>
