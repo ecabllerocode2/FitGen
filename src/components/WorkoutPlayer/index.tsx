@@ -38,6 +38,7 @@ import {
   saveExerciseLogs,
 } from '../../utils/workoutOfflineQueue';
 import { formatLoadLabel, getLoadConventionHint, getWeightInputLabel, getWeightUnitSuffix, resolveLoadConvention } from '../../utils/loadConvention';
+import { getWeightInputStep, snapToGymWeight } from '../../utils/gymInventory';
 import {
   AppEyebrow,
   AppFixedFooter,
@@ -1226,7 +1227,7 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
                 <input
                   type="number"
                   inputMode="decimal"
-                  step="0.5"
+                  step={getWeightInputStep(loadConvention)}
                   min="0"
                   value={localWeight}
                   onFocus={() => {
@@ -1242,6 +1243,16 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
                       setLocalWeight(defaultWeightRef.current);
                       const n = parseFloat(defaultWeightRef.current);
                       onPrescribedWeightChange?.(Number.isNaN(n) ? null : n);
+                      return;
+                    }
+                    const n = parseFloat(localWeight);
+                    if (!Number.isNaN(n)) {
+                      const snapped = snapToGymWeight(n, loadConvention, 'nearest');
+                      if (snapped != null) {
+                        const snappedStr = String(snapped);
+                        setLocalWeight(snappedStr);
+                        onPrescribedWeightChange?.(snapped);
+                      }
                     }
                   }}
                   placeholder={weightUnitSuffix}
