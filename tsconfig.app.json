@@ -24,10 +24,9 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
 
-    "baseUrl": ".",
     "paths": {
-      "@fitgen/visual": ["packages/fitgen-visual/src/index.ts"],
-      "@fitgen/visual/*": ["packages/fitgen-visual/src/*"]
+      "@fitgen/visual": ["./packages/fitgen-visual/src/index.ts"],
+      "@fitgen/visual/*": ["./packages/fitgen-visual/src/*"]
     }
   },
   "include": ["src", "packages/fitgen-visual/src"]

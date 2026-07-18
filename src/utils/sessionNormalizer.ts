@@ -42,6 +42,7 @@ function mapExerciseFields(ex: any) {
     equipo: ex.equipo,
     isUnilateral: ex.isUnilateral,
     isBodyweight: ex.isBodyweight ?? ex.loadMode === 'bodyweight',
+    emphasisTag: ex.emphasisTag ?? null,
     prescribedLoadKg: ex.prescribedLoadKg,
     suggestedLoadKg: ex.suggestedLoadKg,
     peso: buildPesoLabel({ ...ex, loadConvention }),
@@ -243,6 +244,8 @@ export function normalizeSession(raw: any): GeneratedSession | null {
   // TIP & SUMMARY defaults
   session.tipOfTheDay = session.tipOfTheDay || session.tip || '';
   session.summary = session.summary || { duracionEstimada: '0 min', duracionMinutos: 0, ejerciciosTotales: 0, seriesTotales: 0, musculosTrabajos: [] };
+  session.finisher = session.finisher ?? null;
+  session.coachingBrief = session.coachingBrief ?? null;
 
   return session as GeneratedSession;
 }

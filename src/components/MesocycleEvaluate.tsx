@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User } from 'firebase/auth';
 import { AlertTriangle } from 'lucide-react';
@@ -51,15 +51,16 @@ const PAIN_OPTIONS: PainOption[] = [
 ];
 
 const NEXT_GOAL_OPTIONS: Option[] = [
-  { value: 'Ganancia Muscular', label: 'Ganancia muscular' },
-  { value: 'Pérdida de Grasa', label: 'Pérdida de grasa' },
-  { value: 'Fuerza Máxima', label: 'Fuerza máxima' },
-  { value: 'Resistencia', label: 'Resistencia / fitness general' },
+  { value: 'body:Ganar_Musculo', label: 'Ganar músculo' },
+  { value: 'body:Perder_Grasa', label: 'Perder grasa' },
+  { value: 'fitness:Fuerza', label: 'Fuerza máxima' },
+  { value: 'fitness:Hipertrofia', label: 'Hipertrofia (volumen)' },
 ];
 
 const STEPS = [
   { eyebrow: 'Dificultad', title: '¿Cómo fue el bloque?', body: 'Promedio de las últimas 4 semanas.' },
   { eyebrow: 'Molestias', title: '¿Alguna limitación?', body: 'Dolor que te obligó a cambiar ejercicios.' },
+  { eyebrow: 'Medidas', title: 'Check-in completo', body: 'Peso obligatorio. Cintura y otras medidas opcionales.' },
   { eyebrow: 'Objetivo', title: '¿Cambiar enfoque?', body: 'Opcional — mantén el actual si quieres.' },
   { eyebrow: 'Notas', title: 'Algo más que debamos saber?', body: 'Opcional.' },
 ];
@@ -69,11 +70,15 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
   const [step, setStep] = useState(0);
   const [difficultyScore, setDifficultyScore] = useState<number | null>(null);
   const [painAreas, setPainAreas] = useState<string[]>(['none']);
+  const [weightKg, setWeightKg] = useState('');
+  const [waistCm, setWaistCm] = useState('');
+  const [hipCm, setHipCm] = useState('');
+  const [armCm, setArmCm] = useState('');
+  const [thighCm, setThighCm] = useState('');
   const [nextGoalPreference, setNextGoalPreference] = useState('');
   const [notes, setNotes] = useState('');
-  const [status, setStatus] = useState<'idle' | 'evaluating' | 'generating' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'evaluating' | 'success' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [generateApiDone, setGenerateApiDone] = useState(false);
   const [loaderSequenceDone, setLoaderSequenceDone] = useState(false);
   const [levelUpData, setLevelUpData] = useState<{
     celebrationTitle: string;
@@ -85,14 +90,21 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
   const [achievementUnlocks, setAchievementUnlocks] = useState<GamificationAchievementUnlock[]>([]);
   const [showAchievementModal, setShowAchievementModal] = useState(false);
 
-  const isBusy = useMemo(() => status === 'evaluating' || status === 'generating', [status]);
+  const isBusy = status === 'evaluating';
   const isLast = step === STEPS.length - 1;
   const progress = ((step + 1) / STEPS.length) * 100;
 
   useEffect(() => {
-    if (status !== 'generating' || !generateApiDone || !loaderSequenceDone) return;
+    const initial =
+      (profileData?.currentWeightKg as number | undefined) ??
+      (profileData?.initialWeight as number | undefined);
+    if (initial != null) setWeightKg(String(initial));
+  }, [profileData]);
+
+  useEffect(() => {
+    if (status !== 'evaluating' || !loaderSequenceDone) return;
     setStatus('success');
-  }, [status, generateApiDone, loaderSequenceDone]);
+  }, [status, loaderSequenceDone]);
 
   const handlePainSelect = (value: string) => {
     setPainAreas((prevAreas) => {
@@ -114,11 +126,17 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
       return;
     }
 
+    const weight = parseFloat(weightKg);
+    if (!Number.isFinite(weight) || weight < 30) {
+      setError('Ingresa tu peso actual (kg) en el paso de medidas.');
+      setStep(2);
+      return;
+    }
+
     const painPayload = painAreas.includes('none') ? [] : painAreas;
     const token = await user.getIdToken();
 
     try {
-      setGenerateApiDone(false);
       setLoaderSequenceDone(false);
       setStatus('evaluating');
 
@@ -129,6 +147,13 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
           painAreas: painPayload,
           nextGoalPreference,
           notes,
+          bodyMetrics: {
+            weightKg: weight,
+            waistCm: waistCm ? parseFloat(waistCm) : null,
+            hipCm: hipCm ? parseFloat(hipCm) : null,
+            armCm: armCm ? parseFloat(armCm) : null,
+            thighCm: thighCm ? parseFloat(thighCm) : null,
+          },
         }),
       });
 
@@ -152,25 +177,6 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
         setLevelUpData(evaluationData.levelUpgrade);
         setShowLevelUpModal(true);
       }
-
-      setStatus('generating');
-      setLoaderSequenceDone(false);
-      const generationResponse = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, token, {
-        method: 'POST',
-      });
-
-      if (!generationResponse.ok) {
-        let errorMessage = 'Fallo al generar el nuevo mesociclo.';
-        try {
-          const errorData = await generationResponse.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
-        } catch {
-          errorMessage = `Error del servidor. Código: ${generationResponse.status}.`;
-        }
-        throw new Error(errorMessage);
-      }
-
-      setGenerateApiDone(true);
     } catch (err) {
       console.error(err);
       setStatus('error');
@@ -183,6 +189,13 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
     if (step === 0 && difficultyScore === null) {
       setError('Selecciona una dificultad.');
       return;
+    }
+    if (step === 2) {
+      const weight = parseFloat(weightKg);
+      if (!Number.isFinite(weight) || weight < 30) {
+        setError('Ingresa tu peso actual (kg).');
+        return;
+      }
     }
     if (isLast) void handleSubmit();
     else setStep((s) => s + 1);
@@ -200,15 +213,11 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
 
     return (
       <MesocycleGenerationLoader
-        title={status === 'evaluating' ? 'Evaluando tu mesociclo' : 'Generando tu próximo bloque'}
-        subtitle={
-          status === 'evaluating'
-            ? 'Analizando dificultad, molestias y progreso del ciclo anterior…'
-            : 'Aplicando los ajustes de volumen a tu nuevo mesociclo…'
-        }
+        title="Evaluando tu mesociclo"
+        subtitle="Analizando dificultad, medidas y progreso del ciclo anterior…"
         profile={loaderProfile}
-        phase={status === 'evaluating' ? 'saving' : 'generating'}
-        evaluationMode={status === 'generating'}
+        phase="generating"
+        evaluationMode
         onSequenceComplete={() => setLoaderSequenceDone(true)}
       />
     );
@@ -222,7 +231,7 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
             <AppHero
               eyebrow="Mesociclo"
               title="¡Nuevo bloque listo!"
-              body="Tu plan ya incluye los ajustes de volumen según tu feedback."
+              body="Tu plan ya incluye los ajustes de volumen según tu feedback y medidas."
             />
           </div>
           <AppFixedFooter>
@@ -304,6 +313,49 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
           )}
 
           {step === 2 && (
+            <div className="space-y-3">
+              <label className="block">
+                <span className="text-xs text-zinc-400">Peso (kg) *</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={weightKg}
+                  onChange={(e) => setWeightKg(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white focus:border-lime-500 focus:outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-zinc-400">Cintura (cm)</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={waistCm}
+                  onChange={(e) => setWaistCm(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white focus:border-lime-500 focus:outline-none"
+                />
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: 'Cadera', value: hipCm, set: setHipCm },
+                  { label: 'Brazo', value: armCm, set: setArmCm },
+                  { label: 'Muslo', value: thighCm, set: setThighCm },
+                ].map((field) => (
+                  <label key={field.label} className="block">
+                    <span className="text-[10px] text-zinc-500">{field.label}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={field.value}
+                      onChange={(e) => field.set(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-2 text-sm text-white focus:border-lime-500 focus:outline-none"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
             <div className="flex flex-col gap-2">
               <AppOptionButton selected={nextGoalPreference === ''} onClick={() => setNextGoalPreference('')}>
                 <span className="text-sm">Mantener mi objetivo actual</span>
@@ -320,7 +372,7 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
             </div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}

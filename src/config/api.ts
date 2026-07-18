@@ -50,6 +50,8 @@ export const API_ENDPOINTS = {
   // Mesociclos
   MESOCYCLE_GENERATE: `${API_BASE_URL}/api/mesocycle/generate`,
   MESOCYCLE_EVALUATE: `${API_BASE_URL}/api/mesocycle/evaluate`,
+
+  BODY_METRICS_CHECKIN: `${API_BASE_URL}/api/body-metrics/checkin`,
   
   // Usuario
   USER_PROFILE: `${API_BASE_URL}/api/user/profile`,

@@ -11,6 +11,15 @@ export type ExperienceLevel = 'Principiante' | 'Intermedio' | 'Avanzado';
 
 export type FitnessGoal = 'Hipertrofia' | 'Fuerza';
 
+export type BodyCompositionGoal = 'Mantener' | 'Perder_Grasa' | 'Ganar_Musculo';
+
+export type MuscleEmphasisIntensity = 'light' | 'moderate' | 'strong';
+
+export interface MusclePriority {
+  muscle: string;
+  intensity?: MuscleEmphasisIntensity;
+}
+
 export type FocusArea = 'General' | 'Tren_Superior' | 'Tren_Inferior' | 'Core';
 
 export type DayOfWeek = 'Lunes' | 'Martes' | 'Miércoles' | 'Jueves' | 'Viernes' | 'Sábado' | 'Domingo';
@@ -47,6 +56,8 @@ export interface ProfileData {
   experienceLevel: ExperienceLevel; // calculado por el sistema
   fitnessGoal: FitnessGoal;
   focusArea?: FocusArea;
+  bodyCompositionGoal?: BodyCompositionGoal;
+  musclePriorities?: MusclePriority[];
   
   // Configuración de entrenamiento
   trainingDaysPerWeek: number;
@@ -144,6 +155,8 @@ export interface GeneratedSession {
   
   // Resumen
   summary: SessionSummary;
+  finisher?: SessionFinisher | null;
+  coachingBrief?: SessionCoachingBrief | null;
 }
 
 export interface TrainingParameters {
@@ -341,6 +354,34 @@ export interface RecoveryTip {
 }
 
 // ==================== SESSION SUMMARY ====================
+
+export interface SessionFinisher {
+  tipo: 'finisher';
+  included: boolean;
+  optional: boolean;
+  nombre: string;
+  durationMinutes: number;
+  intensityLabel: string;
+  exerciseId: string;
+  exerciseName: string;
+  instrucciones: string;
+  rationale: string;
+  coachingTip: string;
+  imageUrl?: string | null;
+}
+
+export interface CoachingBriefItem {
+  id: string;
+  type: 'body_composition' | 'muscle_priority' | 'focus_area' | 'finisher' | 'strategy';
+  title: string;
+  message: string;
+  muscle?: string;
+}
+
+export interface SessionCoachingBrief {
+  bodyCompositionGoal?: BodyCompositionGoal;
+  items: CoachingBriefItem[];
+}
 
 export interface SessionSummary {
   duracionEstimada: string;

@@ -24,6 +24,10 @@ import HubAchievementsTab from './gamification/HubAchievementsTab';
 import HubSeasonTab from './gamification/HubSeasonTab';
 import HubSessionsTab, { buildSessionHistoryItem } from './gamification/HubSessionsTab';
 import HubRankingTab from './gamification/HubRankingTab';
+import BodyMetricsTrendSection from './BodyMetricsTrendSection';
+import BodyMetricsCheckinModal from './BodyMetricsCheckinModal';
+import { fetchBodyCheckinStatus } from '../api/bodyMetrics';
+import type { BodyMetricEntry } from '../types/bodyMetrics';
 import type { AvatarAppearance } from '@fitgen/visual';
 import {
   resolveAvatarAppearance,
@@ -72,6 +76,9 @@ interface StatsAndAchievementsProps {
       gender?: string;
       currentWeightKg?: number;
       initialWeight?: number;
+    };
+    bodyMetrics?: {
+      entries?: BodyMetricEntry[];
     };
   };
   onClose: () => void;
@@ -215,6 +222,10 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   const [avatarAppearance, setAvatarAppearance] = useState<AvatarAppearance>(() =>
     resolveAvatarAppearance(userProfile.profileData?.gender, userId),
   );
+  const [bodyMetricEntries, setBodyMetricEntries] = useState<BodyMetricEntry[]>(
+    () => userProfile.bodyMetrics?.entries ?? [],
+  );
+  const [showBodyCheckinModal, setShowBodyCheckinModal] = useState(false);
   const profileBodyWeightKg = useMemo(
     () => resolveProfileBodyWeightKg(userProfile?.profileData),
     [userProfile?.profileData],
@@ -276,6 +287,21 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       cancelled = true;
     };
   }, [authToken, userId]);
+
+  useEffect(() => {
+    if (!authToken) return;
+    let cancelled = false;
+    void fetchBodyCheckinStatus(authToken)
+      .then((data) => {
+        if (!cancelled && data.recent?.length) {
+          setBodyMetricEntries(data.recent.slice().reverse());
+        }
+      })
+      .catch((err) => console.warn('No se pudo cargar métricas corporales:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, userProfile.bodyMetrics?.entries?.length]);
 
   const stats = useMemo(() => {
     const datedSessions = history
@@ -554,25 +580,33 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
           ) : (
             <>
               {activeTab === 'home' && (
-                <HubHomeTab
-                  athleteName={userProfile.profileData?.name || 'Atleta'}
-                  fitCoins={fitCoins}
-                  seasonPoints={stats.seasonPoints}
-                  totalSessions={stats.totalSessions}
-                  currentStreak={stats.currentStreak}
-                  weeksCompleted={stats.weeksCompleted}
-                  mesocyclesCompleted={stats.mesocyclesCompleted}
-                  activeDays={stats.activeDays}
-                  thisWeekCount={thisWeekCount}
-                  lastSessionDate={stats.lastSessionDate}
-                  motivationalMessage={motivationalMessage}
-                  currentWeekMessage={stats.currentWeekMessage}
-                  avatarBaseStage={gamification?.avatar.baseStage ?? 0}
-                  avatarAppearance={avatarAppearance}
-                  nextGoal={nextGoal ?? null}
-                  onGoAchievements={() => setActiveTab('achievements')}
-                  onGoSeason={() => setActiveTab('season')}
-                />
+                <>
+                  <HubHomeTab
+                    athleteName={userProfile.profileData?.name || 'Atleta'}
+                    fitCoins={fitCoins}
+                    seasonPoints={stats.seasonPoints}
+                    totalSessions={stats.totalSessions}
+                    currentStreak={stats.currentStreak}
+                    weeksCompleted={stats.weeksCompleted}
+                    mesocyclesCompleted={stats.mesocyclesCompleted}
+                    activeDays={stats.activeDays}
+                    thisWeekCount={thisWeekCount}
+                    lastSessionDate={stats.lastSessionDate}
+                    motivationalMessage={motivationalMessage}
+                    currentWeekMessage={stats.currentWeekMessage}
+                    avatarBaseStage={gamification?.avatar.baseStage ?? 0}
+                    avatarAppearance={avatarAppearance}
+                    nextGoal={nextGoal ?? null}
+                    onGoAchievements={() => setActiveTab('achievements')}
+                    onGoSeason={() => setActiveTab('season')}
+                  />
+                  <div className="mt-5">
+                    <BodyMetricsTrendSection
+                      entries={bodyMetricEntries}
+                      onRegister={() => setShowBodyCheckinModal(true)}
+                    />
+                  </div>
+                </>
               )}
 
               {activeTab === 'achievements' && (
@@ -604,6 +638,22 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
           )}
         </div>
       </div>
+
+      <BodyMetricsCheckinModal
+        open={showBodyCheckinModal}
+        authToken={authToken}
+        initialWeightKg={
+          userProfile.profileData?.currentWeightKg ?? userProfile.profileData?.initialWeight
+        }
+        onClose={() => setShowBodyCheckinModal(false)}
+        onSaved={() => {
+          void fetchBodyCheckinStatus(authToken)
+            .then((data) => {
+              if (data.recent?.length) setBodyMetricEntries(data.recent.slice().reverse());
+            })
+            .catch(() => undefined);
+        }}
+      />
     </div>
   );
 };

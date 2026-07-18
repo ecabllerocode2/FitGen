@@ -12,7 +12,7 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import { API_ENDPOINTS, authenticatedFetch } from '../../config/api';
-import type { FitnessGoal, FocusArea, DayOfWeek, ExternalLoad } from '../../types/session';
+import type { FitnessGoal, FocusArea, DayOfWeek, ExternalLoad, BodyCompositionGoal, MusclePriority } from '../../types/session';
 import { TRAINING_AGE_OPTIONS, getExperienceLevelFromMonths } from '../../utils/experienceLevel';
 import { beginOnboardingCompletion } from '../../utils/onboardingCompletion';
 import { AppFixedFooter, AppHero, AppPrimaryButton, AppShell } from '../ui/AppPrimitives';
@@ -25,6 +25,25 @@ const GOALS: { value: FitnessGoal; title: string; desc: string }[] = [
   { value: 'Hipertrofia', title: 'Hipertrofia', desc: 'Volumen progresivo, 8–12 reps, estilo RP' },
   { value: 'Fuerza', title: 'Fuerza', desc: 'Cargas pesadas, 3–6 reps, levantamientos clave' },
 ];
+
+const BODY_COMPOSITION_OPTIONS: { value: BodyCompositionGoal; label: string; desc: string }[] = [
+  { value: 'Mantener', label: 'Mantener', desc: 'Sin cambio de composición como prioridad' },
+  { value: 'Perder_Grasa', label: 'Perder grasa', desc: 'Volumen conservador y RIR más alto' },
+  { value: 'Ganar_Musculo', label: 'Ganar músculo', desc: 'Énfasis en progresión de masa' },
+];
+
+const MUSCLE_OPTIONS = [
+  'Pecho',
+  'Espalda',
+  'Hombro',
+  'Bíceps',
+  'Tríceps',
+  'Cuádriceps',
+  'Isquiotibiales',
+  'Glúteos',
+  'Pantorrillas',
+  'Core',
+] as const;
 
 const FOCUS_OPTIONS: { value: FocusArea; label: string }[] = [
   { value: 'General', label: 'Balanceado' },
@@ -92,6 +111,8 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
   const [saveResult, setSaveResult] = useState<{ message: string; tier: string } | null>(null);
 
   const [goal, setGoal] = useState<FitnessGoal | ''>('');
+  const [bodyCompositionGoal, setBodyCompositionGoal] = useState<BodyCompositionGoal>('Mantener');
+  const [musclePriorities, setMusclePriorities] = useState<MusclePriority[]>([]);
   const [trainingAgeMonths, setTrainingAgeMonths] = useState(18);
   const [selectedDays, setSelectedDays] = useState<Set<DayOfWeek>>(new Set());
   const [injuries, setInjuries] = useState<string[]>([]);
@@ -106,6 +127,12 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
     const p = initialData?.profileData;
     if (!p) return;
     if (p.fitnessGoal) setGoal(p.fitnessGoal as FitnessGoal);
+    if ((p as { bodyCompositionGoal?: BodyCompositionGoal }).bodyCompositionGoal) {
+      setBodyCompositionGoal((p as { bodyCompositionGoal: BodyCompositionGoal }).bodyCompositionGoal);
+    }
+    if ((p as { musclePriorities?: MusclePriority[] }).musclePriorities) {
+      setMusclePriorities((p as { musclePriorities: MusclePriority[] }).musclePriorities);
+    }
     if (p.trainingAgeMonths) setTrainingAgeMonths(p.trainingAgeMonths);
     if (p.name) setName(p.name);
     if (p.age) setAge(String(p.age));
@@ -210,6 +237,8 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
         heightCm: parseInt(height),
         initialWeight: parseFloat(weight),
         fitnessGoal: goal,
+        bodyCompositionGoal,
+        musclePriorities,
         trainingAgeMonths,
         injuriesOrLimitations: injuries.length ? injuries : [],
         focusArea,
@@ -358,17 +387,32 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
 
           {/* Step 0: Goal */}
           {step === 0 && (
-            <div className="space-y-3">
-              {GOALS.map((g) => (
-                <OptionCard
-                  key={g.value}
-                  selected={goal === g.value}
-                  onClick={() => setGoal(g.value)}
-                  title={g.title}
-                  description={g.desc}
-                  icon={g.value === 'Hipertrofia' ? <Dumbbell className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
-                />
-              ))}
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-zinc-400">Objetivo de entrenamiento</p>
+                {GOALS.map((g) => (
+                  <OptionCard
+                    key={g.value}
+                    selected={goal === g.value}
+                    onClick={() => setGoal(g.value)}
+                    title={g.title}
+                    description={g.desc}
+                    icon={g.value === 'Hipertrofia' ? <Dumbbell className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
+                  />
+                ))}
+              </div>
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-zinc-400">Composición corporal</p>
+                {BODY_COMPOSITION_OPTIONS.map((opt) => (
+                  <OptionCard
+                    key={opt.value}
+                    selected={bodyCompositionGoal === opt.value}
+                    onClick={() => setBodyCompositionGoal(opt.value)}
+                    title={opt.label}
+                    description={opt.desc}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
@@ -491,6 +535,35 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
                       {f.label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-zinc-400 mb-3">Músculos a priorizar (máx. 2)</p>
+                <div className="flex flex-wrap gap-2">
+                  {MUSCLE_OPTIONS.map((muscle) => {
+                    const selected = musclePriorities.some((m) => m.muscle === muscle);
+                    return (
+                      <button
+                        key={muscle}
+                        type="button"
+                        onClick={() => {
+                          setMusclePriorities((prev) => {
+                            if (selected) return prev.filter((m) => m.muscle !== muscle);
+                            if (prev.length >= 2) return prev;
+                            return [...prev, { muscle, intensity: 'moderate' as const }];
+                          });
+                        }}
+                        className={`px-3 py-2 rounded-full text-xs font-medium border transition ${
+                          selected
+                            ? 'bg-lime-500/20 border-lime-500 text-lime-400'
+                            : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                        }`}
+                      >
+                        {muscle}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>

@@ -19,6 +19,7 @@ import { estimateSessionDuration } from '../utils/estimateWorkoutDuration';
 import { markSessionReviewed } from '../utils/sessionReviewContext';
 import { formatLoadLabel, resolveLoadConvention } from '../utils/loadConvention';
 import ExerciseSwapReasonModal, { type SwapReason } from './ExerciseSwapReasonModal';
+import SessionCoachingBrief from './SessionCoachingBrief';
 import {
   AppAccordion,
   AppBackButton,
@@ -79,6 +80,7 @@ interface FlexibleExercise {
   notas?: string;
   duracion?: string;
   instrucciones?: string;
+  emphasisTag?: string | null;
   url_img_0?: string;
   url_img_1?: string;
   tiempo?: string;
@@ -237,6 +239,12 @@ const MainExerciseRow = ({
           <p className="text-[11px] text-amber-400/90 mt-1.5 flex items-center gap-1">
             <AlertCircle className="w-3 h-3 shrink-0" />
             Ajuste por meseta
+          </p>
+        )}
+        {(exercise as FlexibleExercise).emphasisTag === 'priority' && (
+          <p className="text-[11px] text-lime-400/90 mt-1.5 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 shrink-0" />
+            Prioridad muscular · +1 serie
           </p>
         )}
       </div>
@@ -527,7 +535,9 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
       )}
 
       <main className="px-6 py-6 max-w-sm mx-auto w-full">
-        
+
+        <SessionCoachingBrief brief={(currentSession as { coachingBrief?: unknown }).coachingBrief as any} />
+
         <SwapTip />
 
         {currentSession.warmup && currentSession.warmup.length > 0 && (
@@ -580,6 +590,29 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
               {currentSession.coreBlock.ejercicios.map((ejercicio: any, idx: number) => (
                 <CoreExerciseRow key={ejercicio.id || idx} exercise={ejercicio} />
               ))}
+            </div>
+          </AppAccordion>
+        )}
+
+        {(currentSession as { finisher?: { included?: boolean; nombre?: string; durationMinutes?: number; exerciseName?: string; intensityLabel?: string; instrucciones?: string; optional?: boolean } }).finisher?.included && (
+          <AppAccordion
+            title={(currentSession as any).finisher.nombre || 'Finisher cardio'}
+            badge={`${(currentSession as any).finisher.durationMinutes} min · opcional`}
+            defaultOpen={isPreflight}
+          >
+            <div className="rounded-2xl bg-sky-500/10 border border-sky-500/20 p-4 space-y-3">
+              <p className="text-sm font-semibold text-white">
+                {(currentSession as any).finisher.exerciseName}
+              </p>
+              <p className="text-xs text-sky-200/80">
+                {(currentSession as any).finisher.intensityLabel}
+              </p>
+              <p className="text-sm text-zinc-400 leading-relaxed">
+                {(currentSession as any).finisher.instrucciones}
+              </p>
+              <p className="text-xs text-zinc-500">
+                Puedes omitirlo sin afectar tu progresión de fuerza. Hazlo al terminar el bloque principal o más tarde el mismo día.
+              </p>
             </div>
           </AppAccordion>
         )}

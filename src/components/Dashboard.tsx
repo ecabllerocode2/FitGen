@@ -22,6 +22,13 @@ import InstallPwaBanner from './InstallPwaBanner';
 import ProfileMenu from './ProfileMenu';
 import LevelUpCelebration from './LevelUpCelebration';
 import StatsAndAchievements, { type HubTab } from './StatsAndAchievements';
+import BodyMetricsCheckinModal from './BodyMetricsCheckinModal';
+import { fetchBodyCheckinStatus } from '../api/bodyMetrics';
+import {
+  bodyCheckinBannerMessage,
+  shouldShowBodyCheckinBanner,
+} from '../utils/bodyMetricsReminders';
+import type { BodyCheckinStatus, BodyMetricEntry } from '../types/bodyMetrics';
 import ProgressArenaCard from './gamification/ProgressArenaCard';
 import AdminUsersPanel from './admin/AdminUsersPanel';
 import { resolveAvatarAppearance } from '../utils/avatarAppearanceStorage';
@@ -102,6 +109,10 @@ interface UserProfile {
     lastCompletedDayOfWeek?: string;
     lastCompletedWeekNumber?: number;
     _history?: Record<string, unknown>;
+    bodyMetrics?: {
+        entries?: BodyMetricEntry[];
+        latest?: BodyMetricEntry | null;
+    };
 }
 interface DashboardProps {
     user: User;
@@ -232,6 +243,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
     const [recentSessions, setRecentSessions] = useState<RecentSessionRow[]>([]);
     const [authToken, setAuthToken] = useState('');
+    const [bodyCheckinStatus, setBodyCheckinStatus] = useState<BodyCheckinStatus | null>(null);
+    const [showBodyCheckinModal, setShowBodyCheckinModal] = useState(false);
+    const [bodyCheckinDismissed, setBodyCheckinDismissed] = useState(false);
 
     // A. Suscripción a Firestore (Lógica inalterada)
     useEffect(() => {
@@ -269,6 +283,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             }
         });
     }, [authToken, userProfile?.lastWorkoutDate]);
+
+    useEffect(() => {
+        if (!authToken) return;
+        void fetchBodyCheckinStatus(authToken)
+            .then((data) => setBodyCheckinStatus(data.status))
+            .catch((err) => console.warn('No se pudo cargar check-in corporal:', err));
+    }, [authToken, userProfile?.bodyMetrics?.latest?.recordedAt]);
 
     useEffect(() => {
         if (!user || !userProfile?.currentSession) return;
@@ -813,6 +834,36 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         onOpen={() => openProgressHub('home')}
                     />
                 </div>
+                {authToken &&
+                bodyCheckinStatus &&
+                shouldShowBodyCheckinBanner(bodyCheckinStatus) &&
+                !bodyCheckinDismissed ? (
+                    <div className="shrink-0 pb-3">
+                        <div className="max-w-sm mx-auto rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm text-sky-100 leading-snug">
+                                    {bodyCheckinBannerMessage(bodyCheckinStatus)}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowBodyCheckinModal(true)}
+                                    className="mt-2 text-xs font-semibold text-lime-400 hover:text-lime-300"
+                                >
+                                    Registrar ahora →
+                                </button>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setBodyCheckinDismissed(true)}
+                                className="text-zinc-500 hover:text-zinc-300"
+                                aria-label="Cerrar aviso"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
                 <section className="flex-1 flex items-center justify-center py-4 min-h-0">
                     {isEvaluationPending ? (
                         <DashboardHero
@@ -1030,11 +1081,30 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                             startDate: userProfile.currentMesocycle.startDate,
                         } : undefined,
                         profileData: userProfile.profileData,
+                        bodyMetrics: userProfile.bodyMetrics,
                     }}
                     initialTab={statsInitialTab}
                     onClose={() => setShowStatsModal(false)}
                 />
             )}
+
+            {authToken ? (
+                <BodyMetricsCheckinModal
+                    open={showBodyCheckinModal}
+                    authToken={authToken}
+                    initialWeightKg={
+                        (userProfile?.profileData?.currentWeightKg as number | undefined) ??
+                        (userProfile?.profileData?.initialWeight as number | undefined)
+                    }
+                    onClose={() => setShowBodyCheckinModal(false)}
+                    onSaved={() => {
+                        setBodyCheckinDismissed(true);
+                        void fetchBodyCheckinStatus(authToken)
+                            .then((data) => setBodyCheckinStatus(data.status))
+                            .catch(() => undefined);
+                    }}
+                />
+            ) : null}
 
             {showAdminPanel && authToken && (
                 <AdminUsersPanel
