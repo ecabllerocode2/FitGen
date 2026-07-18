@@ -37,7 +37,7 @@ import {
   removeFromQueue,
   saveExerciseLogs,
 } from '../../utils/workoutOfflineQueue';
-import { formatLoadLabel, getWeightInputLabel, resolveLoadConvention } from '../../utils/loadConvention';
+import { formatLoadLabel, getLoadConventionHint, getWeightInputLabel, getWeightUnitSuffix, resolveLoadConvention } from '../../utils/loadConvention';
 import {
   AppEyebrow,
   AppFixedFooter,
@@ -1132,7 +1132,8 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   const parsedWeight = parsePrescribedKg(exercise);
   const loadConvention = resolveLoadConvention(exercise);
   const weight = exercise.peso ?? (parsedWeight != null ? formatLoadLabel(parsedWeight, loadConvention) ?? undefined : undefined);
-  const isExploratory = weight === 'Exploratorio' || (exercise as any).loadMode === 'exploratory';
+  const weightUnitSuffix = getWeightUnitSuffix(loadConvention);
+  const loadHint = getLoadConventionHint(loadConvention);
   const duracion = exercise.duracion || exercise.tiempo;
 
   useEffect(() => {
@@ -1243,15 +1244,13 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
                       onPrescribedWeightChange?.(Number.isNaN(n) ? null : n);
                     }
                   }}
-                  placeholder="kg"
+                  placeholder={weightUnitSuffix}
                   className="w-24 bg-zinc-900/80 border border-zinc-700 rounded-xl px-3 py-2 text-2xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-lime-500/50"
                 />
-                <span className="text-lg text-zinc-500">kg</span>
-                {isExploratory && (
-                  <button type="button" onClick={() => setActiveTooltip('peso')} className="p-1">
-                    <Info className="w-4 h-4 text-zinc-600" />
-                  </button>
-                )}
+                <span className="text-sm text-zinc-500 whitespace-nowrap">{weightUnitSuffix}</span>
+                <button type="button" onClick={() => setActiveTooltip('peso')} className="p-1">
+                  <Info className="w-4 h-4 text-zinc-600" />
+                </button>
               </div>
             ) : weight ? (
               <button
@@ -1262,6 +1261,10 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
               </button>
             ) : null}
           </div>
+
+          {type === 'main' && loadHint && (
+            <p className="text-xs text-zinc-500 mt-2">{loadHint}</p>
+          )}
 
           {/* Description toggle */}
           {description && (
@@ -1351,7 +1354,7 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
         title={weight === 'Exploratorio' ? 'Peso exploratorio' : 'Peso prescrito'}
         content={weight === 'Exploratorio' 
           ? 'Elige un peso que te permita completar las repeticiones con buena técnica. El sistema aprenderá de tu desempeño para las próximas sesiones.'
-          : 'Peso calculado según tu historial para alcanzar la intensidad objetivo de hoy.'}
+          : loadHint ?? 'Peso calculado según tu historial para alcanzar la intensidad objetivo de hoy.'}
         isOpen={activeTooltip === 'peso'}
         onClose={() => setActiveTooltip(null)}
       />

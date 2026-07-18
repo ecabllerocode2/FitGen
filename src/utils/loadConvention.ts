@@ -15,6 +15,40 @@ function normalizeEquipo(equipo: unknown): string[] {
     .filter(Boolean);
 }
 
+function inferConventionFromMetadata(exercise: Record<string, unknown>): LoadConvention | null {
+  const nombre = String(exercise.exerciseName ?? exercise.nombre ?? exercise.name ?? '');
+  const exerciseId = String(exercise.exerciseId ?? exercise.id ?? '');
+  const haystack = `${nombre} ${exerciseId}`;
+
+  if (/\b(unilateral|una mano|un brazo|single[-_ ]arm|one[-_ ]arm)\b/i.test(haystack)) {
+    return LOAD_CONVENTIONS.UNILATERAL;
+  }
+
+  if (/\b(goblet|plie|plié)\b/i.test(haystack) && /mancuerna|dumbbell|kettlebell/i.test(haystack)) {
+    return LOAD_CONVENTIONS.BARBELL_TOTAL;
+  }
+
+  if (/\bmancuernas\b|\bdumbbells\b/i.test(haystack) || /dumbbell_/i.test(exerciseId)) {
+    return LOAD_CONVENTIONS.DUMBBELL_PER_HAND;
+  }
+
+  if (/\bmancuerna\b|\bdumbbell\b|\bkettlebell\b/i.test(haystack)) {
+    return exercise.isUnilateral === true
+      ? LOAD_CONVENTIONS.UNILATERAL
+      : LOAD_CONVENTIONS.DUMBBELL_PER_HAND;
+  }
+
+  if (/\bbarra\b|\bbarbell\b/i.test(haystack)) {
+    return LOAD_CONVENTIONS.BARBELL_TOTAL;
+  }
+
+  if (/\bmáquina\b|\bmaquina\b|\bpolea\b|\bcable\b/i.test(haystack)) {
+    return LOAD_CONVENTIONS.MACHINE_STACK;
+  }
+
+  return null;
+}
+
 export function resolveLoadConvention(exercise: object = {}): LoadConvention {
   const ex = exercise as Record<string, unknown>;
   const stored = ex.loadConvention;
@@ -32,13 +66,19 @@ export function resolveLoadConvention(exercise: object = {}): LoadConvention {
     return LOAD_CONVENTIONS.BODYWEIGHT;
   }
 
+  if (ex.isUnilateral === true) {
+    return LOAD_CONVENTIONS.UNILATERAL;
+  }
+
+  const inferredUnilateral = inferConventionFromMetadata(ex);
+  if (inferredUnilateral === LOAD_CONVENTIONS.UNILATERAL) {
+    return LOAD_CONVENTIONS.UNILATERAL;
+  }
+
   const isDumbbellLike = /mancuerna|dumbbell|kettlebell|kettelbell/i.test(joined);
   const isBarbellLike = /barra|barbell|smith/i.test(joined);
   const isMachineLike = /máquina|maquina|polea|cable|selectorizado|stack|máquina de palancas/i.test(joined);
 
-  if (ex.isUnilateral === true) {
-    return LOAD_CONVENTIONS.UNILATERAL;
-  }
   if (isDumbbellLike && !isBarbellLike) {
     return LOAD_CONVENTIONS.DUMBBELL_PER_HAND;
   }
@@ -51,6 +91,9 @@ export function resolveLoadConvention(exercise: object = {}): LoadConvention {
   if (isDumbbellLike) {
     return LOAD_CONVENTIONS.DUMBBELL_PER_HAND;
   }
+
+  const inferred = inferConventionFromMetadata(ex);
+  if (inferred) return inferred;
 
   return LOAD_CONVENTIONS.BARBELL_TOTAL;
 }
@@ -90,5 +133,27 @@ export function getWeightInputLabel(convention: LoadConvention): string {
       return 'Peso (kg máquina)';
     default:
       return 'Peso (kg)';
+  }
+}
+
+export function getWeightUnitSuffix(convention: LoadConvention): string {
+  switch (convention) {
+    case LOAD_CONVENTIONS.DUMBBELL_PER_HAND:
+      return 'kg / mano';
+    case LOAD_CONVENTIONS.UNILATERAL:
+      return 'kg / lado';
+    default:
+      return 'kg';
+  }
+}
+
+export function getLoadConventionHint(convention: LoadConvention): string | null {
+  switch (convention) {
+    case LOAD_CONVENTIONS.DUMBBELL_PER_HAND:
+      return 'Registra el peso de cada mancuerna, no el total de ambas.';
+    case LOAD_CONVENTIONS.UNILATERAL:
+      return 'Registra el peso del lado que estás trabajando en esta serie.';
+    default:
+      return null;
   }
 }

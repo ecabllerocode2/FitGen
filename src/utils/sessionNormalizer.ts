@@ -39,6 +39,8 @@ function mapExerciseFields(ex: any) {
     instrucciones: ex.instrucciones,
     loadMode: ex.loadMode,
     loadConvention,
+    equipo: ex.equipo,
+    isUnilateral: ex.isUnilateral,
     isBodyweight: ex.isBodyweight ?? ex.loadMode === 'bodyweight',
     prescribedLoadKg: ex.prescribedLoadKg,
     suggestedLoadKg: ex.suggestedLoadKg,
