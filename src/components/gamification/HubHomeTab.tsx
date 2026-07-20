@@ -14,10 +14,12 @@ type HubHomeTabProps = {
   weeksCompleted: number;
   mesocyclesCompleted: number;
   activeDays: number;
-  thisWeekCount: number;
   lastSessionDate: Date | null;
   motivationalMessage: string;
   currentWeekMessage: string;
+  previousWeekMessage: string;
+  mesocycleWeekDone: number;
+  mesocycleWeekPlanned: number;
   avatarBaseStage: number;
   avatarAppearance: AvatarAppearance;
   nextGoal: {
@@ -40,10 +42,12 @@ export default function HubHomeTab({
   weeksCompleted,
   mesocyclesCompleted,
   activeDays,
-  thisWeekCount,
   lastSessionDate,
   motivationalMessage,
   currentWeekMessage,
+  previousWeekMessage,
+  mesocycleWeekDone,
+  mesocycleWeekPlanned,
   avatarBaseStage,
   avatarAppearance,
   nextGoal,
@@ -131,9 +135,10 @@ export default function HubHomeTab({
             </div>
           )}
         </div>
-        {thisWeekCount > 0 && (
+        {mesocycleWeekPlanned > 0 && (
           <p className="text-xs text-lime-400/90 mt-4 pt-4 border-t border-zinc-800">
-            {thisWeekCount} {thisWeekCount === 1 ? 'sesión' : 'sesiones'} esta semana
+            Semana del mesociclo: {mesocycleWeekDone} de {mesocycleWeekPlanned}{' '}
+            {mesocycleWeekPlanned === 1 ? 'sesión' : 'sesiones'}
           </p>
         )}
       </div>
@@ -193,8 +198,19 @@ export default function HubHomeTab({
 
       {currentWeekMessage && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 px-4 py-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-2">Esta semana</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-2">
+            Semana del mesociclo
+          </p>
           <p className="text-sm text-zinc-400">{currentWeekMessage}</p>
+        </div>
+      )}
+
+      {previousWeekMessage && (
+        <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 px-4 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-2">
+            Semana anterior
+          </p>
+          <p className="text-sm text-zinc-500">{previousWeekMessage}</p>
         </div>
       )}
 

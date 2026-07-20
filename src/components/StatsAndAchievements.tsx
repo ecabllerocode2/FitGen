@@ -9,7 +9,7 @@ import {
   ShoppingBag,
   Sparkles,
 } from 'lucide-react';
-import { format, differenceInDays, parseISO, startOfWeek, endOfWeek } from 'date-fns';
+import { format, differenceInDays, parseISO } from 'date-fns';
 import { fetchRecentSessions, type RecentSessionRow } from '../utils/recentSessions';
 import { db } from '../firebase';
 import { pickMotivationalPhraseForDate } from '../utils/motivationalPhrases';
@@ -32,6 +32,9 @@ import { fetchBodyCheckinStatus } from '../api/bodyMetrics';
 import type { BodyMetricEntry } from '../types/bodyMetrics';
 import type { AvatarAppearance } from '@fitgen/visual';
 import {
+  buildMesocycleWeekMessages,
+} from '../utils/mesocycleWeekProgress';
+import {
   resolveAvatarAppearance,
 } from '../utils/avatarAppearanceStorage';
 
@@ -42,6 +45,7 @@ interface HistorySession {
   sessionFocus: string;
   completedAt: string | null;
   weekNumber?: number | null;
+  dayOfWeek?: string | null;
   summary?: {
     durationLabel?: string;
     exerciseCount?: number;
@@ -68,7 +72,7 @@ interface StatsAndAchievementsProps {
       mesocyclePlan?: {
         microcycles?: Array<{
           week: number;
-          sessions: Array<{ dayOfWeek: string; sessionFocus: string }>;
+          sessions: Array<{ dayOfWeek: string; sessionFocus: string; isRestDay?: boolean }>;
         }>;
       };
       startDate?: string;
@@ -147,6 +151,7 @@ function mapRow(row: RecentSessionRow): HistorySession {
     sessionFocus: row.sessionFocus ?? 'Entrenamiento',
     completedAt: row.completedAt ?? row.archivedAt ?? null,
     weekNumber: row.weekNumber,
+    dayOfWeek: row.dayOfWeek ?? null,
     summary: {
       durationLabel: row.summary?.duracionEstimada ?? row.celebrationSummary?.durationLabel ?? '—',
       exerciseCount: row.summary?.ejerciciosTotales ?? row.celebrationSummary?.exerciseCount ?? 0,
@@ -356,39 +361,21 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
     }
 
     const weeksCompleted = gamification?.counters.lifetimeWeeksPerfect ?? 0;
-    let currentWeekProgress = 0;
-    let currentWeekTarget = 0;
-    let currentWeekMessage = '';
 
     const mesocycle = userProfile.currentMesocycle;
-    if (mesocycle?.mesocyclePlan?.microcycles && mesocycle.startDate) {
-      const mesocycleStartDate = parseISO(mesocycle.startDate);
-      const sessionsByWeek: Record<number, number> = {};
+    const currentWeek = mesocycle?.currentWeek ?? 1;
+    const microcycles = mesocycle?.mesocyclePlan?.microcycles;
 
-      datedSessions.forEach(({ date }) => {
-        if (date >= mesocycleStartDate) {
-          const weekIdx =
-            Math.floor(differenceInDays(date, mesocycleStartDate) / 7) + 1;
-          sessionsByWeek[weekIdx] = (sessionsByWeek[weekIdx] || 0) + 1;
-        }
-      });
+    const weekMessages = buildMesocycleWeekMessages(
+      microcycles,
+      currentWeek,
+      datedSessions.map(({ session }) => session),
+    );
 
-      mesocycle.mesocyclePlan.microcycles.forEach((microcycle) => {
-        const weekNum = microcycle.week;
-        const planned = microcycle.sessions.length;
-        const done = sessionsByWeek[weekNum] || 0;
-
-        if (weekNum === mesocycle.currentWeek) {
-          currentWeekProgress = done;
-          currentWeekTarget = planned;
-          const weekEnd = new Date(mesocycleStartDate);
-          weekEnd.setDate(weekEnd.getDate() + weekNum * 7);
-          if (new Date() > weekEnd && done < planned) {
-            currentWeekMessage = `Esta semana completaste ${done} de ${planned} sesiones. La siguiente es una nueva oportunidad.`;
-          }
-        }
-      });
-    }
+    const currentWeekProgress = weekMessages.done;
+    const currentWeekTarget = weekMessages.planned;
+    const currentWeekMessage = weekMessages.currentWeekMessage;
+    const previousWeekMessage = weekMessages.previousWeekMessage;
 
     const mesocyclesCompleted =
       gamification?.counters.lifetimeMesocyclesCompleted ?? 0;
@@ -406,6 +393,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       currentWeekProgress,
       currentWeekTarget,
       currentWeekMessage,
+      previousWeekMessage,
       lastSessionDate,
       seasonPoints: gamification?.counters.seasonPoints ?? 0,
       mesocyclesCompleted,
@@ -439,7 +427,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         icon: achievementIcon('first-week'),
         unlocked: stats.weeksCompleted >= 1,
         progress: stats.currentWeekProgress,
-        target: stats.currentWeekTarget || 4,
+        target: stats.currentWeekTarget || 1,
       },
       {
         id: 'first-month',
@@ -506,16 +494,6 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   const motivationalMessage = pickMotivationalPhraseForDate(
     stats.lastSessionDate?.toISOString() ?? userProfile.lastWorkoutDate,
   );
-
-  const thisWeekCount = useMemo(() => {
-    const now = new Date();
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
-    return history.filter((s) => {
-      const d = sessionDate(s);
-      return d && d >= weekStart && d <= weekEnd;
-    }).length;
-  }, [history]);
 
   const sessionHistoryItems = useMemo(
     () =>
@@ -610,10 +588,12 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                     weeksCompleted={stats.weeksCompleted}
                     mesocyclesCompleted={stats.mesocyclesCompleted}
                     activeDays={stats.activeDays}
-                    thisWeekCount={thisWeekCount}
                     lastSessionDate={stats.lastSessionDate}
                     motivationalMessage={motivationalMessage}
                     currentWeekMessage={stats.currentWeekMessage}
+                    previousWeekMessage={stats.previousWeekMessage}
+                    mesocycleWeekDone={stats.currentWeekProgress}
+                    mesocycleWeekPlanned={stats.currentWeekTarget}
                     avatarBaseStage={gamification?.avatar.baseStage ?? 0}
                     avatarAppearance={avatarAppearance}
                     nextGoal={nextGoal ?? null}
