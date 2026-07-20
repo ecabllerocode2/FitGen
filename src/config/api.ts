@@ -58,6 +58,12 @@ export const API_ENDPOINTS = {
   USER_PROFILE_SAVE: `${API_BASE_URL}/api/profile/save`,
 
   GAMIFICATION_SUMMARY: `${API_BASE_URL}/api/gamification/summary`,
+  GAMIFICATION_LEADERBOARD: `${API_BASE_URL}/api/gamification/leaderboard`,
+  GAMIFICATION_OPT_IN: `${API_BASE_URL}/api/gamification/opt-in-leaderboard`,
+  GAMIFICATION_EQUIP: `${API_BASE_URL}/api/gamification/equip`,
+  SHOP_CATALOG: `${API_BASE_URL}/api/shop/catalog`,
+  SHOP_PURCHASE: `${API_BASE_URL}/api/shop/purchase`,
+  SHOP_REDEEM_PREMIUM: `${API_BASE_URL}/api/shop/redeem-premium`,
   ADMIN_USERS_OVERVIEW: `${API_BASE_URL}/api/admin/users-overview`,
   
   // Otros endpoints que puedas necesitar

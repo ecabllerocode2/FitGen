@@ -56,7 +56,7 @@ export default function ProgressArenaCard({
             {tierLabel}
           </p>
           <p className="text-[11px] text-zinc-600 mt-0.5">
-            {unlockedAchievements} logros · Toca para abrir tu arena
+            {unlockedAchievements} logros · Toca para abrir tu GYM
           </p>
         </div>
 

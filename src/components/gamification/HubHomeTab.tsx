@@ -66,7 +66,7 @@ export default function HubHomeTab({
           />
           <div className="flex-1 min-w-0 pt-1">
             <p className="text-[10px] uppercase tracking-[0.24em] text-lime-400/90 font-semibold">
-              Bienvenido a tu arena
+              Bienvenido a tu GYM
             </p>
             <h3 className="text-2xl font-bold text-white mt-2">{athleteName.split(' ')[0]}</h3>
             <p className="text-sm text-zinc-400 mt-1">
@@ -201,7 +201,7 @@ export default function HubHomeTab({
       {totalSessions === 0 && (
         <div className="text-center py-8 rounded-2xl border border-dashed border-zinc-800">
           <Dumbbell className="w-10 h-10 text-zinc-700 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-white mb-2">Tu arena te espera</h3>
+          <h3 className="text-lg font-bold text-white mb-2">Tu GYM te espera</h3>
           <p className="text-sm text-zinc-500 px-6">
             Completa tu primera sesión para ganar FitCoins y desbloquear logros
           </p>

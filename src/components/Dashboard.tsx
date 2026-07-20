@@ -792,7 +792,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     <div className="flex items-center gap-0.5 shrink-0">
                         <DashboardIconButton
                             onClick={() => openProgressHub('home')}
-                            title="Arena FitGen"
+                            title="GYM FitGen"
                         >
                             <span className="relative">
                                 <Trophy className="w-4 h-4" />
@@ -892,7 +892,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                                     Ver tarjetas de sesión
                                 </DashboardPrimaryButton>
                                 <DashboardPrimaryButton variant="ghost" onClick={() => openProgressHub('home')}>
-                                    Abrir Arena FitGen
+                                    Abrir GYM FitGen
                                 </DashboardPrimaryButton>
                             </div>
                         </DashboardHero>
@@ -1083,6 +1083,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         profileData: userProfile.profileData,
                         bodyMetrics: userProfile.bodyMetrics,
                     }}
+                    seedGamification={gamificationSummary}
+                    onGamificationUpdated={setGamificationSummary}
                     initialTab={statsInitialTab}
                     onClose={() => setShowStatsModal(false)}
                 />

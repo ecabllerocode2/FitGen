@@ -28,6 +28,7 @@ import WorkoutSessionPlanModal from '../WorkoutSessionPlanModal';
 import { storePendingCelebration, type PendingCelebration } from '../WorkoutCelebrationPage';
 import type { SessionCelebrationData } from '../SessionCelebration';
 import { storePendingAchievementUnlocks } from '../gamification/AchievementUnlockModal';
+import { storePendingRewardsDelta } from '../gamification/RewardsEarnedCelebration';
 import { computeMainBlockVolumeFromLogs } from '../../utils/sessionWeight';
 import {
   clearWorkoutPersistence,
@@ -1495,6 +1496,9 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
   ) => {
     if (result.gamificationDelta?.newAchievements?.length) {
       storePendingAchievementUnlocks(result.gamificationDelta.newAchievements);
+    }
+    if (result.gamificationDelta) {
+      storePendingRewardsDelta(result.gamificationDelta);
     }
 
     if (result.weeklyAdjustment && Object.keys(result.weeklyAdjustment).length > 0) {

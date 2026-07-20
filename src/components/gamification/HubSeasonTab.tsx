@@ -92,7 +92,7 @@ export default function HubSeasonTab({
           ))}
         </div>
         <p className="text-[11px] text-zinc-500 mt-3 leading-relaxed">
-          FitCoins (FC) son tu moneda para skins y cosméticos. Los puntos de temporada definen tu posición en el ranking.
+          FitCoins (FC) son tu moneda para marcos y plantillas. Los puntos de temporada definen tu posición en el ranking.
         </p>
       </div>
     </div>
