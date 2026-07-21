@@ -41,6 +41,14 @@ import {
   type WorkoutProgressCheckpoint,
 } from '../../utils/workoutOfflineQueue';
 import { formatElapsedDuration } from '../../utils/estimateWorkoutDuration';
+import {
+  cancelTimerAlarm,
+  ensureNotificationPermission,
+  remainingSecondsFromEndsAt,
+  scheduleTimerAlarm,
+  showTimerNotification,
+  vibrateAlarmPattern,
+} from '../../utils/workoutTimerAlerts';
 import { formatLoadLabel, getLoadConventionHint, getWeightInputLabel, getWeightUnitSuffix, resolveLoadConvention } from '../../utils/loadConvention';
 import { getWeightInputStep, snapToGymWeight } from '../../utils/gymInventory';
 import {
@@ -1607,12 +1615,20 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
   );
   
   const [restSeconds, setRestSeconds] = useState(checkpoint?.restSeconds ?? 0);
-  const [remainingRestSeconds, setRemainingRestSeconds] = useState(
-    checkpoint?.remainingRestSeconds ?? 0,
-  );
+  const [remainingRestSeconds, setRemainingRestSeconds] = useState(() => {
+    if (checkpoint?.isResting && checkpoint.restEndsAt && !checkpoint.isPaused) {
+      return remainingSecondsFromEndsAt(checkpoint.restEndsAt);
+    }
+    return checkpoint?.remainingRestSeconds ?? 0;
+  });
   const [exerciseRemainingSeconds, setExerciseRemainingSeconds] = useState(0);
   const [exerciseTotalSeconds, setExerciseTotalSeconds] = useState(0);
-  const [alarmActive, setAlarmActive] = useState(false);
+  const [alarmActive, setAlarmActive] = useState(() => {
+    if (checkpoint?.isResting && checkpoint.restEndsAt && !checkpoint.isPaused) {
+      return remainingSecondsFromEndsAt(checkpoint.restEndsAt) <= 0;
+    }
+    return false;
+  });
   
   const [warmupIndex, setWarmupIndex] = useState(checkpoint?.warmupIndex ?? 0);
   const [mainStationIndex, setMainStationIndex] = useState(checkpoint?.mainStationIndex ?? 0);
@@ -1641,6 +1657,16 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
       ? crypto.randomUUID()
       : `completion-${Date.now()}`,
   );
+  const restEndsAtRef = useRef<number | null>(
+    checkpoint?.isResting && !checkpoint?.isPaused ? (checkpoint?.restEndsAt ?? null) : null,
+  );
+  const exerciseEndsAtRef = useRef<number | null>(null);
+  const restAlarmFiredRef = useRef(false);
+  const exerciseAlarmFiredRef = useRef(false);
+  const lastRestTickSecondRef = useRef<number | null>(null);
+  const lastExerciseTickSecondRef = useRef<number | null>(null);
+  const soundEnabledRef = useRef(soundEnabled);
+  soundEnabledRef.current = soundEnabled;
 
   useEffect(() => {
     const saved = loadExerciseLogs(sessionStorageId);
@@ -1872,56 +1898,185 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     }
   }, [getNextExerciseInfo, currentExercise]);
 
-  // Rest timer
+  // Rest timer — wall-clock so backgrounding the app does not freeze remaining time
   useEffect(() => {
     if (!isResting || isPaused || alarmActive) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
 
-    timerRef.current = setInterval(() => {
-      setRemainingRestSeconds(prev => {
-        if (prev <= 1) {
-          if (soundEnabled) playAlarmSound();
+    const syncRestFromWallClock = () => {
+      const endsAt = restEndsAtRef.current;
+      if (!endsAt) return;
+      const remaining = remainingSecondsFromEndsAt(endsAt);
+      setRemainingRestSeconds(remaining);
+
+      if (remaining <= 0) {
+        if (!restAlarmFiredRef.current) {
+          restAlarmFiredRef.current = true;
+          void cancelTimerAlarm('rest');
+          if (soundEnabledRef.current) playAlarmSound();
+          vibrateAlarmPattern();
+          if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+            void showTimerNotification({ kind: 'rest' });
+          }
           setAlarmActive(true);
-          return 0;
         }
-        if (prev <= 11 && prev > 1 && soundEnabled) playTickSound();
-        return prev - 1;
-      });
-    }, 1000);
+        return;
+      }
+
+      if (
+        remaining <= 10 &&
+        lastRestTickSecondRef.current !== remaining &&
+        soundEnabledRef.current &&
+        document.visibilityState === 'visible'
+      ) {
+        lastRestTickSecondRef.current = remaining;
+        playTickSound();
+      }
+    };
+
+    syncRestFromWallClock();
+    timerRef.current = setInterval(syncRestFromWallClock, 250);
 
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [isResting, isPaused, alarmActive, soundEnabled]);
+  }, [isResting, isPaused, alarmActive]);
 
-  // Exercise timer (for timed exercises)
+  // Exercise timer (timed holds) — same wall-clock approach
   useEffect(() => {
-    if (isResting || isPaused || !currentExercise || exerciseTotalSeconds <= 0) {
+    if (isResting || isPaused || !currentExercise || exerciseTotalSeconds <= 0 || alarmActive) {
       if (exerciseTimerRef.current) clearInterval(exerciseTimerRef.current);
       return;
     }
 
-    exerciseTimerRef.current = setInterval(() => {
-      setExerciseRemainingSeconds(prev => {
-        if (prev <= 1) {
-          console.log('⏰ Exercise timer finished! Setting alarm active...');
-          if (soundEnabled) playAlarmSound();
-          setAlarmActive(true);
-          return 0;
-        }
-        if (prev <= 11 && prev > 1 && soundEnabled) playTickSound();
-        return prev - 1;
+    if (!exerciseEndsAtRef.current) {
+      exerciseEndsAtRef.current = Date.now() + exerciseRemainingSeconds * 1000;
+      void scheduleTimerAlarm({
+        kind: 'exercise',
+        endsAt: exerciseEndsAtRef.current,
+        title: '¡Tiempo terminado!',
+        body: 'Vuelve a FitGen para continuar el ejercicio.',
       });
-    }, 1000);
+    }
+
+    const syncExerciseFromWallClock = () => {
+      const endsAt = exerciseEndsAtRef.current;
+      if (!endsAt) return;
+      const remaining = remainingSecondsFromEndsAt(endsAt);
+      setExerciseRemainingSeconds(remaining);
+
+      if (remaining <= 0) {
+        if (!exerciseAlarmFiredRef.current) {
+          exerciseAlarmFiredRef.current = true;
+          void cancelTimerAlarm('exercise');
+          if (soundEnabledRef.current) playAlarmSound();
+          vibrateAlarmPattern();
+          if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+            void showTimerNotification({ kind: 'exercise' });
+          }
+          setAlarmActive(true);
+        }
+        return;
+      }
+
+      if (
+        remaining <= 10 &&
+        lastExerciseTickSecondRef.current !== remaining &&
+        soundEnabledRef.current &&
+        document.visibilityState === 'visible'
+      ) {
+        lastExerciseTickSecondRef.current = remaining;
+        playTickSound();
+      }
+    };
+
+    syncExerciseFromWallClock();
+    exerciseTimerRef.current = setInterval(syncExerciseFromWallClock, 250);
 
     return () => { if (exerciseTimerRef.current) clearInterval(exerciseTimerRef.current); };
-  }, [isResting, isPaused, currentExercise, exerciseTotalSeconds, soundEnabled]);
+    // exerciseRemainingSeconds intentionally omitted — only seed endsAt when null on pause→play.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isResting, isPaused, currentExercise, exerciseTotalSeconds, alarmActive]);
+
+  // Catch up when returning from another app
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      if (isResting && !isPaused && restEndsAtRef.current) {
+        const remaining = remainingSecondsFromEndsAt(restEndsAtRef.current);
+        setRemainingRestSeconds(remaining);
+        if (remaining <= 0 && !alarmActive) {
+          restAlarmFiredRef.current = true;
+          void cancelTimerAlarm('rest');
+          if (soundEnabledRef.current) playAlarmSound();
+          vibrateAlarmPattern();
+          setAlarmActive(true);
+        }
+      }
+
+      if (!isResting && !isPaused && exerciseEndsAtRef.current && exerciseTotalSeconds > 0) {
+        const remaining = remainingSecondsFromEndsAt(exerciseEndsAtRef.current);
+        setExerciseRemainingSeconds(remaining);
+        if (remaining <= 0 && !alarmActive) {
+          exerciseAlarmFiredRef.current = true;
+          void cancelTimerAlarm('exercise');
+          if (soundEnabledRef.current) playAlarmSound();
+          vibrateAlarmPattern();
+          setAlarmActive(true);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onVisibility);
+    };
+  }, [isResting, isPaused, alarmActive, exerciseTotalSeconds]);
+
+  // Ask once for notification permission while the player is open
+  useEffect(() => {
+    void ensureNotificationPermission();
+  }, []);
+
+  // Re-arm background alarm after remount / restore mid-rest
+  useEffect(() => {
+    if (!isResting || isPaused || alarmActive) return;
+    let endsAt = restEndsAtRef.current;
+    if (!endsAt && remainingRestSeconds > 0) {
+      endsAt = Date.now() + remainingRestSeconds * 1000;
+      restEndsAtRef.current = endsAt;
+    }
+    if (!endsAt) return;
+    const remaining = remainingSecondsFromEndsAt(endsAt);
+    if (remaining <= 0) {
+      restAlarmFiredRef.current = true;
+      setRemainingRestSeconds(0);
+      setAlarmActive(true);
+      return;
+    }
+    void scheduleTimerAlarm({
+      kind: 'rest',
+      endsAt,
+      title: '¡Descanso terminado!',
+      body: 'Vuelve a FitGen para continuar tu serie.',
+    });
+    // Only on mount / when rest starts — not every remaining tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isResting]);
 
   // Setup exercise timer when exercise changes
   useEffect(() => {
     if (!currentExercise) return;
     
     const duration = getExerciseDurationInSeconds(currentExercise.exercise);
+    void cancelTimerAlarm('exercise');
+    exerciseEndsAtRef.current = null;
+    exerciseAlarmFiredRef.current = false;
+    lastExerciseTickSecondRef.current = null;
+
     if (duration && duration > 0) {
       setExerciseTotalSeconds(duration);
       setExerciseRemainingSeconds(duration);
@@ -2035,6 +2190,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
       isResting,
       restSeconds,
       remainingRestSeconds,
+      restEndsAt: isResting && !isPaused ? restEndsAtRef.current : null,
       isPaused,
       soundEnabled,
       warmupIndex,
@@ -2095,18 +2251,90 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
   }, [currentPhase, syncNotice]);
 
   const startRest = useCallback((seconds: number) => {
+    const endsAt = Date.now() + Math.max(0, seconds) * 1000;
+    restEndsAtRef.current = endsAt;
+    restAlarmFiredRef.current = false;
+    lastRestTickSecondRef.current = null;
     setRestSeconds(seconds);
     setRemainingRestSeconds(seconds);
+    setIsPaused(false);
     setIsResting(true);
     setAlarmActive(false);
+    void ensureNotificationPermission();
+    void scheduleTimerAlarm({
+      kind: 'rest',
+      endsAt,
+      title: '¡Descanso terminado!',
+      body: 'Vuelve a FitGen para continuar tu serie.',
+    });
   }, []);
 
   const endRest = useCallback(() => {
     stopAlarmSound();
+    void cancelTimerAlarm('rest');
+    restEndsAtRef.current = null;
+    restAlarmFiredRef.current = false;
+    lastRestTickSecondRef.current = null;
     setIsResting(false);
     setAlarmActive(false);
     setPendingLogContext(null);
   }, []);
+
+  const handlePauseToggle = useCallback(() => {
+    setIsPaused((prev) => {
+      const next = !prev;
+
+      if (isResting) {
+        if (next) {
+          // Pausing rest: freeze remaining from wall clock and cancel background alarm.
+          if (restEndsAtRef.current) {
+            const remaining = remainingSecondsFromEndsAt(restEndsAtRef.current);
+            setRemainingRestSeconds(remaining);
+          }
+          restEndsAtRef.current = null;
+          void cancelTimerAlarm('rest');
+        } else {
+          // Resuming rest.
+          setRemainingRestSeconds((remaining) => {
+            const endsAt = Date.now() + Math.max(0, remaining) * 1000;
+            restEndsAtRef.current = endsAt;
+            restAlarmFiredRef.current = false;
+            void scheduleTimerAlarm({
+              kind: 'rest',
+              endsAt,
+              title: '¡Descanso terminado!',
+              body: 'Vuelve a FitGen para continuar tu serie.',
+            });
+            return remaining;
+          });
+        }
+      } else if (exerciseTotalSeconds > 0) {
+        if (next) {
+          if (exerciseEndsAtRef.current) {
+            const remaining = remainingSecondsFromEndsAt(exerciseEndsAtRef.current);
+            setExerciseRemainingSeconds(remaining);
+          }
+          exerciseEndsAtRef.current = null;
+          void cancelTimerAlarm('exercise');
+        } else {
+          setExerciseRemainingSeconds((remaining) => {
+            const endsAt = Date.now() + Math.max(0, remaining) * 1000;
+            exerciseEndsAtRef.current = endsAt;
+            exerciseAlarmFiredRef.current = false;
+            void scheduleTimerAlarm({
+              kind: 'exercise',
+              endsAt,
+              title: '¡Tiempo terminado!',
+              body: 'Vuelve a FitGen para continuar el ejercicio.',
+            });
+            return remaining;
+          });
+        }
+      }
+
+      return next;
+    });
+  }, [isResting, exerciseTotalSeconds]);
 
   const advanceToNext = useCallback(() => {
     const mainBlocks = getMainBlocks();
@@ -2386,6 +2614,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     allowExitRef.current = true;
     setShowExitConfirm(false);
     stopAlarmSound();
+    void cancelTimerAlarm('rest');
+    void cancelTimerAlarm('exercise');
     if (onExit) {
       onExit();
     } else {
@@ -2397,6 +2627,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
   const handleExit = requestExit;
 
   const handlePhaseIntroContinue = useCallback(() => {
+    void ensureNotificationPermission();
     setShowPhaseIntro(false);
   }, []);
 
@@ -2726,7 +2957,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
           nextExercise={getNextExerciseInfo()}
           isPaused={isPaused}
           onSkip={handleSkipRest}
-          onPauseToggle={() => setIsPaused(!isPaused)}
+          onPauseToggle={handlePauseToggle}
           alarmActive={alarmActive}
           onDismissAlarm={handleDismissAlarm}
           pendingLogContext={pendingLogContext}
@@ -2745,7 +2976,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
           totalDurationSeconds={exerciseTotalSeconds}
           isTimedExercise={exerciseTotalSeconds > 0}
           onComplete={handleCompleteExercise}
-          onPauseToggle={() => setIsPaused(!isPaused)}
+          onPauseToggle={handlePauseToggle}
           onExit={handleExit}
           soundEnabled={soundEnabled}
           onToggleSound={() => setSoundEnabled(!soundEnabled)}

@@ -37,6 +37,8 @@ export interface WorkoutProgressCheckpoint {
   isResting: boolean;
   restSeconds: number;
   remainingRestSeconds: number;
+  /** Wall-clock epoch ms when the current rest should hit 0 (null if paused / not resting). */
+  restEndsAt?: number | null;
   isPaused: boolean;
   soundEnabled: boolean;
   warmupIndex: number;

@@ -18,9 +18,13 @@ export default defineConfig({
       registerType: 'autoUpdate',
       
       // 🎯 CRÍTICO 1: Usar el nombre de archivo robusto para evitar colisiones
-      filename: 'service-worker.js', 
+      filename: 'service-worker.js',
+      // Background rest/exercise alarms while the workout player is suspended.
+      workbox: {
+        importScripts: ['workout-timer-sw.js'],
+      },
       
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'], 
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', 'pwa-192x192.png', 'pwa-512x512.png', 'workout-timer-sw.js'], 
       manifest: {
         name: 'FitGen',
         short_name: 'FitGen',
