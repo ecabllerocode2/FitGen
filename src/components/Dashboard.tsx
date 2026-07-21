@@ -31,7 +31,7 @@ import {
 import type { BodyCheckinStatus, BodyMetricEntry } from '../types/bodyMetrics';
 import ProgressArenaCard from './gamification/ProgressArenaCard';
 import AdminUsersPanel from './admin/AdminUsersPanel';
-import { resolveAvatarAppearance } from '../utils/avatarAppearanceStorage';
+import { resolveAvatarAppearance, resolveAvatarStartingBuildForDisplay } from '../utils/avatarAppearanceStorage';
 import MesocycleGenerationLoader from './MesocycleGenerationLoader';
 import {
     DashboardEyebrow,
@@ -52,6 +52,7 @@ import { MIN_SESSION_GENERATION_DISPLAY_MS, waitMs } from '../utils/sessionGener
 import { markSessionReviewed } from '../utils/sessionReviewContext';
 import { fetchGamificationSummary } from '../api/gamification';
 import type { GamificationSummary } from '../types/gamification';
+import type { AvatarStartingBuild } from '@fitgen/visual';
 
 // ====================================================================
 
@@ -414,8 +415,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                 ) ||
                 (
                     userProfile.lastCompletedDayOfWeek?.toLowerCase() === todayNameLower &&
-                    (userProfile.lastCompletedWeekNumber == null ||
-                        userProfile.lastCompletedWeekNumber === currentWeekCalc) &&
                     userProfile.lastWorkoutDate &&
                     new Date(userProfile.lastWorkoutDate).toDateString() === today.toDateString()
                 )
@@ -500,11 +499,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     const userName = userProfile?.profileData?.name || userProfile?.name || 'Atleta';
 
     const avatarAppearance = useMemo(
-        () => resolveAvatarAppearance(
-            userProfile?.profileData?.gender as string | undefined,
-            user.uid,
-        ),
-        [userProfile?.profileData?.gender, user.uid],
+        () => {
+            const appearance = resolveAvatarAppearance(
+                userProfile?.profileData?.gender as string | undefined,
+                user.uid,
+                userProfile?.profileData?.avatarStartingBuild as AvatarStartingBuild | undefined,
+            );
+            const startingBuild = resolveAvatarStartingBuildForDisplay(
+                userProfile?.profileData?.gender as string | undefined,
+                user.uid,
+                userProfile?.profileData?.avatarStartingBuild as AvatarStartingBuild | undefined,
+            );
+            return { ...appearance, startingBuild };
+        },
+        [userProfile?.profileData?.gender, userProfile?.profileData?.avatarStartingBuild, user.uid],
     );
 
     const handleLogout = async () => {
@@ -601,6 +609,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         alert(`❌ Error de contexto: ${errorJson.error}\n\nPosibles causas:\n- No se encontró tu perfil en Firestore\n- No hay mesociclo activo\n- No se encontró el catálogo de ejercicios\n\nRevisa la consola del backend para más detalles.`);
                     } else if (errorJson.code === 'NO_ACTIVE_MESOCYCLE') {
                         alert('❌ No hay mesociclo activo. Por favor, genera un mesociclo primero.');
+                    } else if (res.status === 409 || errorJson.alreadyCompletedToday) {
+                        alert(errorJson.error || 'Ya completaste la sesión de hoy. Vuelve mañana para la siguiente.');
                     } else {
                         alert(`Error ${res.status}: ${errorJson.error || errorJson.message || 'Error desconocido'}\n\nCódigo: ${errorJson.code}`);
                     }
@@ -1079,6 +1089,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                             progress: userProfile.currentMesocycle.progress || 0,
                             mesocyclePlan: userProfile.currentMesocycle.mesocyclePlan,
                             startDate: userProfile.currentMesocycle.startDate,
+                            durationWeeks: userProfile.currentMesocycle.mesocyclePlan?.durationWeeks,
                         } : undefined,
                         profileData: userProfile.profileData,
                         bodyMetrics: userProfile.bodyMetrics,

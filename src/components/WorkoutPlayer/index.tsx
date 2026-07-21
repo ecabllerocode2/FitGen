@@ -12,7 +12,6 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  Dumbbell,
   AlertCircle,
   Check,
   Info,
@@ -49,6 +48,7 @@ import {
   showTimerNotification,
   vibrateAlarmPattern,
 } from '../../utils/workoutTimerAlerts';
+import { AnimatedExerciseMedia, ExerciseMediaImage, preloadExerciseImages } from '../ExerciseMediaImage';
 import { formatLoadLabel, getLoadConventionHint, getWeightInputLabel, getWeightUnitSuffix, resolveLoadConvention } from '../../utils/loadConvention';
 import { getWeightInputStep, snapToGymWeight } from '../../utils/gymInventory';
 import {
@@ -271,90 +271,6 @@ interface NextExerciseInfo {
   equipment?: string[];
 }
 
-/** Soften flaky R2/mobile loads: retry, secondary URL, no-referrer. */
-function withImageRetryParam(url: string, attempt: number): string {
-  if (attempt <= 0) return url;
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}fgretry=${attempt}`;
-}
-
-interface ResilientExerciseImageProps {
-  imageUrl?: string;
-  imageUrl2?: string;
-  alt: string;
-  className?: string;
-  imgClassName?: string;
-  fallbackIconClassName?: string;
-}
-
-const ResilientExerciseImage: React.FC<ResilientExerciseImageProps> = ({
-  imageUrl,
-  imageUrl2,
-  alt,
-  className = '',
-  imgClassName = 'w-full h-full object-cover',
-  fallbackIconClassName = 'w-6 h-6 text-zinc-500',
-}) => {
-  const candidates = [imageUrl, imageUrl2].filter(
-    (u, i, arr): u is string => Boolean(u) && arr.indexOf(u) === i,
-  );
-  const [candidateIndex, setCandidateIndex] = useState(0);
-  const [attempt, setAttempt] = useState(0);
-  const [failed, setFailed] = useState(candidates.length === 0);
-
-  useEffect(() => {
-    setCandidateIndex(0);
-    setAttempt(0);
-    setFailed(candidates.length === 0);
-  }, [imageUrl, imageUrl2]);
-
-  const activeUrl = !failed && candidates[candidateIndex]
-    ? withImageRetryParam(candidates[candidateIndex], attempt)
-    : null;
-
-  const handleError = () => {
-    if (attempt < 2) {
-      setAttempt((prev) => prev + 1);
-      return;
-    }
-    if (candidateIndex + 1 < candidates.length) {
-      setCandidateIndex((prev) => prev + 1);
-      setAttempt(0);
-      return;
-    }
-    setFailed(true);
-  };
-
-  return (
-    <div className={className}>
-      {activeUrl ? (
-        <img
-          key={activeUrl}
-          src={activeUrl}
-          alt={alt}
-          className={imgClassName}
-          referrerPolicy="no-referrer"
-          decoding="async"
-          onError={handleError}
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          <Dumbbell className={fallbackIconClassName} />
-        </div>
-      )}
-    </div>
-  );
-};
-
-function preloadExerciseImages(...urls: Array<string | undefined | null>) {
-  for (const url of urls) {
-    if (!url) continue;
-    const img = new Image();
-    img.referrerPolicy = 'no-referrer';
-    img.src = url;
-  }
-}
-
 // ==================== HELPERS ====================
 
 const isBodyweightExercise = (ex: FlexibleExercise): boolean => {
@@ -511,92 +427,6 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
           </span>
         )}
       </div>
-    </div>
-  );
-};
-
-// ==================== ANIMATED EXERCISE IMAGE ====================
-
-interface AnimatedExerciseImageProps {
-  imageUrl1?: string;
-  imageUrl2?: string;
-  exerciseName: string;
-}
-
-const AnimatedExerciseImage: React.FC<AnimatedExerciseImageProps> = ({
-  imageUrl1,
-  imageUrl2,
-  exerciseName
-}) => {
-  const [showFirst, setShowFirst] = useState(true);
-  const [failedPrimary, setFailedPrimary] = useState(false);
-  const [failedSecondary, setFailedSecondary] = useState(false);
-  const [retryTick, setRetryTick] = useState(0);
-  
-  useEffect(() => {
-    setFailedPrimary(false);
-    setFailedSecondary(false);
-    setRetryTick(0);
-    setShowFirst(true);
-  }, [imageUrl1, imageUrl2]);
-
-  useEffect(() => {
-    // Si no hay segunda imagen, no animar
-    if (!imageUrl1 || !imageUrl2 || failedPrimary || failedSecondary) return;
-    
-    const interval = setInterval(() => {
-      setShowFirst(prev => !prev);
-    }, 1500);
-    
-    return () => clearInterval(interval);
-  }, [imageUrl1, imageUrl2, failedPrimary, failedSecondary]);
-
-  const primary = imageUrl1 && !failedPrimary
-    ? withImageRetryParam(imageUrl1, retryTick)
-    : null;
-  const secondary = imageUrl2 && !failedSecondary
-    ? withImageRetryParam(imageUrl2, retryTick)
-    : null;
-  const currentImage = showFirst
-    ? (primary || secondary)
-    : (secondary || primary);
-  const hasAnimation = Boolean(primary && secondary);
-
-  const handleError = () => {
-    if (retryTick < 2) {
-      setRetryTick((t) => t + 1);
-      return;
-    }
-    if (showFirst && imageUrl1) setFailedPrimary(true);
-    else if (imageUrl2) setFailedSecondary(true);
-    else if (imageUrl1) setFailedPrimary(true);
-  };
-
-  return (
-    <div className="relative w-full aspect-video bg-zinc-800 rounded-2xl overflow-hidden">
-      {currentImage ? (
-        <>
-          <img 
-            key={currentImage}
-            src={currentImage} 
-            alt={exerciseName}
-            className="w-full h-full object-contain transition-opacity duration-500"
-            referrerPolicy="no-referrer"
-            decoding="async"
-            onError={handleError}
-          />
-          {hasAnimation && (
-            <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full flex items-center gap-1">
-              <div className={`w-2 h-2 rounded-full transition-colors ${showFirst ? 'bg-lime-500' : 'bg-zinc-500'}`} />
-              <div className={`w-2 h-2 rounded-full transition-colors ${!showFirst ? 'bg-lime-500' : 'bg-zinc-500'}`} />
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          <Dumbbell className="w-16 h-16 text-zinc-600" />
-        </div>
-      )}
     </div>
   );
 };
@@ -1100,7 +930,7 @@ const RestScreen: React.FC<RestScreenProps> = ({
       <div className="w-full max-w-sm bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 shrink-0">
         <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Siguiente</p>
         <div className="flex items-center gap-3">
-          <ResilientExerciseImage
+          <ExerciseMediaImage
             imageUrl={nextExercise.imageUrl}
             imageUrl2={nextExercise.imageUrl2}
             alt={nextExercise.name}
@@ -1363,7 +1193,7 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
 
       <div className="flex-1 flex flex-col px-5 overflow-y-auto">
         <div className="w-full shrink-0 rounded-2xl overflow-hidden ring-1 ring-zinc-800/80 bg-zinc-900/40">
-          <AnimatedExerciseImage 
+          <AnimatedExerciseMedia
             imageUrl1={getExerciseImage(exercise)}
             imageUrl2={getExerciseImage2(exercise)}
             exerciseName={name}

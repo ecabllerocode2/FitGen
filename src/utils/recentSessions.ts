@@ -73,7 +73,7 @@ export function subscribeRecentSessions(
   db: Firestore,
   userId: string,
   onRows: (rows: RecentSessionRow[]) => void,
-  max = 10,
+  max = 40,
 ) {
   const ref = collection(db, 'users', userId, 'recentSessions');
   return onSnapshot(
@@ -107,13 +107,12 @@ export function completedScheduledSessionToday(
   sessions: RecentSessionRow[],
   today: Date,
   todayNameLower: string,
-  currentWeek: number,
+  _currentWeek?: number,
 ): boolean {
-  const latest = sessions.find((s) => s.completed !== false);
-  if (!latest) return false;
-  if (!sessionCompletedOnCalendarDay(latest, today)) return false;
-  return (
-    latest.dayOfWeek?.toLowerCase() === todayNameLower &&
-    (latest.weekNumber == null || latest.weekNumber === currentWeek)
-  );
+  // Prefer any completion today for today's weekday. Week numbers can drift FE vs BE.
+  return sessions.some((session) => {
+    if (session.completed === false) return false;
+    if (!sessionCompletedOnCalendarDay(session, today)) return false;
+    return session.dayOfWeek?.toLowerCase() === todayNameLower;
+  });
 }
