@@ -31,7 +31,7 @@ import {
 import type { BodyCheckinStatus, BodyMetricEntry } from '../types/bodyMetrics';
 import ProgressArenaCard from './gamification/ProgressArenaCard';
 import AdminUsersPanel from './admin/AdminUsersPanel';
-import { resolveAvatarAppearance, resolveAvatarStartingBuildForDisplay } from '../utils/avatarAppearanceStorage';
+import { resolveAvatarAppearance } from '../utils/avatarAppearanceStorage';
 import MesocycleGenerationLoader from './MesocycleGenerationLoader';
 import {
     DashboardEyebrow,
@@ -52,7 +52,6 @@ import { MIN_SESSION_GENERATION_DISPLAY_MS, waitMs } from '../utils/sessionGener
 import { markSessionReviewed } from '../utils/sessionReviewContext';
 import { fetchGamificationSummary } from '../api/gamification';
 import type { GamificationSummary } from '../types/gamification';
-import type { AvatarStartingBuild } from '@fitgen/visual';
 
 // ====================================================================
 
@@ -499,20 +498,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     const userName = userProfile?.profileData?.name || userProfile?.name || 'Atleta';
 
     const avatarAppearance = useMemo(
-        () => {
-            const appearance = resolveAvatarAppearance(
-                userProfile?.profileData?.gender as string | undefined,
-                user.uid,
-                userProfile?.profileData?.avatarStartingBuild as AvatarStartingBuild | undefined,
-            );
-            const startingBuild = resolveAvatarStartingBuildForDisplay(
-                userProfile?.profileData?.gender as string | undefined,
-                user.uid,
-                userProfile?.profileData?.avatarStartingBuild as AvatarStartingBuild | undefined,
-            );
-            return { ...appearance, startingBuild };
-        },
-        [userProfile?.profileData?.gender, userProfile?.profileData?.avatarStartingBuild, user.uid],
+        () => resolveAvatarAppearance(
+            userProfile?.profileData?.gender as string | undefined,
+            user.uid,
+        ),
+        [userProfile?.profileData?.gender, user.uid],
     );
 
     const handleLogout = async () => {
@@ -1089,7 +1079,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                             progress: userProfile.currentMesocycle.progress || 0,
                             mesocyclePlan: userProfile.currentMesocycle.mesocyclePlan,
                             startDate: userProfile.currentMesocycle.startDate,
-                            durationWeeks: userProfile.currentMesocycle.mesocyclePlan?.durationWeeks,
                         } : undefined,
                         profileData: userProfile.profileData,
                         bodyMetrics: userProfile.bodyMetrics,
