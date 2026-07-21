@@ -260,7 +260,92 @@ interface CurrentExercise {
 interface NextExerciseInfo {
   name: string;
   imageUrl?: string;
+  imageUrl2?: string;
   equipment?: string[];
+}
+
+/** Soften flaky R2/mobile loads: retry, secondary URL, no-referrer. */
+function withImageRetryParam(url: string, attempt: number): string {
+  if (attempt <= 0) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}fgretry=${attempt}`;
+}
+
+interface ResilientExerciseImageProps {
+  imageUrl?: string;
+  imageUrl2?: string;
+  alt: string;
+  className?: string;
+  imgClassName?: string;
+  fallbackIconClassName?: string;
+}
+
+const ResilientExerciseImage: React.FC<ResilientExerciseImageProps> = ({
+  imageUrl,
+  imageUrl2,
+  alt,
+  className = '',
+  imgClassName = 'w-full h-full object-cover',
+  fallbackIconClassName = 'w-6 h-6 text-zinc-500',
+}) => {
+  const candidates = [imageUrl, imageUrl2].filter(
+    (u, i, arr): u is string => Boolean(u) && arr.indexOf(u) === i,
+  );
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(candidates.length === 0);
+
+  useEffect(() => {
+    setCandidateIndex(0);
+    setAttempt(0);
+    setFailed(candidates.length === 0);
+  }, [imageUrl, imageUrl2]);
+
+  const activeUrl = !failed && candidates[candidateIndex]
+    ? withImageRetryParam(candidates[candidateIndex], attempt)
+    : null;
+
+  const handleError = () => {
+    if (attempt < 2) {
+      setAttempt((prev) => prev + 1);
+      return;
+    }
+    if (candidateIndex + 1 < candidates.length) {
+      setCandidateIndex((prev) => prev + 1);
+      setAttempt(0);
+      return;
+    }
+    setFailed(true);
+  };
+
+  return (
+    <div className={className}>
+      {activeUrl ? (
+        <img
+          key={activeUrl}
+          src={activeUrl}
+          alt={alt}
+          className={imgClassName}
+          referrerPolicy="no-referrer"
+          decoding="async"
+          onError={handleError}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <Dumbbell className={fallbackIconClassName} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+function preloadExerciseImages(...urls: Array<string | undefined | null>) {
+  for (const url of urls) {
+    if (!url) continue;
+    const img = new Image();
+    img.referrerPolicy = 'no-referrer';
+    img.src = url;
+  }
 }
 
 // ==================== HELPERS ====================
@@ -437,29 +522,61 @@ const AnimatedExerciseImage: React.FC<AnimatedExerciseImageProps> = ({
   exerciseName
 }) => {
   const [showFirst, setShowFirst] = useState(true);
+  const [failedPrimary, setFailedPrimary] = useState(false);
+  const [failedSecondary, setFailedSecondary] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
   
   useEffect(() => {
+    setFailedPrimary(false);
+    setFailedSecondary(false);
+    setRetryTick(0);
+    setShowFirst(true);
+  }, [imageUrl1, imageUrl2]);
+
+  useEffect(() => {
     // Si no hay segunda imagen, no animar
-    if (!imageUrl1 || !imageUrl2) return;
+    if (!imageUrl1 || !imageUrl2 || failedPrimary || failedSecondary) return;
     
     const interval = setInterval(() => {
       setShowFirst(prev => !prev);
     }, 1500);
     
     return () => clearInterval(interval);
-  }, [imageUrl1, imageUrl2]);
+  }, [imageUrl1, imageUrl2, failedPrimary, failedSecondary]);
 
-  const currentImage = showFirst ? imageUrl1 : (imageUrl2 || imageUrl1);
-  const hasAnimation = imageUrl1 && imageUrl2;
+  const primary = imageUrl1 && !failedPrimary
+    ? withImageRetryParam(imageUrl1, retryTick)
+    : null;
+  const secondary = imageUrl2 && !failedSecondary
+    ? withImageRetryParam(imageUrl2, retryTick)
+    : null;
+  const currentImage = showFirst
+    ? (primary || secondary)
+    : (secondary || primary);
+  const hasAnimation = Boolean(primary && secondary);
+
+  const handleError = () => {
+    if (retryTick < 2) {
+      setRetryTick((t) => t + 1);
+      return;
+    }
+    if (showFirst && imageUrl1) setFailedPrimary(true);
+    else if (imageUrl2) setFailedSecondary(true);
+    else if (imageUrl1) setFailedPrimary(true);
+  };
 
   return (
     <div className="relative w-full aspect-video bg-zinc-800 rounded-2xl overflow-hidden">
       {currentImage ? (
         <>
           <img 
+            key={currentImage}
             src={currentImage} 
             alt={exerciseName}
             className="w-full h-full object-contain transition-opacity duration-500"
+            referrerPolicy="no-referrer"
+            decoding="async"
+            onError={handleError}
           />
           {hasAnimation && (
             <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full flex items-center gap-1">
@@ -750,11 +867,6 @@ const RestScreen: React.FC<RestScreenProps> = ({
   onOpenPlan,
   onExit,
 }) => {
-  const [imageFailed, setImageFailed] = useState(false);
-
-  useEffect(() => {
-    setImageFailed(false);
-  }, [nextExercise?.imageUrl]);
   const [weight, setWeight] = useState<string>('');
   const [reps, setReps] = useState<string>('');
   const [rir, setRir] = useState<string>('');
@@ -777,6 +889,11 @@ const RestScreen: React.FC<RestScreenProps> = ({
     setWeight(defaultWeight);
     setRir('');
   }, [pendingLogContext]);
+
+  useEffect(() => {
+    if (!nextExercise) return;
+    preloadExerciseImages(nextExercise.imageUrl, nextExercise.imageUrl2);
+  }, [nextExercise?.imageUrl, nextExercise?.imageUrl2]);
 
   const clearIfDefault = (
     field: 'reps' | 'weight' | 'rir',
@@ -971,26 +1088,18 @@ const RestScreen: React.FC<RestScreenProps> = ({
 
   const renderNextExerciseCard = () => {
     if (!nextExercise) return null;
-    const showImage = Boolean(nextExercise.imageUrl) && !imageFailed;
 
     return (
       <div className="w-full max-w-sm bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 shrink-0">
         <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Siguiente</p>
         <div className="flex items-center gap-3">
-          <div className="w-16 h-16 bg-zinc-700 rounded-lg overflow-hidden shrink-0">
-            {showImage ? (
-              <img
-                src={nextExercise.imageUrl}
-                alt={nextExercise.name}
-                className="w-full h-full object-cover"
-                onError={() => setImageFailed(true)}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Dumbbell className="w-6 h-6 text-zinc-500" />
-              </div>
-            )}
-          </div>
+          <ResilientExerciseImage
+            imageUrl={nextExercise.imageUrl}
+            imageUrl2={nextExercise.imageUrl2}
+            alt={nextExercise.name}
+            className="w-16 h-16 bg-zinc-700 rounded-lg overflow-hidden shrink-0"
+            imgClassName="w-full h-full object-cover"
+          />
           <div className="flex-1 min-w-0">
             <h4 className="text-white font-medium text-sm truncate">{nextExercise.name}</h4>
             {nextExercise.equipment && nextExercise.equipment.length > 0 && (
@@ -1701,24 +1810,23 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
   // Get next exercise info
   const getNextExerciseInfo = useCallback((): NextExerciseInfo | undefined => {
     const mainBlocks = getMainBlocks();
+    const toInfo = (ex: FlexibleExercise | undefined, equipment?: string[]): NextExerciseInfo | undefined => {
+      if (!ex) return undefined;
+      return {
+        name: getExerciseName(ex),
+        imageUrl: getExerciseImage(ex),
+        imageUrl2: getExerciseImage2(ex),
+        equipment: equipment ?? (Array.isArray(ex.equipo) ? ex.equipo : []),
+      };
+    };
     
     if (currentPhase === 'warmup') {
       const nextIdx = warmupIndex + 1;
       if (session.warmup && nextIdx < session.warmup.length) {
-        const next = session.warmup[nextIdx] as FlexibleExercise;
-        return {
-          name: getExerciseName(next),
-          imageUrl: getExerciseImage(next),
-          equipment: []
-        };
+        return toInfo(session.warmup[nextIdx] as FlexibleExercise, []);
       }
       if (mainBlocks[0]?.ejercicios?.[0]) {
-        const next = mainBlocks[0].ejercicios[0] as FlexibleExercise;
-        return {
-          name: getExerciseName(next),
-          imageUrl: getExerciseImage(next),
-          equipment: Array.isArray(next.equipo) ? next.equipo : []
-        };
+        return toInfo(mainBlocks[0].ejercicios[0] as FlexibleExercise);
       }
     }
     
@@ -1728,57 +1836,45 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
       const totalSets = getExerciseSets(currentEx);
       
       if (mainSetNumber < totalSets) {
-        return {
-          name: getExerciseName(currentEx),
-          imageUrl: getExerciseImage(currentEx),
-          equipment: Array.isArray(currentEx?.equipo) ? currentEx.equipo : []
-        };
+        return toInfo(currentEx);
       }
       
       const nextExIdx = mainExerciseIndex + 1;
       if (currentStation && nextExIdx < currentStation.ejercicios.length) {
-        const next = currentStation.ejercicios[nextExIdx] as FlexibleExercise;
-        return {
-          name: getExerciseName(next),
-          imageUrl: getExerciseImage(next),
-          equipment: Array.isArray(next.equipo) ? next.equipo : []
-        };
+        return toInfo(currentStation.ejercicios[nextExIdx] as FlexibleExercise);
       }
       
       const nextStationIdx = mainStationIndex + 1;
       if (nextStationIdx < mainBlocks.length) {
-        const next = mainBlocks[nextStationIdx].ejercicios[0] as FlexibleExercise;
-        return {
-          name: getExerciseName(next),
-          imageUrl: getExerciseImage(next),
-          equipment: Array.isArray(next.equipo) ? next.equipo : []
-        };
+        return toInfo(mainBlocks[nextStationIdx].ejercicios[0] as FlexibleExercise);
       }
       
       if (session.coreBlock?.ejercicios?.[0]) {
-        const next = session.coreBlock.ejercicios[0] as unknown as FlexibleExercise;
-        return {
-          name: getExerciseName(next),
-          imageUrl: getExerciseImage(next),
-          equipment: []
-        };
+        return toInfo(session.coreBlock.ejercicios[0] as unknown as FlexibleExercise, []);
       }
     }
     
     if (currentPhase === 'core') {
       const nextIdx = coreIndex + 1;
       if (session.coreBlock?.ejercicios && nextIdx < session.coreBlock.ejercicios.length) {
-        const next = session.coreBlock.ejercicios[nextIdx] as unknown as FlexibleExercise;
-        return {
-          name: getExerciseName(next),
-          imageUrl: getExerciseImage(next),
-          equipment: []
-        };
+        return toInfo(session.coreBlock.ejercicios[nextIdx] as unknown as FlexibleExercise, []);
       }
     }
     
     return undefined;
   }, [currentPhase, warmupIndex, mainStationIndex, mainExerciseIndex, mainSetNumber, coreIndex, session, getMainBlocks]);
+
+  // Preload upcoming exercise media so rest preview is less sensitive to flaky gym Wi‑Fi
+  useEffect(() => {
+    const next = getNextExerciseInfo();
+    preloadExerciseImages(next?.imageUrl, next?.imageUrl2);
+    if (currentExercise) {
+      preloadExerciseImages(
+        getExerciseImage(currentExercise.exercise),
+        getExerciseImage2(currentExercise.exercise),
+      );
+    }
+  }, [getNextExerciseInfo, currentExercise]);
 
   // Rest timer
   useEffect(() => {
