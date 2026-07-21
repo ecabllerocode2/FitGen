@@ -1,28 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Dumbbell } from 'lucide-react';
 
-/** Normalize catalog/R2 URLs so path segments with spaces/unicode always resolve. */
+/** Trim / accept catalog URLs as-is (R2 keys are already URL-safe ASCII). */
 export function normalizeExerciseImageUrl(url?: string | null): string | undefined {
   if (!url || typeof url !== 'string') return undefined;
   const trimmed = url.trim();
-  if (!trimmed) return undefined;
-  try {
-    const parsed = new URL(trimmed);
-    parsed.pathname = parsed.pathname
-      .split('/')
-      .map((segment) => {
-        if (!segment) return segment;
-        try {
-          return encodeURIComponent(decodeURIComponent(segment));
-        } catch {
-          return encodeURIComponent(segment);
-        }
-      })
-      .join('/');
-    return parsed.toString();
-  } catch {
-    return trimmed;
-  }
+  return trimmed || undefined;
 }
 
 export function resolveExerciseImageUrls(ex: {
@@ -45,14 +28,13 @@ type ExerciseMediaImageProps = {
   className?: string;
   imgClassName?: string;
   icon?: React.ReactNode;
-  /** object-cover thumbnails vs object-contain hero frames */
   fit?: 'cover' | 'contain';
 };
 
 /**
- * Reliable exercise media loader for overview + player.
- * Retries the same URL (no cache-bust query that can break R2),
- * falls back to the second frame, and ignores abort errors from remounts.
+ * Workout media thumbnails.
+ * Important: do NOT remount <img> on animation/retries — abort events look like load
+ * failures and were incorrectly permanently falling back to the placeholder icon.
  */
 export function ExerciseMediaImage({
   imageUrl,
@@ -68,21 +50,16 @@ export function ExerciseMediaImage({
   );
 
   const [candidateIndex, setCandidateIndex] = useState(0);
-  const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(candidates.length === 0);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const srcAssignedAtRef = useRef(0);
+  const softRetryUsedRef = useRef(false);
 
   useEffect(() => {
     setCandidateIndex(0);
-    setAttempt(0);
     setFailed(candidates.length === 0);
+    softRetryUsedRef.current = false;
+    srcAssignedAtRef.current = Date.now();
   }, [imageUrl, imageUrl2]);
 
   const activeUrl = !failed ? candidates[candidateIndex] : undefined;
@@ -91,20 +68,28 @@ export function ExerciseMediaImage({
     (fit === 'contain' ? 'w-full h-full object-contain' : 'w-full h-full object-cover');
 
   const handleError = () => {
-    // Remounts / StrictMode aborts often fire onError — don't treat as permanent fail.
-    if (!mountedRef.current) return;
-
-    if (attempt < 2) {
-      window.setTimeout(() => {
-        if (!mountedRef.current) return;
-        setAttempt((prev) => prev + 1);
-      }, 120 * (attempt + 1));
+    const ageMs = Date.now() - srcAssignedAtRef.current;
+    // Aborted loads from remount/parent updates fire onError almost immediately.
+    if (ageMs < 500 && activeUrl && !softRetryUsedRef.current) {
+      softRetryUsedRef.current = true;
+      const img = imgRef.current;
+      if (img) {
+        const url = activeUrl;
+        img.removeAttribute('src');
+        requestAnimationFrame(() => {
+          if (imgRef.current) {
+            srcAssignedAtRef.current = Date.now();
+            imgRef.current.src = url;
+          }
+        });
+      }
       return;
     }
 
     if (candidateIndex + 1 < candidates.length) {
+      softRetryUsedRef.current = false;
+      srcAssignedAtRef.current = Date.now();
       setCandidateIndex((prev) => prev + 1);
-      setAttempt(0);
       return;
     }
 
@@ -113,21 +98,36 @@ export function ExerciseMediaImage({
 
   if (!activeUrl) {
     return (
-      <div className={`flex items-center justify-center bg-zinc-800 ${className}`}>
+      <button
+        type="button"
+        className={`flex items-center justify-center bg-zinc-800 ${className}`}
+        onClick={() => {
+          if (candidates.length === 0) return;
+          softRetryUsedRef.current = false;
+          srcAssignedAtRef.current = Date.now();
+          setCandidateIndex(0);
+          setFailed(false);
+        }}
+        aria-label={`Reintentar imagen de ${alt}`}
+      >
         {icon ?? <Dumbbell className="w-6 h-6 text-zinc-500" />}
-      </div>
+      </button>
     );
   }
 
   return (
     <div className={className}>
       <img
-        key={`${activeUrl}#${attempt}`}
+        ref={imgRef}
         src={activeUrl}
         alt={alt}
         className={resolvedImgClass}
         decoding="async"
-        loading="lazy"
+        loading="eager"
+        draggable={false}
+        onLoad={() => {
+          softRetryUsedRef.current = false;
+        }}
         onError={handleError}
       />
     </div>
@@ -141,7 +141,7 @@ type AnimatedExerciseMediaProps = {
   className?: string;
 };
 
-/** Two-frame flip used on the workout player exercise screen. */
+/** Two always-mounted frames; opacity flip avoids abort/onError false failures. */
 export function AnimatedExerciseMedia({
   imageUrl1,
   imageUrl2,
@@ -151,63 +151,95 @@ export function AnimatedExerciseMedia({
   const primary = normalizeExerciseImageUrl(imageUrl1);
   const secondary = normalizeExerciseImageUrl(imageUrl2);
   const [showFirst, setShowFirst] = useState(true);
-  const [primaryFailed, setPrimaryFailed] = useState(false);
-  const [secondaryFailed, setSecondaryFailed] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const [primaryOk, setPrimaryOk] = useState(Boolean(primary));
+  const [secondaryOk, setSecondaryOk] = useState(Boolean(secondary));
+  const primaryAssignedAt = useRef(0);
+  const secondaryAssignedAt = useRef(0);
+  const primarySoftRetryUsed = useRef(false);
+  const secondarySoftRetryUsed = useRef(false);
 
   useEffect(() => {
     setShowFirst(true);
-    setPrimaryFailed(false);
-    setSecondaryFailed(false);
-    setAttempt(0);
+    setPrimaryOk(Boolean(primary));
+    setSecondaryOk(Boolean(secondary));
+    primaryAssignedAt.current = Date.now();
+    secondaryAssignedAt.current = Date.now();
+    primarySoftRetryUsed.current = false;
+    secondarySoftRetryUsed.current = false;
   }, [primary, secondary]);
 
   useEffect(() => {
-    if (!primary || !secondary || primaryFailed || secondaryFailed) return;
+    if (!primaryOk || !secondaryOk) return;
     const interval = window.setInterval(() => setShowFirst((v) => !v), 1500);
     return () => window.clearInterval(interval);
-  }, [primary, secondary, primaryFailed, secondaryFailed]);
+  }, [primaryOk, secondaryOk]);
 
-  const current =
-    showFirst
-      ? (!primaryFailed ? primary : !secondaryFailed ? secondary : undefined)
-      : (!secondaryFailed ? secondary : !primaryFailed ? primary : undefined);
-
-  const handleError = () => {
-    if (!mountedRef.current) return;
-    if (attempt < 2) {
-      window.setTimeout(() => {
-        if (!mountedRef.current) return;
-        setAttempt((n) => n + 1);
-      }, 120 * (attempt + 1));
+  const handlePrimaryError = (event: React.SyntheticEvent<HTMLImageElement>) => {
+    if (Date.now() - primaryAssignedAt.current < 500 && primary && !primarySoftRetryUsed.current) {
+      primarySoftRetryUsed.current = true;
+      const img = event.currentTarget;
+      const url = primary;
+      img.removeAttribute('src');
+      requestAnimationFrame(() => {
+        primaryAssignedAt.current = Date.now();
+        img.src = url;
+      });
       return;
     }
-    if (showFirst && primary) setPrimaryFailed(true);
-    else if (secondary) setSecondaryFailed(true);
-    else if (primary) setPrimaryFailed(true);
+    setPrimaryOk(false);
   };
+
+  const handleSecondaryError = (event: React.SyntheticEvent<HTMLImageElement>) => {
+    if (Date.now() - secondaryAssignedAt.current < 500 && secondary && !secondarySoftRetryUsed.current) {
+      secondarySoftRetryUsed.current = true;
+      const img = event.currentTarget;
+      const url = secondary;
+      img.removeAttribute('src');
+      requestAnimationFrame(() => {
+        secondaryAssignedAt.current = Date.now();
+        img.src = url;
+      });
+      return;
+    }
+    setSecondaryOk(false);
+  };
+
+  const hasAny = (primary && primaryOk) || (secondary && secondaryOk);
 
   return (
     <div className={`relative w-full aspect-video bg-zinc-800 rounded-2xl overflow-hidden ${className}`}>
-      {current ? (
+      {hasAny ? (
         <>
-          <img
-            key={`${current}#${attempt}`}
-            src={current}
-            alt={exerciseName}
-            className="w-full h-full object-contain transition-opacity duration-500"
-            decoding="async"
-            onError={handleError}
-          />
-          {primary && secondary && !primaryFailed && !secondaryFailed && (
+          {primary && (
+            <img
+              src={primary}
+              alt={exerciseName}
+              className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-500 ${
+                primaryOk && (showFirst || !secondaryOk) ? 'opacity-100' : 'opacity-0'
+              }`}
+              decoding="async"
+              loading="eager"
+              draggable={false}
+              onLoad={() => setPrimaryOk(true)}
+              onError={handlePrimaryError}
+            />
+          )}
+          {secondary && secondary !== primary && (
+            <img
+              src={secondary}
+              alt=""
+              aria-hidden
+              className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-500 ${
+                secondaryOk && (!showFirst || !primaryOk) ? 'opacity-100' : 'opacity-0'
+              }`}
+              decoding="async"
+              loading="eager"
+              draggable={false}
+              onLoad={() => setSecondaryOk(true)}
+              onError={handleSecondaryError}
+            />
+          )}
+          {primaryOk && secondaryOk && primary && secondary && secondary !== primary && (
             <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full flex items-center gap-1">
               <div className={`w-2 h-2 rounded-full transition-colors ${showFirst ? 'bg-lime-500' : 'bg-zinc-500'}`} />
               <div className={`w-2 h-2 rounded-full transition-colors ${!showFirst ? 'bg-lime-500' : 'bg-zinc-500'}`} />
