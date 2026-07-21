@@ -207,7 +207,7 @@ export function normalizeSession(raw: any): GeneratedSession | null {
     session.coreBlock = null;
   } else {
     // Si viene como { ejercicios: [...] } ok
-    session.coreBlock.ejercicios = session.coreBlock.ejercicios || [];
+    session.coreBlock.ejercicios = (session.coreBlock.ejercicios || []).map(mapExerciseFields);
   }
 
   // NORMALIZAR COOLDOWN — backend v3 devuelve array plano

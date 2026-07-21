@@ -17,11 +17,45 @@ export interface PendingCompletion {
 }
 
 const LOGS_PREFIX = 'fitgen.workout.logs.';
+const PROGRESS_PREFIX = 'fitgen.workout.progress.';
 const QUEUE_KEY = 'fitgen.workout.completeQueue';
 const MAX_QUEUE = 5;
 
+export type WorkoutPhaseCheckpoint =
+  | 'warmup'
+  | 'main'
+  | 'core'
+  | 'cooldown'
+  | 'rest'
+  | 'complete';
+
+export interface WorkoutProgressCheckpoint {
+  sessionId: string;
+  startedAt: string;
+  currentPhase: WorkoutPhaseCheckpoint;
+  showPhaseIntro: boolean;
+  isResting: boolean;
+  restSeconds: number;
+  remainingRestSeconds: number;
+  isPaused: boolean;
+  soundEnabled: boolean;
+  warmupIndex: number;
+  mainStationIndex: number;
+  mainExerciseIndex: number;
+  mainSetNumber: number;
+  coreIndex: number;
+  cooldownPhaseIndex: number;
+  cooldownExerciseIndex: number;
+  weightOverrides: Record<string, number>;
+  savedAt: string;
+}
+
 function logsKey(sessionId: string) {
   return `${LOGS_PREFIX}${sessionId}`;
+}
+
+function progressKey(sessionId: string) {
+  return `${PROGRESS_PREFIX}${sessionId}`;
 }
 
 export function saveExerciseLogs(sessionId: string, logs: ExerciseLogs) {
@@ -66,8 +100,34 @@ export function removeFromQueue(clientCompletionId: string) {
   writeCompletionQueue(getCompletionQueue().filter((q) => q.clientCompletionId !== clientCompletionId));
 }
 
+export function saveWorkoutProgress(sessionId: string, progress: WorkoutProgressCheckpoint) {
+  if (!sessionId) return;
+  try {
+    localStorage.setItem(progressKey(sessionId), JSON.stringify(progress));
+  } catch {
+    // Ignore quota errors.
+  }
+}
+
+export function loadWorkoutProgress(sessionId: string): WorkoutProgressCheckpoint | null {
+  if (!sessionId) return null;
+  try {
+    const raw = localStorage.getItem(progressKey(sessionId));
+    return raw ? (JSON.parse(raw) as WorkoutProgressCheckpoint) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearWorkoutProgress(sessionId: string) {
+  if (sessionId) {
+    localStorage.removeItem(progressKey(sessionId));
+  }
+}
+
 export function clearWorkoutPersistence(sessionId: string) {
   if (sessionId) {
     localStorage.removeItem(logsKey(sessionId));
+    localStorage.removeItem(progressKey(sessionId));
   }
 }

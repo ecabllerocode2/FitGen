@@ -4,11 +4,17 @@ function parseDurationSeconds(value: unknown): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
-function formatDurationMinutes(minutes: number): string {
+export function formatDurationMinutes(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
   return remainder > 0 ? `${hours}h ${remainder} min` : `${hours}h`;
+}
+
+/** Wall-clock elapsed time from session start to finish. */
+export function formatElapsedDuration(elapsedMs: number): string {
+  const minutes = Math.max(1, Math.round(elapsedMs / 60_000));
+  return formatDurationMinutes(minutes);
 }
 
 export function getMainBlockExercises(session: any): any[] {

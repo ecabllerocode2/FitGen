@@ -34,9 +34,13 @@ import {
   enqueueCompletion,
   getCompletionQueue,
   loadExerciseLogs,
+  loadWorkoutProgress,
   removeFromQueue,
   saveExerciseLogs,
+  saveWorkoutProgress,
+  type WorkoutProgressCheckpoint,
 } from '../../utils/workoutOfflineQueue';
+import { formatElapsedDuration } from '../../utils/estimateWorkoutDuration';
 import { formatLoadLabel, getLoadConventionHint, getWeightInputLabel, getWeightUnitSuffix, resolveLoadConvention } from '../../utils/loadConvention';
 import { getWeightInputStep, snapToGymWeight } from '../../utils/gymInventory';
 import {
@@ -728,6 +732,7 @@ interface RestScreenProps {
   } | null;
   onLogSubmit: (data: SetLog) => void;
   onOpenPlan?: () => void;
+  onExit?: () => void;
 }
 
 const RestScreen: React.FC<RestScreenProps> = ({
@@ -742,7 +747,13 @@ const RestScreen: React.FC<RestScreenProps> = ({
   pendingLogContext,
   onLogSubmit,
   onOpenPlan,
+  onExit,
 }) => {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [nextExercise?.imageUrl]);
   const [weight, setWeight] = useState<string>('');
   const [reps, setReps] = useState<string>('');
   const [rir, setRir] = useState<string>('');
@@ -957,40 +968,116 @@ const RestScreen: React.FC<RestScreenProps> = ({
      );
   };
 
+  const renderNextExerciseCard = () => {
+    if (!nextExercise) return null;
+    const showImage = Boolean(nextExercise.imageUrl) && !imageFailed;
+
+    return (
+      <div className="w-full max-w-sm bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 shrink-0">
+        <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Siguiente</p>
+        <div className="flex items-center gap-3">
+          <div className="w-16 h-16 bg-zinc-700 rounded-lg overflow-hidden shrink-0">
+            {showImage ? (
+              <img
+                src={nextExercise.imageUrl}
+                alt={nextExercise.name}
+                className="w-full h-full object-cover"
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Dumbbell className="w-6 h-6 text-zinc-500" />
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-white font-medium text-sm truncate">{nextExercise.name}</h4>
+            {nextExercise.equipment && nextExercise.equipment.length > 0 && (
+              <p className="text-xs text-zinc-400 truncate">
+                {nextExercise.equipment.slice(0, 2).join(', ')}
+              </p>
+            )}
+          </div>
+          <ChevronRight className="w-5 h-5 text-zinc-500" />
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="flex flex-col items-center justify-between h-full py-8 px-6">
-      <div className="text-center w-full max-w-sm">
-        <AppEyebrow>Descanso</AppEyebrow>
-        <p className="text-sm text-zinc-500 mt-3">Recupera antes de la siguiente serie</p>
-        {onOpenPlan && (
+    <div className="relative flex flex-col h-full min-h-0 overflow-y-auto py-6 px-6">
+      <div className="flex items-start justify-between w-full max-w-sm mx-auto shrink-0">
+        {onExit ? (
+          <button
+            type="button"
+            onClick={onExit}
+            className="p-2 -ml-2 rounded-full hover:bg-zinc-800/80 transition-colors"
+            aria-label="Salir del entrenamiento"
+          >
+            <X className="w-5 h-5 text-zinc-500" />
+          </button>
+        ) : (
+          <span className="w-9" />
+        )}
+        <div className="text-center flex-1">
+          <AppEyebrow>Descanso</AppEyebrow>
+          <p className="text-sm text-zinc-500 mt-2">Recupera antes de la siguiente serie</p>
+        </div>
+        {onOpenPlan ? (
           <button
             type="button"
             onClick={onOpenPlan}
-            className="mt-3 inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-white transition-colors"
+            className="p-2 -mr-2 rounded-full hover:bg-zinc-800/80 transition-colors"
+            aria-label="Ver rutina completa"
           >
-            <List className="w-4 h-4" />
-            Ver rutina completa
+            <List className="w-4 h-4 text-zinc-500" />
           </button>
+        ) : (
+          <span className="w-9" />
         )}
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center w-full">
-        <CircularTimer 
+      <div className="flex flex-col items-center w-full max-w-sm mx-auto gap-4 mt-4 pb-6">
+        <CircularTimer
           totalSeconds={restSeconds}
           remainingSeconds={remainingSeconds}
           size="large"
           isPaused={isPaused}
         />
+
+        {/* Above the log form so it stays visible on short viewports */}
+        {renderNextExerciseCard()}
         {renderLogForm()}
+
+        <div className="flex items-center gap-4 pt-2">
+          <button
+            onClick={onPauseToggle}
+            className="w-14 h-14 bg-zinc-800 border border-zinc-700 rounded-full flex items-center justify-center active:scale-95 transition-transform"
+          >
+            {isPaused ? <Play className="w-6 h-6 text-white" /> : <Pause className="w-6 h-6 text-white" />}
+          </button>
+          <button
+            onClick={handleSkip}
+            className="bg-lime-500 text-zinc-900 font-bold px-6 py-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform"
+          >
+            <SkipForward className="w-5 h-5" />
+            Saltar
+          </button>
+        </div>
       </div>
 
       {alarmActive && (
         <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50 animate-pulse">
-          <div className="text-center">
+          <div className="text-center px-6">
             <div className="w-24 h-24 bg-lime-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
               <Check className="w-12 h-12 text-zinc-900" />
             </div>
-            <h3 className="text-2xl font-bold text-white mb-4">¡Tiempo!</h3>
+            <h3 className="text-2xl font-bold text-white mb-2">¡Tiempo!</h3>
+            {nextExercise && (
+              <p className="text-sm text-zinc-300 mb-4 truncate max-w-xs mx-auto">
+                Siguiente: {nextExercise.name}
+              </p>
+            )}
             <button
               onClick={() => {
                 stopAlarmSound();
@@ -1003,52 +1090,6 @@ const RestScreen: React.FC<RestScreenProps> = ({
           </div>
         </div>
       )}
-
-      {nextExercise && !alarmActive && (
-        <div className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 mb-4">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Siguiente</p>
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-14 bg-zinc-700 rounded-lg overflow-hidden shrink-0">
-              {nextExercise.imageUrl ? (
-                <img 
-                  src={nextExercise.imageUrl} 
-                  alt={nextExercise.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Dumbbell className="w-6 h-6 text-zinc-500" />
-                </div>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="text-white font-medium text-sm truncate">{nextExercise.name}</h4>
-              {nextExercise.equipment && nextExercise.equipment.length > 0 && (
-                <p className="text-xs text-zinc-400 truncate">
-                  {nextExercise.equipment.slice(0, 2).join(', ')}
-                </p>
-              )}
-            </div>
-            <ChevronRight className="w-5 h-5 text-zinc-500" />
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center gap-4">
-        <button
-          onClick={onPauseToggle}
-          className="w-14 h-14 bg-zinc-800 border border-zinc-700 rounded-full flex items-center justify-center active:scale-95 transition-transform"
-        >
-          {isPaused ? <Play className="w-6 h-6 text-white" /> : <Pause className="w-6 h-6 text-white" />}
-        </button>
-        <button
-          onClick={handleSkip}
-          className="bg-lime-500 text-zinc-900 font-bold px-6 py-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform"
-        >
-          <SkipForward className="w-5 h-5" />
-          Saltar
-        </button>
-      </div>
     </div>
   );
 };
@@ -1382,7 +1423,10 @@ interface WorkoutPlayerProps {
   onExit?: () => void;
 }
 
-const buildCelebrationData = (session: GeneratedSession): SessionCelebrationData => {
+const buildCelebrationData = (
+  session: GeneratedSession,
+  durationLabel?: string,
+): SessionCelebrationData => {
   let exerciseCount = 0;
   let totalSets = 0;
   const mb = session.mainBlock as any;
@@ -1400,12 +1444,15 @@ const buildCelebrationData = (session: GeneratedSession): SessionCelebrationData
 
   return {
     sessionFocus: session.sessionFocus ?? 'Entrenamiento',
-    durationLabel: session.summary?.duracionEstimada ?? '—',
+    durationLabel: durationLabel ?? session.summary?.duracionEstimada ?? '—',
     exerciseCount: exerciseCount || session.summary?.ejerciciosTotales || 0,
     totalSets: totalSets || session.summary?.seriesTotales || 0,
     muscles: session.summary?.musculosTrabajos,
   };
 };
+
+const resolveSessionStorageId = (session: GeneratedSession) =>
+  session.id ?? (session as { sessionId?: string }).sessionId ?? 'active';
 
 const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
   session: initialSession,
@@ -1415,8 +1462,17 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
 }) => {
   const navigate = useNavigate();
   const [session, setSession] = useState(() => normalizeSession(initialSession) || initialSession);
+  const sessionStorageId = resolveSessionStorageId(session);
+  const initialCheckpointRef = useRef<WorkoutProgressCheckpoint | null>(
+    loadWorkoutProgress(resolveSessionStorageId(normalizeSession(initialSession) || initialSession)),
+  );
+  const checkpoint = initialCheckpointRef.current;
+  const allowExitRef = useRef(false);
+  const initializedFromCheckpointRef = useRef(Boolean(checkpoint));
+
   const [swappingExerciseId, setSwappingExerciseId] = useState<string | null>(null);
   const [showSessionPlan, setShowSessionPlan] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [swapTarget, setSwapTarget] = useState<{
     exerciseId: string;
     name: string;
@@ -1430,30 +1486,43 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     setSession(normalizeSession(initialSession) || initialSession);
   }, [initialSession]);
   
-  const [currentPhase, setCurrentPhase] = useState<WorkoutPhase>('warmup');
+  const [currentPhase, setCurrentPhase] = useState<WorkoutPhase>(
+    (checkpoint?.currentPhase as WorkoutPhase) ?? 'warmup',
+  );
   const [currentExercise, setCurrentExercise] = useState<CurrentExercise | null>(null);
-  const [isResting, setIsResting] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [showPhaseIntro, setShowPhaseIntro] = useState(true);
+  const [isResting, setIsResting] = useState(Boolean(checkpoint?.isResting));
+  const [isPaused, setIsPaused] = useState(Boolean(checkpoint?.isPaused));
+  const [soundEnabled, setSoundEnabled] = useState(checkpoint?.soundEnabled ?? true);
+  const [showPhaseIntro, setShowPhaseIntro] = useState(
+    checkpoint ? Boolean(checkpoint.showPhaseIntro) : true,
+  );
   
-  const [restSeconds, setRestSeconds] = useState(0);
-  const [remainingRestSeconds, setRemainingRestSeconds] = useState(0);
+  const [restSeconds, setRestSeconds] = useState(checkpoint?.restSeconds ?? 0);
+  const [remainingRestSeconds, setRemainingRestSeconds] = useState(
+    checkpoint?.remainingRestSeconds ?? 0,
+  );
   const [exerciseRemainingSeconds, setExerciseRemainingSeconds] = useState(0);
   const [exerciseTotalSeconds, setExerciseTotalSeconds] = useState(0);
   const [alarmActive, setAlarmActive] = useState(false);
   
-  const [warmupIndex, setWarmupIndex] = useState(0);
-  const [mainStationIndex, setMainStationIndex] = useState(0);
-  const [mainExerciseIndex, setMainExerciseIndex] = useState(0);
-  const [mainSetNumber, setMainSetNumber] = useState(1);
-  const [coreIndex, setCoreIndex] = useState(0);
-  const [cooldownPhaseIndex, setCooldownPhaseIndex] = useState(0);
-  const [cooldownExerciseIndex, setCooldownExerciseIndex] = useState(0);
+  const [warmupIndex, setWarmupIndex] = useState(checkpoint?.warmupIndex ?? 0);
+  const [mainStationIndex, setMainStationIndex] = useState(checkpoint?.mainStationIndex ?? 0);
+  const [mainExerciseIndex, setMainExerciseIndex] = useState(checkpoint?.mainExerciseIndex ?? 0);
+  const [mainSetNumber, setMainSetNumber] = useState(checkpoint?.mainSetNumber ?? 1);
+  const [coreIndex, setCoreIndex] = useState(checkpoint?.coreIndex ?? 0);
+  const [cooldownPhaseIndex, setCooldownPhaseIndex] = useState(checkpoint?.cooldownPhaseIndex ?? 0);
+  const [cooldownExerciseIndex, setCooldownExerciseIndex] = useState(
+    checkpoint?.cooldownExerciseIndex ?? 0,
+  );
+  const [sessionStartedAt] = useState(
+    () => checkpoint?.startedAt ?? new Date().toISOString(),
+  );
 
   // Logging state
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLogs>({});
-  const [weightOverrides, setWeightOverrides] = useState<Record<string, number>>({});
+  const [weightOverrides, setWeightOverrides] = useState<Record<string, number>>(
+    checkpoint?.weightOverrides ?? {},
+  );
   const [pendingLogContext, setPendingLogContext] = useState<RestScreenProps['pendingLogContext']>(null);
   const [isSubmittingSession, setIsSubmittingSession] = useState(false);
   const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
@@ -1463,7 +1532,6 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
       ? crypto.randomUUID()
       : `completion-${Date.now()}`,
   );
-  const sessionStorageId = session.id ?? (session as { sessionId?: string }).sessionId ?? 'active';
 
   useEffect(() => {
     const saved = loadExerciseLogs(sessionStorageId);
@@ -1493,6 +1561,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     result: Record<string, any>,
     celebrationPayload: PendingCelebration,
   ) => {
+    allowExitRef.current = true;
+
     if (result.gamificationDelta?.newAchievements?.length) {
       storePendingAchievementUnlocks(result.gamificationDelta.newAchievements);
     }
@@ -1770,10 +1840,70 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     }
   }, [currentExercise]);
 
-  // Initialize first exercise
+  // Initialize first exercise (or restore from checkpoint once)
   useEffect(() => {
     const mainBlocks = getMainBlocks();
-    
+    const saved = initialCheckpointRef.current;
+
+    if (saved && initializedFromCheckpointRef.current) {
+      initializedFromCheckpointRef.current = false;
+
+      const restoreMain = (stationIdx: number, exerciseIdx: number, setNumber: number) => {
+        const ex = mainBlocks[stationIdx]?.ejercicios?.[exerciseIdx] as FlexibleExercise | undefined;
+        if (!ex) return false;
+        setCurrentExercise({
+          type: 'main',
+          exercise: ex,
+          setNumber,
+          totalSets: getExerciseSets(ex),
+          stationIndex: stationIdx,
+          exerciseIndex: exerciseIdx,
+        });
+        return true;
+      };
+
+      if (saved.currentPhase === 'complete') {
+        setCurrentPhase('complete');
+        setShowPhaseIntro(false);
+        setIsResting(false);
+        return;
+      }
+
+      if (saved.currentPhase === 'warmup' && session.warmup?.[saved.warmupIndex]) {
+        setCurrentExercise({
+          type: 'warmup',
+          exercise: session.warmup[saved.warmupIndex] as FlexibleExercise,
+        });
+        return;
+      }
+
+      if (saved.currentPhase === 'main') {
+        if (restoreMain(saved.mainStationIndex, saved.mainExerciseIndex, saved.mainSetNumber)) {
+          return;
+        }
+      }
+
+      if (saved.currentPhase === 'core' && session.coreBlock?.ejercicios?.[saved.coreIndex]) {
+        setCurrentExercise({
+          type: 'core',
+          exercise: session.coreBlock.ejercicios[saved.coreIndex] as unknown as FlexibleExercise,
+        });
+        return;
+      }
+
+      if (saved.currentPhase === 'cooldown') {
+        const fase = session.cooldown?.fases?.[saved.cooldownPhaseIndex];
+        const ex = fase?.contenido?.ejercicios?.[saved.cooldownExerciseIndex] as FlexibleExercise | undefined;
+        if (ex) {
+          setCurrentExercise({ type: 'cooldown', exercise: ex });
+          return;
+        }
+      }
+      // Fall through to default init if checkpoint indices are stale.
+    }
+
+    if (currentExercise) return;
+
     if (session.warmup && session.warmup.length > 0) {
       setCurrentExercise({
         type: 'warmup',
@@ -1794,7 +1924,79 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
       setCurrentPhase('main');
       setShowPhaseIntro(true);
     }
-  }, [session, getMainBlocks]);
+  }, [session, getMainBlocks, currentExercise]);
+
+  // Persist in-progress session so leaving and returning resumes where left off
+  useEffect(() => {
+    if (currentPhase === 'complete' && !isSubmittingSession) {
+      // Keep progress until successful completion clears it.
+    }
+    saveWorkoutProgress(sessionStorageId, {
+      sessionId: sessionStorageId,
+      startedAt: sessionStartedAt,
+      currentPhase,
+      showPhaseIntro,
+      isResting,
+      restSeconds,
+      remainingRestSeconds,
+      isPaused,
+      soundEnabled,
+      warmupIndex,
+      mainStationIndex,
+      mainExerciseIndex,
+      mainSetNumber,
+      coreIndex,
+      cooldownPhaseIndex,
+      cooldownExerciseIndex,
+      weightOverrides,
+      savedAt: new Date().toISOString(),
+    });
+  }, [
+    sessionStorageId,
+    sessionStartedAt,
+    currentPhase,
+    showPhaseIntro,
+    isResting,
+    restSeconds,
+    remainingRestSeconds,
+    isPaused,
+    soundEnabled,
+    warmupIndex,
+    mainStationIndex,
+    mainExerciseIndex,
+    mainSetNumber,
+    coreIndex,
+    cooldownPhaseIndex,
+    cooldownExerciseIndex,
+    weightOverrides,
+    isSubmittingSession,
+  ]);
+
+  // Confirm browser / Android back instead of silently leaving
+  useEffect(() => {
+    const shouldProtect = currentPhase !== 'complete' || Boolean(syncNotice);
+    if (!shouldProtect) return;
+
+    window.history.pushState({ fitgenWorkoutGuard: true }, '');
+    const onPopState = () => {
+      if (allowExitRef.current) return;
+      window.history.pushState({ fitgenWorkoutGuard: true }, '');
+      setShowExitConfirm(true);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [currentPhase, syncNotice]);
+
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowExitRef.current) return;
+      if (currentPhase === 'complete' && !syncNotice) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [currentPhase, syncNotice]);
 
   const startRest = useCallback((seconds: number) => {
     setRestSeconds(seconds);
@@ -2079,14 +2281,24 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     advanceToNext();
   }, [endRest, advanceToNext]);
 
-  const handleExit = useCallback(() => {
+  const requestExit = useCallback(() => {
+    stopAlarmSound();
+    setShowExitConfirm(true);
+  }, []);
+
+  const confirmExit = useCallback(() => {
+    allowExitRef.current = true;
+    setShowExitConfirm(false);
     stopAlarmSound();
     if (onExit) {
       onExit();
     } else {
-      navigate(-1);
+      // Use an explicit route: the back-guard pushState would make navigate(-1) stay on the player.
+      navigate('/workout/today', { replace: true });
     }
   }, [navigate, onExit]);
+
+  const handleExit = requestExit;
 
   const handlePhaseIntroContinue = useCallback(() => {
     setShowPhaseIntro(false);
@@ -2262,9 +2474,13 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
            bodyWeightKg,
          );
 
+       const elapsedMs = Math.max(0, Date.now() - new Date(sessionStartedAt).getTime());
+       const actualDurationSeconds = Math.max(1, Math.round(elapsedMs / 1000));
+       const durationLabel = formatElapsedDuration(elapsedMs);
+
        const celebrationFallback: SessionCelebrationData = {
          sessionFocus: session.sessionFocus ?? 'Entrenamiento',
-         durationLabel: session.summary?.duracionEstimada ?? '—',
+         durationLabel,
          exerciseCount: session.summary?.ejerciciosTotales ?? 0,
          totalSets: session.summary?.seriesTotales ?? 0,
          totalWeightKg,
@@ -2276,6 +2492,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
          clientCompletionId: clientCompletionIdRef.current,
          sessionFeedback: feedback,
          performanceData: { exercises },
+         actualDurationSeconds,
+         durationLabel,
        };
 
        enqueueCompletion({
@@ -2309,14 +2527,14 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
          data: result.celebrationSummary
            ? {
                sessionFocus: result.celebrationSummary.sessionFocus,
-               durationLabel: result.celebrationSummary.durationLabel,
+               durationLabel: result.celebrationSummary.durationLabel || durationLabel,
                exerciseCount: result.celebrationSummary.exerciseCount,
                totalSets: result.celebrationSummary.totalSets,
                totalWeightKg: result.celebrationSummary.totalWeightKg ?? totalWeightKg,
                muscles: result.celebrationSummary.muscles,
                completedAt: new Date().toISOString(),
              }
-           : buildCelebrationData(session),
+           : buildCelebrationData(session, durationLabel),
          archivedSessionId: result.archivedSessionId ?? null,
        };
 
@@ -2342,25 +2560,58 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     }
   };
 
+  const exitConfirmModal = showExitConfirm ? (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-6">
+      <div className="w-full max-w-sm rounded-2xl bg-zinc-900 ring-1 ring-zinc-700 p-6 text-center shadow-2xl">
+        <h3 className="text-lg font-bold text-white mb-2">¿Salir del entrenamiento?</h3>
+        <p className="text-sm text-zinc-400 mb-6">
+          Tu progreso se guarda. Si sales, podrás continuar exactamente donde lo dejaste.
+        </p>
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => setShowExitConfirm(false)}
+            className="w-full bg-lime-500 hover:bg-lime-400 text-zinc-900 font-bold py-3 rounded-xl transition-colors"
+          >
+            Seguir entrenando
+          </button>
+          <button
+            type="button"
+            onClick={confirmExit}
+            className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold py-3 rounded-xl transition-colors"
+          >
+            Salir y guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   // Show phase intro screen
   if (showPhaseIntro && currentPhase !== 'complete' && currentPhase !== 'rest') {
     return (
-      <PhaseIntroScreen
-        phase={currentPhase as 'warmup' | 'main' | 'core' | 'cooldown'}
-        explanation={getPhaseExplanation(currentPhase)}
-        onContinue={handlePhaseIntroContinue}
-      />
+      <>
+        <PhaseIntroScreen
+          phase={currentPhase as 'warmup' | 'main' | 'core' | 'cooldown'}
+          explanation={getPhaseExplanation(currentPhase)}
+          onContinue={handlePhaseIntroContinue}
+        />
+        {exitConfirmModal}
+      </>
     );
   }
 
   if (currentPhase === 'complete') {
     return (
-      <SessionFeedbackForm 
-        onSubmit={handleFinishSession}
-        isSubmitting={isSubmittingSession}
-        syncNotice={syncNotice}
-        onRetrySync={handleRetrySync}
-      />
+      <>
+        <SessionFeedbackForm 
+          onSubmit={handleFinishSession}
+          isSubmitting={isSubmittingSession}
+          syncNotice={syncNotice}
+          onRetrySync={handleRetrySync}
+        />
+        {exitConfirmModal}
+      </>
     );
   }
 
@@ -2385,6 +2636,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
           pendingLogContext={pendingLogContext}
           onLogSubmit={handleLogSubmit}
           onOpenPlan={() => setShowSessionPlan(true)}
+          onExit={handleExit}
         />
       ) : currentExercise ? (
         <ExerciseScreen
@@ -2445,6 +2697,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
         swappingId={swappingExerciseId}
       />
     )}
+    {exitConfirmModal}
     </>
   );
 };
