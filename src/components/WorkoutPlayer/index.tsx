@@ -50,6 +50,7 @@ import {
   vibrateAlarmPattern,
 } from '../../utils/workoutTimerAlerts';
 import { AnimatedExerciseMedia, ExerciseMediaImage, preloadExerciseImages } from '../ExerciseMediaImage';
+import { resolveExerciseMediaFromFields } from '../../utils/exerciseMedia';
 import { formatLoadLabel, getLoadConventionHint, getWeightInputLabel, getWeightUnitSuffix, resolveLoadConvention } from '../../utils/loadConvention';
 import { getWeightInputStep, snapToGymWeight } from '../../utils/gymInventory';
 import {
@@ -295,11 +296,11 @@ const getExerciseName = (ex: FlexibleExercise): string => {
 };
 
 const getExerciseImage = (ex: FlexibleExercise): string | undefined => {
-  return ex.imageUrl || ex.imagenUrl || ex.url_img_0;
+  return resolveExerciseMediaFromFields(ex).imageUrl;
 };
 
 const getExerciseImage2 = (ex: FlexibleExercise): string | undefined => {
-  return ex.imageUrl2 || ex.url_img_1;
+  return resolveExerciseMediaFromFields(ex).imageUrl2;
 };
 
 const getExerciseSets = (ex: FlexibleExercise): number => {

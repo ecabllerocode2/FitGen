@@ -18,6 +18,7 @@ import { normalizeSession } from '../utils/sessionNormalizer';
 import { estimateSessionDuration } from '../utils/estimateWorkoutDuration';
 import { markSessionReviewed } from '../utils/sessionReviewContext';
 import { formatLoadLabel, resolveLoadConvention } from '../utils/loadConvention';
+import { resolveExerciseMediaFromFields } from '../utils/exerciseMedia';
 import { ExerciseMediaImage } from './ExerciseMediaImage';
 import ExerciseSwapReasonModal, { type SwapReason } from './ExerciseSwapReasonModal';
 import SessionCoachingBrief from './SessionCoachingBrief';
@@ -124,11 +125,11 @@ const formatExerciseLoad = (ex: FlexibleExercise): string | null => {
 };
 
 const getExerciseImage = (ex: FlexibleExercise): string | undefined => {
-  return ex.imageUrl || ex.imagenUrl || ex.url_img_0 || undefined;
+  return resolveExerciseMediaFromFields(ex).imageUrl;
 };
 
 const getExerciseImage2 = (ex: FlexibleExercise): string | undefined => {
-  return ex.imageUrl2 || ex.url_img_1 || undefined;
+  return resolveExerciseMediaFromFields(ex).imageUrl2;
 };
 
 // ==================== COMPONENTES UI ====================
