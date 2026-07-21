@@ -22,6 +22,14 @@ export default defineConfig({
       // Background rest/exercise alarms while the workout player is suspended.
       workbox: {
         importScripts: ['workout-timer-sw.js'],
+        // Never cache exercise media from R2 — failed/opaque responses were sticky for some users.
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) =>
+              url.hostname.endsWith('r2.dev') || url.hostname.includes('r2.cloudflarestorage.com'),
+            handler: 'NetworkOnly',
+          },
+        ],
       },
       
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', 'pwa-192x192.png', 'pwa-512x512.png', 'workout-timer-sw.js'], 
