@@ -18,6 +18,7 @@ import { normalizeSession } from '../utils/sessionNormalizer';
 import { estimateSessionDuration } from '../utils/estimateWorkoutDuration';
 import { markSessionReviewed } from '../utils/sessionReviewContext';
 import { formatLoadLabel, resolveLoadConvention } from '../utils/loadConvention';
+import { ExerciseMediaImage } from './ExerciseMediaImage';
 import ExerciseSwapReasonModal, { type SwapReason } from './ExerciseSwapReasonModal';
 import SessionCoachingBrief from './SessionCoachingBrief';
 import {
@@ -123,7 +124,11 @@ const formatExerciseLoad = (ex: FlexibleExercise): string | null => {
 };
 
 const getExerciseImage = (ex: FlexibleExercise): string | undefined => {
-  return ex.imageUrl || ex.imagenUrl || ex.url_img_0;
+  return ex.imageUrl || ex.imagenUrl || ex.url_img_0 || undefined;
+};
+
+const getExerciseImage2 = (ex: FlexibleExercise): string | undefined => {
+  return ex.imageUrl2 || ex.url_img_1 || undefined;
 };
 
 // ==================== COMPONENTES UI ====================
@@ -152,16 +157,17 @@ const WarmupExerciseRow = ({
 }) => {
   const name = getExerciseName(exercise);
   const image = getExerciseImage(exercise);
+  const image2 = getExerciseImage2(exercise);
 
   return (
     <div className="relative flex items-start gap-3 py-3 border-b border-zinc-800 last:border-0 pr-10">
-      <div className="w-12 h-12 bg-zinc-700 rounded-lg shrink-0 flex items-center justify-center overflow-hidden">
-        {image ? (
-          <img src={image} alt={name} className="w-full h-full object-cover" />
-        ) : (
-          <Flame className="w-5 h-5 text-orange-400 opacity-50" />
-        )}
-      </div>
+      <ExerciseMediaImage
+        imageUrl={image}
+        imageUrl2={image2}
+        alt={name}
+        className="w-12 h-12 bg-zinc-700 rounded-lg shrink-0 overflow-hidden"
+        icon={<Flame className="w-5 h-5 text-orange-400 opacity-50" />}
+      />
       <div className="flex-1 min-w-0">
         <h4 className="text-zinc-100 font-semibold text-sm leading-tight mb-1 truncate">
           {name}
@@ -205,20 +211,23 @@ const MainExerciseRow = ({
   const reps = getExerciseReps(exercise);
   const load = formatExerciseLoad(exercise);
   const image = getExerciseImage(exercise);
+  const image2 = getExerciseImage2(exercise);
 
   return (
     <div className="flex items-center gap-4 py-4 border-b border-zinc-800/80 last:border-0 relative">
-      <div className="w-[4.5rem] h-[4.5rem] bg-zinc-800/80 rounded-2xl shrink-0 flex items-center justify-center overflow-hidden relative ring-1 ring-zinc-800">
+      <div className="w-[4.5rem] h-[4.5rem] bg-zinc-800/80 rounded-2xl shrink-0 overflow-hidden relative ring-1 ring-zinc-800">
         {isSwapping && (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
             <RefreshCw className="w-5 h-5 text-white animate-spin" />
           </div>
         )}
-        {image ? (
-          <img src={image} alt={name} className="w-full h-full object-cover" />
-        ) : (
-          <Dumbbell className="w-6 h-6 text-zinc-600" />
-        )}
+        <ExerciseMediaImage
+          imageUrl={image}
+          imageUrl2={image2}
+          alt={name}
+          className="w-full h-full"
+          icon={<Dumbbell className="w-6 h-6 text-zinc-600" />}
+        />
       </div>
       
       <div className="flex-1 min-w-0 pr-10">
@@ -269,17 +278,18 @@ const MainExerciseRow = ({
 const CoreExerciseRow = ({ exercise }: { exercise: FlexibleExercise }) => {
   const name = getExerciseName(exercise);
   const image = getExerciseImage(exercise);
+  const image2 = getExerciseImage2(exercise);
   const detail = getExerciseReps(exercise) || `${exercise.prescripcion?.series ?? 1} series`;
   
   return (
     <div className="flex items-center gap-4 py-3 border-b border-zinc-800/80 last:border-0">
-      <div className="w-14 h-14 bg-zinc-800/80 rounded-xl shrink-0 flex items-center justify-center overflow-hidden ring-1 ring-zinc-800">
-        {image ? (
-          <img src={image} alt={name} className="w-full h-full object-cover" />
-        ) : (
-          <Layers3 className="w-5 h-5 text-yellow-500/50" />
-        )}
-      </div>
+      <ExerciseMediaImage
+        imageUrl={image}
+        imageUrl2={image2}
+        alt={name}
+        className="w-14 h-14 bg-zinc-800/80 rounded-xl shrink-0 overflow-hidden ring-1 ring-zinc-800"
+        icon={<Layers3 className="w-5 h-5 text-yellow-500/50" />}
+      />
       <div className="flex-1 min-w-0">
         <h4 className="text-sm font-semibold text-white leading-snug truncate">{name}</h4>
         <p className="text-xs text-zinc-500 mt-0.5">{detail}</p>
@@ -291,16 +301,17 @@ const CoreExerciseRow = ({ exercise }: { exercise: FlexibleExercise }) => {
 const CooldownExerciseRow = ({ exercise }: { exercise: FlexibleExercise }) => {
   const name = getExerciseName(exercise);
   const image = getExerciseImage(exercise);
+  const image2 = getExerciseImage2(exercise);
   
   return (
     <div className="flex items-start gap-3 py-3 border-b border-zinc-800 last:border-0">
-      <div className="w-12 h-12 bg-zinc-700 rounded-lg shrink-0 flex items-center justify-center overflow-hidden">
-        {image ? (
-          <img src={image} alt={name} className="w-full h-full object-cover" />
-        ) : (
-          <Wind className="w-5 h-5 text-cyan-400 opacity-50" />
-        )}
-      </div>
+      <ExerciseMediaImage
+        imageUrl={image}
+        imageUrl2={image2}
+        alt={name}
+        className="w-12 h-12 bg-zinc-700 rounded-lg shrink-0 overflow-hidden"
+        icon={<Wind className="w-5 h-5 text-cyan-400 opacity-50" />}
+      />
       <div className="flex-1 min-w-0">
         <h4 className="text-zinc-100 font-semibold text-sm leading-tight mb-1 truncate">
           {name}
