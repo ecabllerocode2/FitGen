@@ -30,12 +30,18 @@ import BodyMetricsTrendSection from './BodyMetricsTrendSection';
 import BodyMetricsCheckinModal from './BodyMetricsCheckinModal';
 import { fetchBodyCheckinStatus } from '../api/bodyMetrics';
 import type { BodyMetricEntry } from '../types/bodyMetrics';
-import type { AvatarAppearance } from '@fitgen/visual';
+import type { AvatarAppearance, AvatarStartingBuild } from '@fitgen/visual';
+import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import {
   buildMesocycleWeekMessages,
+  resolveMesocycleCurrentWeek,
 } from '../utils/mesocycleWeekProgress';
 import {
+  profileGenderToAvatarGender,
   resolveAvatarAppearance,
+  resolveAvatarStartingBuildForDisplay,
+  saveAvatarStartingBuild,
+  hasAvatarStartingBuildChosen,
 } from '../utils/avatarAppearanceStorage';
 
 export type HubTab = 'home' | 'achievements' | 'season' | 'sessions' | 'ranking' | 'shop';
@@ -76,12 +82,14 @@ interface StatsAndAchievementsProps {
         }>;
       };
       startDate?: string;
+      durationWeeks?: number;
     };
     profileData?: {
       name?: string;
       gender?: string;
       currentWeightKg?: number;
       initialWeight?: number;
+      avatarStartingBuild?: AvatarStartingBuild;
     };
     bodyMetrics?: {
       entries?: BodyMetricEntry[];
@@ -232,7 +240,20 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
     resolveInitialTab(initialSection, initialTab),
   );
   const [avatarAppearance, setAvatarAppearance] = useState<AvatarAppearance>(() =>
-    resolveAvatarAppearance(userProfile.profileData?.gender, userId),
+    resolveAvatarAppearance(
+      userProfile.profileData?.gender,
+      userId,
+      userProfile.profileData?.avatarStartingBuild,
+    ),
+  );
+  const [savingAvatar, setSavingAvatar] = useState(false);
+  const profileStartingBuild = userProfile.profileData?.avatarStartingBuild ?? null;
+  const avatarGender = profileGenderToAvatarGender(userProfile.profileData?.gender);
+  const avatarChosen = hasAvatarStartingBuildChosen(profileStartingBuild, userId);
+  const displayStartingBuild = resolveAvatarStartingBuildForDisplay(
+    userProfile.profileData?.gender,
+    userId,
+    profileStartingBuild,
   );
   const [bodyMetricEntries, setBodyMetricEntries] = useState<BodyMetricEntry[]>(
     () => userProfile.bodyMetrics?.entries ?? [],
@@ -248,8 +269,44 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   }, [initialSection, initialTab]);
 
   useEffect(() => {
-    setAvatarAppearance(resolveAvatarAppearance(userProfile.profileData?.gender, userId));
-  }, [userProfile.profileData?.gender, userId]);
+    setAvatarAppearance(
+      resolveAvatarAppearance(
+        userProfile.profileData?.gender,
+        userId,
+        userProfile.profileData?.avatarStartingBuild,
+      ),
+    );
+  }, [
+    userProfile.profileData?.gender,
+    userProfile.profileData?.avatarStartingBuild,
+    userId,
+  ]);
+
+  const handleSaveAvatarStartingBuild = async (build: AvatarStartingBuild) => {
+    saveAvatarStartingBuild(build, userId);
+    setAvatarAppearance((prev) => ({ ...prev, startingBuild: build }));
+
+    if (!authToken) return;
+
+    setSavingAvatar(true);
+    try {
+      const res = await authenticatedFetch(API_ENDPOINTS.USER_PROFILE_SAVE, authToken, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'profile_metadata_update',
+          profileData: { avatarStartingBuild: build },
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        console.warn('No se pudo guardar avatar en perfil:', data?.error);
+      }
+    } catch (err) {
+      console.warn('Error guardando avatar:', err);
+    } finally {
+      setSavingAvatar(false);
+    }
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -363,7 +420,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
     const weeksCompleted = gamification?.counters.lifetimeWeeksPerfect ?? 0;
 
     const mesocycle = userProfile.currentMesocycle;
-    const currentWeek = mesocycle?.currentWeek ?? 1;
+    const currentWeek = resolveMesocycleCurrentWeek(mesocycle);
     const microcycles = mesocycle?.mesocyclePlan?.microcycles;
 
     const weekMessages = buildMesocycleWeekMessages(
@@ -595,7 +652,14 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                     mesocycleWeekDone={stats.currentWeekProgress}
                     mesocycleWeekPlanned={stats.currentWeekTarget}
                     avatarBaseStage={gamification?.avatar.baseStage ?? 0}
-                    avatarAppearance={avatarAppearance}
+                    avatarAppearance={{
+                      ...avatarAppearance,
+                      startingBuild: displayStartingBuild,
+                    }}
+                    avatarGender={avatarGender}
+                    avatarStartingBuild={avatarChosen ? displayStartingBuild : null}
+                    onSaveAvatarStartingBuild={handleSaveAvatarStartingBuild}
+                    savingAvatar={savingAvatar}
                     nextGoal={nextGoal ?? null}
                     onGoAchievements={() => setActiveTab('achievements')}
                     onGoSeason={() => setActiveTab('season')}

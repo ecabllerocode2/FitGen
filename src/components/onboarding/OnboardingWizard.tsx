@@ -15,11 +15,14 @@ import { API_ENDPOINTS, authenticatedFetch } from '../../config/api';
 import type { FitnessGoal, FocusArea, DayOfWeek, ExternalLoad, BodyCompositionGoal, MusclePriority } from '../../types/session';
 import { TRAINING_AGE_OPTIONS, getExperienceLevelFromMonths } from '../../utils/experienceLevel';
 import { beginOnboardingCompletion } from '../../utils/onboardingCompletion';
+import { profileGenderToAvatarGender, saveAvatarStartingBuild } from '../../utils/avatarAppearanceStorage';
+import AvatarStartingBuildPicker, { AvatarEvolutionPreview } from '../avatar/AvatarStartingBuildPicker';
+import type { AvatarStartingBuild } from '@fitgen/visual';
 import { AppFixedFooter, AppHero, AppPrimaryButton, AppShell } from '../ui/AppPrimitives';
 import StepProgress from './StepProgress';
 import OptionCard from './OptionCard';
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 const GOALS: { value: FitnessGoal; title: string; desc: string }[] = [
   { value: 'Hipertrofia', title: 'Hipertrofia', desc: 'Volumen progresivo, 8–12 reps, estilo RP' },
@@ -92,6 +95,7 @@ interface UserProfileInitial {
     trainingDaysPerWeek?: number;
     preferredTrainingDays?: string[];
     weeklyScheduleContext?: DaySchedule[];
+    avatarStartingBuild?: AvatarStartingBuild;
   };
 }
 
@@ -122,6 +126,7 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
   const [gender, setGender] = useState('');
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
+  const [avatarStartingBuild, setAvatarStartingBuild] = useState<AvatarStartingBuild | ''>('');
 
   useEffect(() => {
     const p = initialData?.profileData;
@@ -145,6 +150,9 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
         ? p.injuriesOrLimitations
         : [p.injuriesOrLimitations];
       setInjuries(list.filter((i) => i && i !== 'Ninguna'));
+    }
+    if ((p as { avatarStartingBuild?: AvatarStartingBuild }).avatarStartingBuild) {
+      setAvatarStartingBuild((p as { avatarStartingBuild: AvatarStartingBuild }).avatarStartingBuild);
     }
     if (p.weeklyScheduleContext?.length) {
       setSelectedDays(new Set(p.weeklyScheduleContext.filter((d) => d.canTrain).map((d) => d.day)));
@@ -204,6 +212,8 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
           !!height &&
           parseInt(height) >= 120
         );
+      case 5:
+        return avatarStartingBuild !== '';
       default:
         return false;
     }
@@ -220,6 +230,9 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
       if (!gender) return 'Selecciona tu género.';
       if (!weight) return 'Ingresa tu peso.';
       if (!height) return 'Ingresa tu estatura.';
+    }
+    if (step === 5 && !avatarStartingBuild) {
+      return 'Elige cómo te ves hoy para personalizar tu avatar.';
     }
     return null;
   };
@@ -246,6 +259,7 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
         trainingDaysPerWeek: selectedDays.size,
         preferredTrainingDays: preferredDaysList,
         weeklyScheduleContext: weeklySchedule,
+        avatarStartingBuild: avatarStartingBuild || undefined,
         dateCompleted: new Date().toISOString(),
       },
     };
@@ -300,6 +314,9 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
       return;
     }
     setError(null);
+    if (step === 5 && avatarStartingBuild) {
+      saveAvatarStartingBuild(avatarStartingBuild, user.uid);
+    }
     if (step < TOTAL_STEPS - 1) setStep((s) => s + 1);
     else if (isEditMode) void saveProfileEdit();
     else beginOnboardingCompletion(generationProfile, buildSavePayload());
@@ -317,6 +334,7 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
     '¿Qué días entrenas?',
     '¿Algo que debamos saber?',
     'Datos rápidos',
+    'Tu avatar',
   ];
 
   const stepSubtitles = [
@@ -325,7 +343,10 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
     'Toca los días que vas al gym',
     'Opcional — ajustamos ejercicios por seguridad',
     'Solo lo necesario para tu prescripción',
+    'Elige tu punto de partida — evolucionará con cada sesión',
   ];
+
+  const avatarGender = profileGenderToAvatarGender(gender);
 
   if (isEditMode && saveResult) {
     return (
@@ -642,6 +663,31 @@ export default function OnboardingWizard({ user, initialData }: OnboardingWizard
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Step 5: Avatar starting build */}
+          {step === 5 && (
+            <div className="space-y-5">
+              <div className="rounded-xl border border-lime-500/20 bg-lime-500/5 px-4 py-3">
+                <p className="text-xs text-lime-300/90 leading-relaxed">
+                  Tu avatar reflejará tu progreso real. Con cada sesión completada verás cambios
+                  graduales hasta alcanzar tu versión fitness.
+                </p>
+              </div>
+
+              <AvatarStartingBuildPicker
+                gender={avatarGender}
+                value={avatarStartingBuild || null}
+                onChange={setAvatarStartingBuild}
+              />
+
+              {avatarStartingBuild && (
+                <AvatarEvolutionPreview
+                  gender={avatarGender}
+                  startingBuild={avatarStartingBuild}
+                />
+              )}
             </div>
           )}
 

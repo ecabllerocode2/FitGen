@@ -1,37 +1,51 @@
-import type { PhysiqueTier } from '../types';
+import type { AvatarProgressStage } from '../types';
 
-/** Session thresholds for physique morph (roadmap Fase 5–6). */
-export const PHYSIQUE_THRESHOLDS = [0, 5, 15, 30, 50, 100, 200, 365] as const;
+/** Session thresholds for avatar evolution (5 stages: 0–4). */
+export const AVATAR_STAGE_THRESHOLDS = [0, 8, 20, 40, 70] as const;
 
-export const PHYSIQUE_TIER_LABELS: Record<PhysiqueTier, string> = {
-  0: 'Principiante',
-  1: 'Activo',
-  2: 'Constante',
-  3: 'Comprometido',
-  4: 'Atleta',
-  5: 'Veterano',
-  6: 'Élite',
-  7: 'Leyenda',
+export const AVATAR_STAGE_LABELS: Record<AvatarProgressStage, string> = {
+  0: 'Punto de partida',
+  1: 'Primeros cambios',
+  2: 'Progreso visible',
+  3: 'En forma',
+  4: 'Meta fitness',
 };
 
-export function computePhysiqueTier(completedSessions: number): PhysiqueTier {
-  let tier: PhysiqueTier = 0;
-  for (let i = PHYSIQUE_THRESHOLDS.length - 1; i >= 0; i -= 1) {
-    if (completedSessions >= PHYSIQUE_THRESHOLDS[i]) {
-      tier = i as PhysiqueTier;
+export const AVATAR_STAGE_DESCRIPTIONS: Record<AvatarProgressStage, string> = {
+  0: 'Tu cuerpo actual — la base de tu transformación',
+  1: 'Empiezas a notar cambios con constancia',
+  2: 'Más definición y mejor postura',
+  3: 'Cerca de tu mejor versión',
+  4: 'Tu avatar refleja tu dedicación',
+};
+
+export function computeAvatarProgressStage(completedSessions: number): AvatarProgressStage {
+  let stage: AvatarProgressStage = 0;
+  for (let i = AVATAR_STAGE_THRESHOLDS.length - 1; i >= 0; i -= 1) {
+    if (completedSessions >= AVATAR_STAGE_THRESHOLDS[i]) {
+      stage = i as AvatarProgressStage;
       break;
     }
   }
-  return tier;
+  return stage;
 }
 
-/** Morph multipliers per tier — subtle Zdog scale/stroke changes. */
-export function physiqueMorph(tier: PhysiqueTier) {
-  const t = Math.min(tier, 7);
-  return {
-    shoulderScale: 1 + t * 0.04,
-    armStroke: 6 + t * 0.8,
-    chestScale: 1 + t * 0.035,
-    torsoHeight: 28 + t * 1.2,
-  };
+export function sessionsUntilNextAvatarStage(completedSessions: number): number | null {
+  const stage = computeAvatarProgressStage(completedSessions);
+  if (stage >= 4) return null;
+  const nextThreshold = AVATAR_STAGE_THRESHOLDS[stage + 1];
+  return Math.max(0, nextThreshold - completedSessions);
 }
+
+export function nextAvatarStageThreshold(completedSessions: number): number | null {
+  const stage = computeAvatarProgressStage(completedSessions);
+  if (stage >= 4) return null;
+  return AVATAR_STAGE_THRESHOLDS[stage + 1];
+}
+
+/** @deprecated Use computeAvatarProgressStage */
+export const PHYSIQUE_THRESHOLDS = AVATAR_STAGE_THRESHOLDS;
+/** @deprecated Use AVATAR_STAGE_LABELS */
+export const PHYSIQUE_TIER_LABELS = AVATAR_STAGE_LABELS;
+/** @deprecated Use computeAvatarProgressStage */
+export const computePhysiqueTier = computeAvatarProgressStage;

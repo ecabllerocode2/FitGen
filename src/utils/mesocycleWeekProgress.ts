@@ -1,7 +1,41 @@
-import { format } from 'date-fns';
+import { differenceInCalendarWeeks, format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const DAY_ORDER = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+export type MesocycleWeekContext = {
+  startDate?: string | null;
+  currentWeek?: number | null;
+  durationWeeks?: number | null;
+  mesocyclePlan?: { microcycles?: MesocycleMicrocycle[] };
+};
+
+/**
+ * Resolve active mesocycle week from start date (aligned with Dashboard/backend).
+ * Stored currentWeek can lag after a new calendar week begins.
+ */
+export function resolveMesocycleCurrentWeek(
+  mesocycle?: MesocycleWeekContext | null,
+  referenceDate: Date = new Date(),
+): number {
+  const duration =
+    mesocycle?.durationWeeks ??
+    mesocycle?.mesocyclePlan?.microcycles?.length ??
+    4;
+
+  if (!mesocycle?.startDate) {
+    return Math.min(Math.max(mesocycle?.currentWeek ?? 1, 1), duration);
+  }
+
+  const startString = String(mesocycle.startDate).split('T')[0];
+  const start = parseISO(`${startString}T00:00:00`);
+  if (Number.isNaN(start.getTime())) {
+    return Math.min(Math.max(mesocycle?.currentWeek ?? 1, 1), duration);
+  }
+
+  const weeksDiff = differenceInCalendarWeeks(referenceDate, start, { weekStartsOn: 1 });
+  const computed = weeksDiff + 1;
+  return Math.min(Math.max(computed, 1), duration);
+}
+
 
 export type MesocycleSessionSlot = {
   dayOfWeek?: string;
@@ -20,6 +54,8 @@ export type CompletedSessionRef = {
   completedAt?: string | null;
   id?: string;
 };
+
+const DAY_ORDER = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 function dayIndex(dayName: string | null | undefined): number {
   if (!dayName) return -1;

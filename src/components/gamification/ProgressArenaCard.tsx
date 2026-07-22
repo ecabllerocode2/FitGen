@@ -1,5 +1,10 @@
 import { useMemo } from 'react';
-import { AvatarDisplay, FitCoin, computePhysiqueTier, PHYSIQUE_TIER_LABELS } from '@fitgen/visual';
+import {
+  AvatarDisplay,
+  FitCoin,
+  computeAvatarProgressStage,
+  AVATAR_STAGE_LABELS,
+} from '@fitgen/visual';
 import type { AvatarAppearance } from '@fitgen/visual';
 import { formatFitCoins } from '../../utils/gamificationDisplay';
 
@@ -24,21 +29,21 @@ export default function ProgressArenaCard({
   avatarAppearance,
   onOpen,
 }: ProgressArenaCardProps) {
-  const physiqueTier = useMemo(
-    () => computePhysiqueTier(totalSessions),
+  const progressStage = useMemo(
+    () => computeAvatarProgressStage(totalSessions),
     [totalSessions],
   );
 
   const avatarConfig = useMemo(
     () => ({
       appearance: avatarAppearance,
-      physiqueTier,
+      progressStage,
       baseStage: avatarBaseStage,
     }),
-    [avatarAppearance, physiqueTier, avatarBaseStage],
+    [avatarAppearance, progressStage, avatarBaseStage],
   );
 
-  const tierLabel = PHYSIQUE_TIER_LABELS[physiqueTier];
+  const stageLabel = AVATAR_STAGE_LABELS[progressStage];
 
   return (
     <button
@@ -53,7 +58,7 @@ export default function ProgressArenaCard({
       <div className="mt-4 space-y-3">
         <div>
           <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-medium">
-            {tierLabel}
+            {stageLabel}
           </p>
           <p className="text-[11px] text-zinc-600 mt-0.5">
             {unlockedAchievements} logros · Toca para abrir tu GYM
