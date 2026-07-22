@@ -65,6 +65,7 @@ export const API_ENDPOINTS = {
   SHOP_PURCHASE: `${API_BASE_URL}/api/shop/purchase`,
   SHOP_REDEEM_PREMIUM: `${API_BASE_URL}/api/shop/redeem-premium`,
   ADMIN_USERS_OVERVIEW: `${API_BASE_URL}/api/admin/users-overview`,
+  ADMIN_USER_DETAIL: `${API_BASE_URL}/api/admin/user-detail`,
   
   // Otros endpoints que puedas necesitar
   ANALYTICS: `${API_BASE_URL}/api/analytics`,
