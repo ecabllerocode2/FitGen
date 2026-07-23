@@ -1,24 +1,25 @@
 import type { GeneratedSession } from '../types/session';
 import { formatLoadLabel, resolveLoadConvention } from './loadConvention';
 import { resolveExerciseMediaFromFields } from './exerciseMedia';
+import { normalizeWeightUnit, type WeightUnit } from './weightUnits';
 
-function buildPesoLabel(ex: any): string | undefined {
+function buildPesoLabel(ex: any, unit: WeightUnit = 'kg'): string | undefined {
   if (ex.loadMode === 'bodyweight' || ex.isBodyweight === true) return undefined;
   const convention = resolveLoadConvention(ex);
   if (ex.loadMode === 'exploratory' && ex.prescribedLoadKg == null) {
-    return formatLoadLabel(ex.suggestedLoadKg, convention, { approximate: true, exploratory: !ex.suggestedLoadKg }) ?? 'Exploratorio';
+    return formatLoadLabel(ex.suggestedLoadKg, convention, { approximate: true, exploratory: !ex.suggestedLoadKg, unit }) ?? 'Exploratorio';
   }
   if (ex.prescribedLoadKg != null) {
-    return formatLoadLabel(ex.prescribedLoadKg, convention) ?? undefined;
+    return formatLoadLabel(ex.prescribedLoadKg, convention, { unit }) ?? undefined;
   }
   if (ex.suggestedLoadKg != null) {
-    return formatLoadLabel(ex.suggestedLoadKg, convention, { approximate: true }) ?? undefined;
+    return formatLoadLabel(ex.suggestedLoadKg, convention, { approximate: true, unit }) ?? undefined;
   }
   if (ex.loadMode === 'exploratory') return 'Exploratorio';
   return ex.peso;
 }
 
-function mapExerciseFields(ex: any) {
+function mapExerciseFields(ex: any, unit: WeightUnit = 'kg') {
   const { imageUrl, imageUrl2 } = resolveExerciseMediaFromFields(ex);
   const loadConvention = ex.loadConvention ?? resolveLoadConvention(ex);
   const mapped = {
@@ -45,7 +46,7 @@ function mapExerciseFields(ex: any) {
     emphasisTag: ex.emphasisTag ?? null,
     prescribedLoadKg: ex.prescribedLoadKg,
     suggestedLoadKg: ex.suggestedLoadKg,
-    peso: buildPesoLabel({ ...ex, loadConvention }),
+    peso: buildPesoLabel({ ...ex, loadConvention }, unit),
     prescripcion: ex.prescripcion ?? {
       series: ex.sets,
       reps: ex.repRange ?? ex.reps,
@@ -97,8 +98,9 @@ function wrapCooldownExercises(exercises: any[]) {
 
 // Normaliza distintas variantes de la sesión que pueden llegar desde Firestore
 // Devuelve un objeto que cumple (de forma floja) con GeneratedSession
-export function normalizeSession(raw: any): GeneratedSession | null {
+export function normalizeSession(raw: any, options: { weightUnit?: WeightUnit } = {}): GeneratedSession | null {
   if (!raw) return null;
+  const weightUnit = normalizeWeightUnit(options.weightUnit);
 
   // Algunos documentos pueden envolver la sesión en { session: {...} }
   let session = raw.session && typeof raw.session === 'object' ? raw.session : raw;
@@ -159,7 +161,7 @@ export function normalizeSession(raw: any): GeneratedSession | null {
     session.mainBlock = {
       tipo: 'estaciones',
       descripcion: '',
-      bloques: [{ ejercicios: exercises.map(mapExerciseFields) }],
+      bloques: [{ ejercicios: exercises.map((exercise: any) => mapExerciseFields(exercise, weightUnit)) }],
     };
   } else if (session.mainBlock) {
     const mb = session.mainBlock;
@@ -170,7 +172,7 @@ export function normalizeSession(raw: any): GeneratedSession | null {
         ...mb,
         bloques: mb.bloques.map((block: any) => ({
           ...block,
-          ejercicios: (block.ejercicios ?? []).map(mapExerciseFields),
+          ejercicios: (block.ejercicios ?? []).map((exercise: any) => mapExerciseFields(exercise, weightUnit)),
         })),
       };
     } else if (Array.isArray(mb.estaciones)) {
@@ -178,7 +180,7 @@ export function normalizeSession(raw: any): GeneratedSession | null {
         ...mb,
         bloques: mb.estaciones.map((block: any) => ({
           ...block,
-          ejercicios: (block.ejercicios ?? []).map(mapExerciseFields),
+          ejercicios: (block.ejercicios ?? []).map((exercise: any) => mapExerciseFields(exercise, weightUnit)),
         })),
       };
     } else if (Array.isArray(mb.blocks)) {
@@ -186,7 +188,7 @@ export function normalizeSession(raw: any): GeneratedSession | null {
         ...mb,
         bloques: mb.blocks.map((block: any) => ({
           ...block,
-          ejercicios: (block.ejercicios ?? []).map(mapExerciseFields),
+          ejercicios: (block.ejercicios ?? []).map((exercise: any) => mapExerciseFields(exercise, weightUnit)),
         })),
       };
     } else if (mb.ejercicios && Array.isArray(mb.ejercicios)) {
@@ -194,7 +196,7 @@ export function normalizeSession(raw: any): GeneratedSession | null {
       session.mainBlock = {
         tipo: 'estaciones',
         descripcion: '',
-        bloques: [{ ejercicios: mb.ejercicios.map(mapExerciseFields) }],
+        bloques: [{ ejercicios: mb.ejercicios.map((exercise: any) => mapExerciseFields(exercise, weightUnit)) }],
       };
     } else {
       // Asegurar la forma minima
@@ -210,7 +212,7 @@ export function normalizeSession(raw: any): GeneratedSession | null {
     session.coreBlock = null;
   } else {
     // Si viene como { ejercicios: [...] } ok
-    session.coreBlock.ejercicios = (session.coreBlock.ejercicios || []).map(mapExerciseFields);
+    session.coreBlock.ejercicios = (session.coreBlock.ejercicios || []).map((exercise: any) => mapExerciseFields(exercise, weightUnit));
   }
 
   // NORMALIZAR COOLDOWN — backend v3 devuelve array plano

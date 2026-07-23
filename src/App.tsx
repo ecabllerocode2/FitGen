@@ -16,6 +16,8 @@ import { canPlayCurrentSession } from './utils/sessionDay';
 import WorkoutCelebrationPage from './components/WorkoutCelebrationPage';
 import MesocycleEvaluate from './components/MesocycleEvaluate';
 import ExerciseExclusionsScreen, { type ExercisePreferences } from './components/ExerciseExclusionsScreen';
+import TrainingUnitsSettingsScreen from './components/TrainingUnitsSettingsScreen';
+import { WeightUnitProvider } from './context/WeightUnitContext';
 
 // Tipos de sesión V2
 import type { GeneratedSession } from './types/session';
@@ -261,6 +263,7 @@ const App: FC = () => {
             return <Navigate to="/" replace />;
         }
         return (
+            <WeightUnitProvider preferredUnit={userProfile.profileData?.weightUnit}>
             <Routes>
                 {/* 1. DASHBOARD (Home) */}
                 <Route path="/" element={
@@ -324,9 +327,12 @@ const App: FC = () => {
                     />
                 } />
 
+                <Route path="/settings/training-units" element={<TrainingUnitsSettingsScreen />} />
+
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </WeightUnitProvider>
         );
     }
 

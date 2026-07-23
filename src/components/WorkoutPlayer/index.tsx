@@ -51,8 +51,17 @@ import {
 } from '../../utils/workoutTimerAlerts';
 import { AnimatedExerciseMedia, ExerciseMediaImage, preloadExerciseImages } from '../ExerciseMediaImage';
 import { resolveExerciseMediaFromFields } from '../../utils/exerciseMedia';
-import { formatLoadLabel, getLoadConventionHint, getWeightInputLabel, getWeightUnitSuffix, resolveLoadConvention } from '../../utils/loadConvention';
-import { getWeightInputStep, snapToGymWeight } from '../../utils/gymInventory';
+import { formatLoadLabel, getLoadConventionHint, getWeightInputLabel, getWeightUnitSuffix, resolveLoadConvention, type LoadConvention } from '../../utils/loadConvention';
+import WeightUnitToggle from '../WeightUnitToggle';
+import { useWeightUnit } from '../../context/WeightUnitContext';
+import {
+  formatWeightNumber,
+  fromDisplayWeight,
+  getInputStep,
+  snapInDisplayUnit,
+  toDisplayWeight,
+  type WeightUnit,
+} from '../../utils/weightUnits';
 import {
   AppEyebrow,
   AppFixedFooter,
@@ -686,7 +695,10 @@ interface RestScreenProps {
     defaultWeight?: number | null;
     weightPlaceholder?: string;
     weightLabel?: string;
+    loadConvention: LoadConvention;
   } | null;
+  weightUnit: WeightUnit;
+  onWeightUnitChange: (unit: WeightUnit) => void;
   onLogSubmit: (data: SetLog) => void;
   onOpenPlan?: () => void;
   onExit?: () => void;
@@ -702,6 +714,8 @@ const RestScreen: React.FC<RestScreenProps> = ({
   alarmActive,
   onDismissAlarm,
   pendingLogContext,
+  weightUnit,
+  onWeightUnitChange,
   onLogSubmit,
   onOpenPlan,
   onExit,
@@ -719,15 +733,20 @@ const RestScreen: React.FC<RestScreenProps> = ({
     }
     setHasSubmitted(false);
     const defaultReps = pendingLogContext.defaultReps?.toString() ?? '';
+    const defaultWeightKg = pendingLogContext.defaultWeight;
+    const displayDefault =
+      defaultWeightKg != null
+        ? toDisplayWeight(defaultWeightKg, weightUnit, pendingLogContext.loadConvention)
+        : null;
     const defaultWeight =
-      pendingLogContext.defaultWeight != null
-        ? String(pendingLogContext.defaultWeight)
+      displayDefault != null
+        ? String(displayDefault)
         : pendingLogContext.weightPlaceholder ?? '';
     defaultsRef.current = { reps: defaultReps, weight: defaultWeight, rir: '' };
     setReps(defaultReps);
     setWeight(defaultWeight);
     setRir('');
-  }, [pendingLogContext]);
+  }, [pendingLogContext, weightUnit]);
 
   useEffect(() => {
     if (!nextExercise) return;
@@ -755,13 +774,22 @@ const RestScreen: React.FC<RestScreenProps> = ({
     return typeof fallback === 'number' ? fallback : parseInt(String(fallback), 10);
   };
 
+  const resolveWeightKg = (value: string, fallbackKg: number | null | undefined): number | null => {
+    if (!pendingLogContext || pendingLogContext.isBodyweight) return null;
+    let displayValue: number | null = null;
+    if (value !== '') {
+      const parsed = parseFloat(value);
+      displayValue = Number.isNaN(parsed) ? null : parsed;
+    } else if (fallbackKg != null) {
+      displayValue = toDisplayWeight(fallbackKg, weightUnit, pendingLogContext.loadConvention);
+    }
+    return fromDisplayWeight(displayValue, weightUnit, pendingLogContext.loadConvention);
+  };
+
   const submitWithDefaults = () => {
     if (!pendingLogContext) return true;
     const repsNum = resolveFieldValue('reps', reps, pendingLogContext.defaultReps) as number;
-    let weightNum: number | null = null;
-    if (!pendingLogContext.isBodyweight) {
-      weightNum = resolveFieldValue('weight', weight, pendingLogContext.defaultWeight ?? null) as number | null;
-    }
+    const weightNum = resolveWeightKg(weight, pendingLogContext.defaultWeight ?? null);
     onLogSubmit({
       reps: typeof repsNum === 'number' && !Number.isNaN(repsNum) ? repsNum : pendingLogContext.defaultReps,
       weight: weightNum,
@@ -790,7 +818,7 @@ const RestScreen: React.FC<RestScreenProps> = ({
             alert('Por favor indica el peso usado.');
             return false;
         }
-        weightNum = resolveFieldValue('weight', weight, pendingLogContext.defaultWeight ?? null) as number | null;
+        weightNum = resolveWeightKg(weight, pendingLogContext.defaultWeight ?? null);
      }
 
      let rirNum: number | undefined = undefined;
@@ -844,16 +872,30 @@ const RestScreen: React.FC<RestScreenProps> = ({
             <div className="flex gap-3 mb-3">
                {!pendingLogContext.isBodyweight && (
                  <div className="flex-1">
-                   <label className="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider mb-1 block">
-                     {pendingLogContext.weightLabel ?? 'Peso (kg)'}
-                   </label>
+                   <div className="flex items-center justify-between gap-2 mb-1">
+                     <label className="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider">
+                       {pendingLogContext.weightLabel ?? getWeightInputLabel(pendingLogContext.loadConvention, weightUnit)}
+                     </label>
+                     <WeightUnitToggle unit={weightUnit} onChange={onWeightUnitChange} />
+                   </div>
                    <input 
                      type="number" 
                      value={weight}
                      onFocus={() => clearIfDefault('weight', weight, setWeight)}
                      onChange={e => setWeight(e.target.value)}
+                     onBlur={() => {
+                       const parsed = parseFloat(weight);
+                       if (Number.isNaN(parsed)) return;
+                       const snapped = snapInDisplayUnit(
+                         parsed,
+                         weightUnit,
+                         pendingLogContext.loadConvention,
+                       );
+                       setWeight(String(snapped));
+                     }}
+                     step={getInputStep(weightUnit, pendingLogContext.loadConvention)}
                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-center text-white font-semibold focus:border-lime-500/50 outline-none"
-                     placeholder={pendingLogContext.weightPlaceholder || 'kg'}
+                     placeholder={getWeightUnitSuffix(pendingLogContext.loadConvention, weightUnit)}
                    />
                  </div>
                )}
@@ -1111,6 +1153,7 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   isSwapping = false,
   onOpenPlan,
 }) => {
+  const { activeUnit, setActiveUnit } = useWeightUnit();
   const [showDescription, setShowDescription] = useState(true);
   const [activeTooltip, setActiveTooltip] = useState<'peso' | null>(null);
   const [localWeight, setLocalWeight] = useState('');
@@ -1122,17 +1165,23 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   const reps = getExerciseReps(exercise);
   const parsedWeight = parsePrescribedKg(exercise);
   const loadConvention = resolveLoadConvention(exercise);
-  const weight = exercise.peso ?? (parsedWeight != null ? formatLoadLabel(parsedWeight, loadConvention) ?? undefined : undefined);
-  const weightUnitSuffix = getWeightUnitSuffix(loadConvention);
+  const displayKg = prescribedWeightKg ?? parsedWeight;
+  const weight = exercise.peso ?? (displayKg != null
+    ? formatLoadLabel(displayKg, loadConvention, { unit: activeUnit }) ?? undefined
+    : undefined);
+  const weightUnitSuffix = getWeightUnitSuffix(loadConvention, activeUnit);
   const loadHint = getLoadConventionHint(loadConvention);
   const duracion = exercise.duracion || exercise.tiempo;
 
   useEffect(() => {
-    const initial = prescribedWeightKg ?? parsedWeight;
-    const initialStr = initial != null ? String(initial) : '';
+    const initialKg = prescribedWeightKg ?? parsedWeight;
+    const initialDisplay = initialKg != null
+      ? toDisplayWeight(initialKg, activeUnit, loadConvention)
+      : null;
+    const initialStr = initialDisplay != null ? String(initialDisplay) : '';
     defaultWeightRef.current = initialStr;
     setLocalWeight(initialStr);
-  }, [exercise.id, prescribedWeightKg, parsedWeight]);
+  }, [exercise.id, prescribedWeightKg, parsedWeight, activeUnit, loadConvention]);
 
   const phaseLabels: Record<string, string> = {
     warmup: 'Calentamiento',
@@ -1213,11 +1262,11 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
             ) : null}
 
             {type === 'main' && !isTimedExercise && !isBodyweight && !isBodyweightExercise(exercise) ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <input
                   type="number"
                   inputMode="decimal"
-                  step={getWeightInputStep(loadConvention)}
+                  step={getInputStep(activeUnit, loadConvention)}
                   min="0"
                   value={localWeight}
                   onFocus={() => {
@@ -1226,29 +1275,35 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
                   onChange={(e) => {
                     setLocalWeight(e.target.value);
                     const n = parseFloat(e.target.value);
-                    onPrescribedWeightChange?.(Number.isNaN(n) ? null : n);
+                    onPrescribedWeightChange?.(
+                      Number.isNaN(n)
+                        ? null
+                        : fromDisplayWeight(n, activeUnit, loadConvention),
+                    );
                   }}
                   onBlur={() => {
                     if (!localWeight && defaultWeightRef.current) {
                       setLocalWeight(defaultWeightRef.current);
                       const n = parseFloat(defaultWeightRef.current);
-                      onPrescribedWeightChange?.(Number.isNaN(n) ? null : n);
+                      onPrescribedWeightChange?.(
+                        Number.isNaN(n)
+                          ? null
+                          : fromDisplayWeight(n, activeUnit, loadConvention),
+                      );
                       return;
                     }
                     const n = parseFloat(localWeight);
                     if (!Number.isNaN(n)) {
-                      const snapped = snapToGymWeight(n, loadConvention, 'nearest');
-                      if (snapped != null) {
-                        const snappedStr = String(snapped);
-                        setLocalWeight(snappedStr);
-                        onPrescribedWeightChange?.(snapped);
-                      }
+                      const snapped = snapInDisplayUnit(n, activeUnit, loadConvention);
+                      const snappedStr = formatWeightNumber(snapped, activeUnit);
+                      setLocalWeight(snappedStr);
+                      onPrescribedWeightChange?.(fromDisplayWeight(snapped, activeUnit, loadConvention));
                     }
                   }}
                   placeholder={weightUnitSuffix}
                   className="w-24 bg-zinc-900/80 border border-zinc-700 rounded-xl px-3 py-2 text-2xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-lime-500/50"
                 />
-                <span className="text-sm text-zinc-500 whitespace-nowrap">{weightUnitSuffix}</span>
+                <WeightUnitToggle unit={activeUnit} onChange={setActiveUnit} />
                 <button type="button" onClick={() => setActiveTooltip('peso')} className="p-1">
                   <Info className="w-4 h-4 text-zinc-600" />
                 </button>
@@ -1410,6 +1465,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
   onExit,
 }) => {
   const navigate = useNavigate();
+  const { activeUnit, setActiveUnit } = useWeightUnit();
   const [session, setSession] = useState(() => normalizeSession(initialSession) || initialSession);
   const sessionStorageId = resolveSessionStorageId(session);
   const initialCheckpointRef = useRef<WorkoutProgressCheckpoint | null>(
@@ -1432,8 +1488,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
   } | null>(null);
 
   useEffect(() => {
-    setSession(normalizeSession(initialSession) || initialSession);
-  }, [initialSession]);
+    setSession(normalizeSession(initialSession, { weightUnit: activeUnit }) || initialSession);
+  }, [initialSession, activeUnit]);
   
   const [currentPhase, setCurrentPhase] = useState<WorkoutPhase>(
     (checkpoint?.currentPhase as WorkoutPhase) ?? 'warmup',
@@ -2409,7 +2465,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
          defaultReps: isTimed ? (duration as number) : parseDefaultReps(ex),
          defaultWeight: bodyweight ? null : defaultWeight,
          weightPlaceholder: bodyweight ? undefined : (defaultWeight != null ? String(defaultWeight) : undefined),
-         weightLabel: bodyweight ? undefined : getWeightInputLabel(loadConvention),
+         weightLabel: bodyweight ? undefined : getWeightInputLabel(loadConvention, activeUnit),
+         loadConvention,
       });
 
       if (currentExercise.setNumber === totalSets) {
@@ -2425,7 +2482,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     }
     
     startRest(restTime);
-  }, [currentExercise, startRest, getMainBlocks, weightOverrides]);
+  }, [currentExercise, startRest, getMainBlocks, weightOverrides, activeUnit]);
 
   const handleDismissAlarm = useCallback(() => {
     stopAlarmSound();
@@ -2500,7 +2557,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     replacedId: string,
   ) => {
     if (!currentExercise) return;
-    const normalized = normalizeSession(updatedSession) || updatedSession;
+    const normalized = normalizeSession(updatedSession, { weightUnit: activeUnit }) || updatedSession;
 
     if (currentExercise.type === 'warmup') {
       const idx = warmupIndex;
@@ -2553,7 +2610,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
         throw new Error(data.error ?? 'No se encontró alternativa');
       }
       if (data.session) {
-        const normalized = normalizeSession(data.session) || (data.session as GeneratedSession);
+        const normalized = normalizeSession(data.session, { weightUnit: activeUnit }) || (data.session as GeneratedSession);
         setSession(normalized);
         refreshCurrentExerciseFromSession(normalized, swapTarget.exerciseId);
       }
@@ -2796,6 +2853,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
           alarmActive={alarmActive}
           onDismissAlarm={handleDismissAlarm}
           pendingLogContext={pendingLogContext}
+          weightUnit={activeUnit}
+          onWeightUnitChange={setActiveUnit}
           onLogSubmit={handleLogSubmit}
           onOpenPlan={() => setShowSessionPlan(true)}
           onExit={handleExit}

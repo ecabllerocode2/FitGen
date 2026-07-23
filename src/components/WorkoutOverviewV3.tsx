@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { 
@@ -18,6 +18,9 @@ import { normalizeSession } from '../utils/sessionNormalizer';
 import { estimateSessionDuration } from '../utils/estimateWorkoutDuration';
 import { markSessionReviewed } from '../utils/sessionReviewContext';
 import { formatLoadLabel, resolveLoadConvention } from '../utils/loadConvention';
+import { useWeightUnit } from '../context/WeightUnitContext';
+import WeightUnitToggle from './WeightUnitToggle';
+import { type WeightUnit } from '../utils/weightUnits';
 import { resolveExerciseMediaFromFields } from '../utils/exerciseMedia';
 import { ExerciseMediaImage } from './ExerciseMediaImage';
 import ExerciseSwapReasonModal, { type SwapReason } from './ExerciseSwapReasonModal';
@@ -112,15 +115,15 @@ const getExerciseReps = (ex: FlexibleExercise): string => {
     : `${text} reps`;
 };
 
-const formatExerciseLoad = (ex: FlexibleExercise): string | null => {
+const formatExerciseLoad = (ex: FlexibleExercise, unit: WeightUnit = 'kg'): string | null => {
   if ((ex as any).isBodyweight === true || (ex as any).loadMode === 'bodyweight') return 'Peso corporal';
-  if (ex.peso) return ex.peso;
   const convention = resolveLoadConvention(ex);
   const prescribed = (ex as any).prescribedLoadKg;
   const suggested = (ex as any).suggestedLoadKg ?? ex.prescripcion?.pesoSugerido;
-  if (typeof prescribed === 'number') return formatLoadLabel(prescribed, convention);
-  if (typeof suggested === 'number') return formatLoadLabel(suggested, convention, { approximate: true });
+  if (typeof prescribed === 'number') return formatLoadLabel(prescribed, convention, { unit });
+  if (typeof suggested === 'number') return formatLoadLabel(suggested, convention, { approximate: true, unit });
   if ((ex as any).loadMode === 'exploratory' || suggested === 'Exploratorio') return 'Exploratorio';
+  if (ex.peso) return ex.peso;
   return null;
 };
 
@@ -202,15 +205,17 @@ const WarmupExerciseRow = ({
 const MainExerciseRow = ({ 
   exercise, 
   onSwap, 
-  isSwapping 
+  isSwapping,
+  weightUnit,
 }: { 
   exercise: FlexibleExercise;
   onSwap?: () => void;
   isSwapping?: boolean;
+  weightUnit: WeightUnit;
 }) => {
   const name = getExerciseName(exercise);
   const reps = getExerciseReps(exercise);
-  const load = formatExerciseLoad(exercise);
+  const load = formatExerciseLoad(exercise, weightUnit);
   const image = getExerciseImage(exercise);
   const image2 = getExerciseImage2(exercise);
 
@@ -343,9 +348,12 @@ interface WorkoutOverviewProps {
 const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSession }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { activeUnit, setActiveUnit } = useWeightUnit();
   const isPreflight = (location.state as { preflight?: boolean } | null)?.preflight === true;
-  // Aceptar distintas formas de session que puedan llegar desde Firestore
-  const normalized = normalizeSession(initialSession) || initialSession;
+  const normalized = useMemo(
+    () => normalizeSession(initialSession, { weightUnit: activeUnit }) || initialSession,
+    [initialSession, activeUnit],
+  );
   const [currentSession, setCurrentSession] = useState<GeneratedSession>(normalized as GeneratedSession);
   const [swappingId, setSwappingId] = useState<string | null>(null);
   const [swapTarget, setSwapTarget] = useState<{
@@ -356,6 +364,10 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
     stationIndex?: number;
     exerciseIndex?: number;
   } | null>(null);
+
+  useEffect(() => {
+    setCurrentSession(normalized as GeneratedSession);
+  }, [normalized]);
 
   const executeWarmupSwap = async (exerciseId: string, reason: SwapReason, excludeEquipment: boolean) => {
     const authInstance = getAuth();
@@ -370,7 +382,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
     if (!response.ok || !data.success) {
       throw new Error(data.error ?? 'No se encontró alternativa');
     }
-    if (data.session) setCurrentSession(normalizeSession(data.session) || (data.session as GeneratedSession));
+    if (data.session) setCurrentSession(normalizeSession(data.session, { weightUnit: activeUnit }) || (data.session as GeneratedSession));
   };
 
   const executeMainSwap = async (
@@ -399,7 +411,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
       throw new Error(data.error ?? 'No se encontró alternativa');
     }
     if (data.session) {
-      setCurrentSession(normalizeSession(data.session) || (data.session as GeneratedSession));
+      setCurrentSession(normalizeSession(data.session, { weightUnit: activeUnit }) || (data.session as GeneratedSession));
     } else if (data.newExercise) {
       setCurrentSession((prev) => {
         const newSession = JSON.parse(JSON.stringify(prev)) as GeneratedSession;
@@ -518,6 +530,11 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
             </span>
           </div>
 
+          <div className="mt-5 flex items-center justify-between gap-3">
+            <p className="text-xs text-zinc-600">Pesos en</p>
+            <WeightUnitToggle unit={activeUnit} onChange={setActiveUnit} />
+          </div>
+
           {muscleSummary && muscleSummary.length > 0 && (
             <p className="text-xs text-zinc-600 mt-4 leading-relaxed">
               {muscleSummary.join(' · ')}
@@ -574,6 +591,7 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
                 <MainExerciseRow 
                   key={ejercicio.id || ejIdx}
                   exercise={ejercicio}
+                  weightUnit={activeUnit}
                   onSwap={() => {
                     const stationIdx = ((currentSession.mainBlock?.bloques || (currentSession.mainBlock as any)?.estaciones) as FlexibleStation[]).findIndex(
                       (s) => s.ejercicios?.some((e) => e.id === ejercicio.id),
