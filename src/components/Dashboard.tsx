@@ -95,6 +95,7 @@ interface CurrentSessionData {
     sessionFocus?: string;
 }
 interface UserProfile {
+    athleteOrigin?: 'direct' | 'coached';
     profileData?: {
         name: string;
         fitnessGoal?: string;

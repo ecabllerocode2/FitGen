@@ -4,6 +4,7 @@ import { getAuth } from 'firebase/auth';
 import SessionCelebration, { type SessionCelebrationData } from './SessionCelebration';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import { renderShareCardCanvas } from '../utils/shareCard';
+import { fetchShareBranding } from '../api/coach';
 import { pickMotivationalPhrase } from '../utils/motivationalPhrases';
 import AchievementUnlockModal, {
   consumePendingAchievementUnlocks,
@@ -48,6 +49,22 @@ export default function WorkoutCelebrationPage() {
     () => consumePendingAchievementUnlocks(),
   );
 
+  const [footerText, setFooterText] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const user = getAuth().currentUser;
+        if (!user) return;
+        const token = await user.getIdToken();
+        const branding = await fetchShareBranding(token);
+        setFooterText(branding.footerText);
+      } catch {
+        setFooterText('Entrenamiento completado con FitGen');
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     const delta = consumePendingRewardsDelta();
     if (!delta) return;
@@ -83,6 +100,7 @@ export default function WorkoutCelebrationPage() {
           phrase: pickMotivationalPhrase(),
           completedAt: payload.data.completedAt ?? new Date().toISOString(),
           aspect: '4:5',
+          footerText,
         });
         await authenticatedFetch(API_ENDPOINTS.SESSION_CELEBRATION_CARD, token, {
           method: 'POST',
@@ -98,7 +116,7 @@ export default function WorkoutCelebrationPage() {
 
     const timer = window.setTimeout(uploadCard, 800);
     return () => window.clearTimeout(timer);
-  }, [payload?.archivedSessionId, payload?.data]);
+  }, [payload?.archivedSessionId, payload?.data, footerText]);
 
   if (!payload) return null;
 
@@ -124,6 +142,7 @@ export default function WorkoutCelebrationPage() {
       ) : (
         <SessionCelebration
           data={payload.data}
+          footerText={footerText}
           onDone={() => {
             clearPendingCelebration();
             navigate('/', { replace: true });

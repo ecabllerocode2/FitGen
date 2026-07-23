@@ -66,6 +66,14 @@ export const API_ENDPOINTS = {
   SHOP_REDEEM_PREMIUM: `${API_BASE_URL}/api/shop/redeem-premium`,
   ADMIN_USERS_OVERVIEW: `${API_BASE_URL}/api/admin/users-overview`,
   ADMIN_USER_DETAIL: `${API_BASE_URL}/api/admin/user-detail`,
+  ADMIN_COACH_SET_PLAN: `${API_BASE_URL}/api/admin/coach-set-plan`,
+
+  // Coach platform
+  COACH_REGISTER: `${API_BASE_URL}/api/coach/register`,
+  COACH_ME: `${API_BASE_URL}/api/coach/me`,
+  COACH_INVITES: `${API_BASE_URL}/api/coach/invites`,
+  COACH_CLIENTS: `${API_BASE_URL}/api/coach/clients`,
+  ATHLETE_SHARE_BRANDING: `${API_BASE_URL}/api/athlete/share-branding`,
   
   // Otros endpoints que puedas necesitar
   ANALYTICS: `${API_BASE_URL}/api/analytics`,
