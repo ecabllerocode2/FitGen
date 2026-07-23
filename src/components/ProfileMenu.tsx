@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Scale, User as UserIcon, ChevronDown, Ban, Shield } from 'lucide-react';
+import { LogOut, Scale, User as UserIcon, ChevronDown, Ban, Shield, Dumbbell } from 'lucide-react';
 import { isAdminUser } from '../constants/admin';
 
 interface ProfileMenuProps {
@@ -53,6 +53,11 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
         setIsOpen(false);
     };
 
+    const handleTrainingUnitsClick = () => {
+        navigate('/settings/training-units');
+        setIsOpen(false);
+    };
+
     const handleExclusionsClick = () => {
         navigate('/settings/exclusions');
         setIsOpen(false);
@@ -101,6 +106,14 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
                         >
                             <Scale className="w-4 h-4" />
                             Actualizar perfil
+                        </button>
+                        <button
+                            onClick={handleTrainingUnitsClick}
+                            className="w-full text-left px-4 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-900 flex items-center gap-3 transition-colors"
+                            role="menuitem"
+                        >
+                            <Dumbbell className="w-4 h-4" />
+                            Unidades de carga
                         </button>
                         <button
                             onClick={handleExclusionsClick}

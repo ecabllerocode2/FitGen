@@ -4,6 +4,7 @@ import {
   resolveSetLoadKgForVolume,
   type BodyweightExerciseMeta,
 } from './bodyweightEffectiveLoad';
+import { formatVolume, type WeightUnit } from './weightUnits';
 
 type PerformanceSet = {
   completed?: boolean;
@@ -107,9 +108,11 @@ export const computeTotalWeightFromLogs = (
   return hasVolumeSet ? Math.round(total) : null;
 };
 
-export function formatVolumeKg(kg: number | null | undefined): string | null {
-  if (kg == null || kg <= 0) return null;
-  return `${kg.toLocaleString('es-MX')} kg`;
+export function formatVolumeKg(
+  kg: number | null | undefined,
+  unit: WeightUnit = 'kg',
+): string | null {
+  return formatVolume(kg, unit);
 }
 
 /** @deprecated */

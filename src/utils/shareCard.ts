@@ -1,6 +1,7 @@
 /** Share card PNG generation — canvas-based, mobile-friendly download/share. */
 
 import { formatVolumeKg } from './sessionWeight';
+import type { WeightUnit } from './weightUnits';
 
 export type ShareCardAspect = '4:5' | '9:16';
 
@@ -10,11 +11,13 @@ export interface ShareCardData {
   exerciseCount: number;
   totalSets: number;
   totalWeightKg?: number | null;
+  volumeUnit?: WeightUnit;
   muscles?: string[];
   phrase?: string;
   completedAt?: string;
   photoDataUrl?: string | null;
   aspect?: ShareCardAspect;
+  footerText?: string;
 }
 
 /** @deprecated use ShareCardData */
@@ -290,7 +293,7 @@ function renderDesignShareCard(
   drawHeaderBadges(ctx, width, pad, aspect);
 
   const dateLabel = formatCompletedLabel(data.completedAt);
-  const weightLabel = formatVolumeKg(data.totalWeightKg ?? null);
+  const weightLabel = formatVolumeKg(data.totalWeightKg ?? null, data.volumeUnit ?? 'kg');
   const centerY = aspect === '9:16' ? height * 0.36 : height * 0.34;
 
   ctx.textAlign = 'center';
@@ -348,7 +351,7 @@ function renderDesignShareCard(
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(132, 204, 22, 0.9)';
   ctx.font = '600 11px system-ui, -apple-system, sans-serif';
-  ctx.fillText('Entrenamiento completado con FitGen', width / 2, height - 24);
+  ctx.fillText(data.footerText ?? 'Entrenamiento completado con FitGen', width / 2, height - 24);
   ctx.textAlign = 'left';
 }
 
@@ -367,10 +370,10 @@ function renderPhotoOverlayShareCard(
   const footerY = height - 22;
   ctx.fillStyle = 'rgba(132, 204, 22, 0.9)';
   ctx.font = '600 11px system-ui, -apple-system, sans-serif';
-  ctx.fillText('Entrenamiento completado con FitGen', pad, footerY);
+  ctx.fillText(data.footerText ?? 'Entrenamiento completado con FitGen', pad, footerY);
 
   const dateLabel = formatCompletedLabel(data.completedAt);
-  const weightLabel = formatVolumeKg(data.totalWeightKg ?? null);
+  const weightLabel = formatVolumeKg(data.totalWeightKg ?? null, data.volumeUnit ?? 'kg');
   const bullets = buildBullets(data);
   const panelStart = height * (aspect === '9:16' ? 0.48 : 0.45);
 

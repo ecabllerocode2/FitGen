@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { AppPrimaryButton, AppShell } from './ui/AppPrimitives';
 import SessionShareCard from './SessionShareCard';
 import { pickMotivationalPhrase } from '../utils/motivationalPhrases';
+import { useWeightUnit } from '../context/WeightUnitContext';
 
 export interface SessionCelebrationData {
   sessionFocus: string;
@@ -16,10 +17,12 @@ export interface SessionCelebrationData {
 interface SessionCelebrationProps {
   data: SessionCelebrationData;
   onDone: () => void;
+  footerText?: string;
 }
 
-export default function SessionCelebration({ data, onDone }: SessionCelebrationProps) {
+export default function SessionCelebration({ data, onDone, footerText }: SessionCelebrationProps) {
   const phrase = useMemo(() => pickMotivationalPhrase(), []);
+  const { activeUnit } = useWeightUnit();
 
   const shareData = useMemo(
     () => ({
@@ -28,12 +31,14 @@ export default function SessionCelebration({ data, onDone }: SessionCelebrationP
       exerciseCount: data.exerciseCount,
       totalSets: data.totalSets,
       totalWeightKg: data.totalWeightKg,
+      volumeUnit: activeUnit,
       muscles: data.muscles,
       phrase,
       completedAt: data.completedAt ?? new Date().toISOString(),
       aspect: '4:5' as const,
+      footerText,
     }),
-    [data, phrase],
+    [data, phrase, footerText, activeUnit],
   );
 
   return (
