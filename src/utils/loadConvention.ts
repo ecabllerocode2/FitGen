@@ -1,3 +1,10 @@
+import {
+  formatUnitLabel,
+  formatWeightNumber,
+  toDisplayWeight,
+  type WeightUnit,
+} from './weightUnits';
+
 export const LOAD_CONVENTIONS = {
   BARBELL_TOTAL: 'barbell_total',
   DUMBBELL_PER_HAND: 'dumbbell_per_hand',
@@ -101,13 +108,16 @@ export function resolveLoadConvention(exercise: object = {}): LoadConvention {
 export function formatLoadLabel(
   kg: number | null | undefined,
   convention: LoadConvention,
-  options: { approximate?: boolean; exploratory?: boolean } = {},
+  options: { approximate?: boolean; exploratory?: boolean; unit?: WeightUnit } = {},
 ): string | null {
   if (options.exploratory) return 'Exploratorio';
   if (kg == null || Number.isNaN(kg)) return null;
 
+  const unit = options.unit ?? 'kg';
+  const display = toDisplayWeight(kg, unit, convention) ?? kg;
   const prefix = options.approximate ? '~' : '';
-  const value = `${prefix}${kg} kg`;
+  const unitLabel = formatUnitLabel(unit);
+  const value = `${prefix}${formatWeightNumber(display, unit)} ${unitLabel}`;
 
   switch (convention) {
     case LOAD_CONVENTIONS.DUMBBELL_PER_HAND:
@@ -123,27 +133,29 @@ export function formatLoadLabel(
   }
 }
 
-export function getWeightInputLabel(convention: LoadConvention): string {
+export function getWeightInputLabel(convention: LoadConvention, unit: WeightUnit = 'kg'): string {
+  const unitLabel = formatUnitLabel(unit);
   switch (convention) {
     case LOAD_CONVENTIONS.DUMBBELL_PER_HAND:
-      return 'Peso (kg / mano)';
+      return `Peso (${unitLabel} / mano)`;
     case LOAD_CONVENTIONS.UNILATERAL:
-      return 'Peso (kg / lado)';
+      return `Peso (${unitLabel} / lado)`;
     case LOAD_CONVENTIONS.MACHINE_STACK:
-      return 'Peso (kg máquina)';
+      return `Peso (${unitLabel} máquina)`;
     default:
-      return 'Peso (kg)';
+      return `Peso (${unitLabel})`;
   }
 }
 
-export function getWeightUnitSuffix(convention: LoadConvention): string {
+export function getWeightUnitSuffix(convention: LoadConvention, unit: WeightUnit = 'kg'): string {
+  const unitLabel = formatUnitLabel(unit);
   switch (convention) {
     case LOAD_CONVENTIONS.DUMBBELL_PER_HAND:
-      return 'kg / mano';
+      return `${unitLabel} / mano`;
     case LOAD_CONVENTIONS.UNILATERAL:
-      return 'kg / lado';
+      return `${unitLabel} / lado`;
     default:
-      return 'kg';
+      return unitLabel;
   }
 }
 
