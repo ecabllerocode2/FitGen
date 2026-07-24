@@ -107,6 +107,46 @@ export const authenticatedFetch = async (
   });
 };
 
+const NETWORK_ERROR_RE =
+  /load failed|failed to fetch|networkerror|network request failed|fetch failed|the internet connection appears to be offline/i;
+
+export function isNetworkFetchError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if (err.name === 'TypeError') return true;
+  return NETWORK_ERROR_RE.test(err.message);
+}
+
+export function humanizeFetchError(err: unknown, fallback: string): string {
+  if (isNetworkFetchError(err)) {
+    return 'No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.';
+  }
+  if (err instanceof Error && err.message.trim()) return err.message;
+  return fallback;
+}
+
+/**
+ * Authenticated fetch with retries for transient iOS Safari network failures
+ * ("Load failed" / TypeError). Does not retry HTTP 4xx/5xx responses.
+ */
+export async function authenticatedFetchWithRetry(
+  endpoint: string,
+  token: string,
+  options: RequestInit = {},
+  retries = 3,
+): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await authenticatedFetch(endpoint, token, options);
+    } catch (err) {
+      lastError = err;
+      if (!isNetworkFetchError(err) || attempt === retries - 1) throw err;
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Información del entorno actual
  */

@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
-import { API_ENDPOINTS, authenticatedFetch } from '../../config/api';
+import {
+  API_ENDPOINTS,
+  authenticatedFetchWithRetry,
+  humanizeFetchError,
+} from '../../config/api';
 import { getMesocyclePreviewSessions, normalizeMesocycleForUI } from '../../utils/mesocycleNormalizer';
 import {
   finishOnboardingCompletion,
   patchOnboardingCompletion,
   readOnboardingCompletion,
+  retryOnboardingCompletion,
 } from '../../utils/onboardingCompletion';
 import { waitMs } from '../../utils/onboardingFlowLock';
 import {
@@ -26,6 +31,15 @@ interface OnboardingCompletionFlowProps {
   user: User;
 }
 
+function parseJsonSafe(text: string): Record<string, unknown> | null {
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 export default function OnboardingCompletionFlow({ user }: OnboardingCompletionFlowProps) {
   const navigate = useNavigate();
   const [, bump] = useState(0);
@@ -38,8 +52,9 @@ export default function OnboardingCompletionFlow({ user }: OnboardingCompletionF
 
   const completion = readOnboardingCompletion();
 
+  // Save profile (if needed) then generate mesocycle. Retries must not require a full wizard redo.
   useEffect(() => {
-    if (!completion || completion.profileSaved || completion.saveInFlight || completion.error) {
+    if (!completion || completion.saveInFlight || completion.error || completion.mesocycleReady) {
       return;
     }
 
@@ -47,49 +62,74 @@ export default function OnboardingCompletionFlow({ user }: OnboardingCompletionF
 
     const run = async () => {
       try {
-        const idToken = await user.getIdToken();
-        const saveRes = await authenticatedFetch(API_ENDPOINTS.USER_PROFILE_SAVE, idToken, {
-          method: 'POST',
-          body: JSON.stringify(completion.savePayload),
-        });
+        let idToken = await user.getIdToken();
 
-        const saveText = await saveRes.text();
-        const saveData = saveText ? JSON.parse(saveText) : null;
-        if (!saveRes.ok) {
-          throw new Error(saveData?.error || saveData?.message || 'Error al guardar perfil');
+        if (!completion.profileSaved) {
+          const saveRes = await authenticatedFetchWithRetry(
+            API_ENDPOINTS.USER_PROFILE_SAVE,
+            idToken,
+            {
+              method: 'POST',
+              body: JSON.stringify(completion.savePayload),
+            },
+          );
+
+          const saveText = await saveRes.text();
+          const saveData = parseJsonSafe(saveText);
+          if (!saveRes.ok) {
+            throw new Error(
+              (saveData?.error as string) ||
+                (saveData?.message as string) ||
+                'Error al guardar perfil',
+            );
+          }
+
+          const savingElapsed = Date.now() - completion.startedAt;
+          if (savingElapsed < MIN_SAVING_DISPLAY_MS) {
+            await waitMs(MIN_SAVING_DISPLAY_MS - savingElapsed);
+          }
+
+          // Persist progress before mesocycle so a reload can resume without re-saving.
+          patchOnboardingCompletion({ profileSaved: true, phase: 'generating' });
+          idToken = await user.getIdToken(true);
+        } else {
+          idToken = await user.getIdToken(true);
         }
 
-        const savingElapsed = Date.now() - completion.startedAt;
-        if (savingElapsed < MIN_SAVING_DISPLAY_MS) {
-          await waitMs(MIN_SAVING_DISPLAY_MS - savingElapsed);
-        }
-
-        patchOnboardingCompletion({ profileSaved: true, saveInFlight: false, phase: 'generating' });
-
-        await user.getIdToken(true);
-
-        const mesoRes = await authenticatedFetch(API_ENDPOINTS.MESOCYCLE_GENERATE, idToken, {
-          method: 'POST',
-        });
+        const mesoRes = await authenticatedFetchWithRetry(
+          API_ENDPOINTS.MESOCYCLE_GENERATE,
+          idToken,
+          { method: 'POST' },
+        );
 
         const mesoText = await mesoRes.text();
-        const mesoData = mesoText ? JSON.parse(mesoText) : null;
+        const mesoData = parseJsonSafe(mesoText);
         if (!mesoRes.ok || !mesoData?.success) {
-          throw new Error(mesoData?.error || 'Error al generar mesociclo');
+          throw new Error((mesoData?.error as string) || 'Error al generar mesociclo');
         }
 
         const normalized = normalizeMesocycleForUI(mesoData.mesocycle ?? mesoData.plan);
         patchOnboardingCompletion({
           mesocycleReady: true,
+          saveInFlight: false,
           generatedMesocycle: normalized,
         });
       } catch (err) {
-        patchOnboardingCompletion({ error: (err as Error).message, saveInFlight: false });
+        patchOnboardingCompletion({
+          error: humanizeFetchError(err, 'Error al completar el registro'),
+          saveInFlight: false,
+        });
       }
     };
 
     void run();
-  }, [completion?.saveInFlight, completion?.profileSaved, completion?.error, user]);
+  }, [
+    completion?.saveInFlight,
+    completion?.profileSaved,
+    completion?.mesocycleReady,
+    completion?.error,
+    user,
+  ]);
 
   useEffect(() => {
     if (!completion || completion.phase !== 'generating') return;
@@ -126,12 +166,7 @@ export default function OnboardingCompletionFlow({ user }: OnboardingCompletionF
       <AppShell>
         <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
           <p className="text-red-400 mb-6 text-sm">{completion.error}</p>
-          <AppPrimaryButton
-            onClick={() => {
-              finishOnboardingCompletion();
-              window.location.reload();
-            }}
-          >
+          <AppPrimaryButton onClick={() => retryOnboardingCompletion()}>
             Reintentar
           </AppPrimaryButton>
         </div>
