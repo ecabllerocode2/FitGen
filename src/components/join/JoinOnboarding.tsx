@@ -86,8 +86,9 @@ export default function JoinOnboarding({ user }: JoinOnboardingProps) {
   };
 
   return (
-    <AppShell>
-      <div className="flex-1 px-6 py-8 max-w-sm mx-auto w-full">
+    <AppShell className="h-[100dvh] overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-6 py-8 pb-32">
+        <div className="max-w-sm mx-auto w-full">
         <AppHero
           eyebrow={coachName ? `Invitación de ${coachName}` : 'FitGen'}
           title={step === 0 ? 'Datos personales' : 'Tu avatar'}
@@ -174,6 +175,7 @@ export default function JoinOnboarding({ user }: JoinOnboardingProps) {
         )}
 
         {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
+        </div>
       </div>
 
       <AppFixedFooter>
