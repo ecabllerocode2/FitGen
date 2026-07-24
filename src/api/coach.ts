@@ -1,6 +1,8 @@
 import { API_BASE_URL, authenticatedFetch } from '../config/api';
 import type {
   CoachClientSummary,
+  CoachInsight,
+  CoachNote,
   CoachProfile,
   ShareBranding,
 } from '../types/coach';

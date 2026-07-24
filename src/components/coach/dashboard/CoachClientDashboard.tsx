@@ -12,7 +12,13 @@ import {
   Scale,
   TrendingUp,
 } from 'lucide-react';
-import type { CoachClientDashboardData, CoachSessionSummary, LoadComparison } from '../../types/coachDashboard';
+import type { CoachInsight } from '../../../types/coach';
+import type {
+  CoachClientDashboardData,
+  CoachSessionSummary,
+  LoadComparison,
+  SessionExerciseSummary,
+} from '../../../types/coachDashboard';
 
 function loadComparisonLabel(c: LoadComparison) {
   if (c === 'on_target') return 'En objetivo';
@@ -40,7 +46,7 @@ function SessionExerciseTable({ session }: { session: CoachSessionSummary }) {
 
   return (
     <div className="space-y-2">
-      {session.exercises.map((ex) => (
+      {session.exercises.map((ex: SessionExerciseSummary) => (
         <div key={ex.exerciseId} className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -271,7 +277,7 @@ export default function CoachClientDashboard({ client }: CoachClientDashboardPro
           </p>
           <p className="text-[11px] text-zinc-500 mt-3 leading-relaxed">{liveSession.note}</p>
           <div className="mt-4 space-y-2">
-            {liveSession.exercises.slice(0, 6).map((ex) => (
+            {liveSession.exercises.slice(0, 6).map((ex: SessionExerciseSummary) => (
               <div key={ex.exerciseId} className="flex items-center justify-between text-xs">
                 <span className="text-zinc-300 truncate pr-2">{ex.name}</span>
                 <span className="text-zinc-500 shrink-0">
@@ -319,7 +325,7 @@ export default function CoachClientDashboard({ client }: CoachClientDashboardPro
             />
           </div>
           <div className="mt-4 space-y-1.5">
-            {mesocycle.weeklySplit.map((slot) => (
+            {mesocycle.weeklySplit.map((slot: { day: string; focus: string; isRest: boolean }) => (
               <div
                 key={slot.day}
                 className={`flex items-center justify-between text-xs rounded-lg px-2 py-1.5 ${
@@ -364,7 +370,7 @@ export default function CoachClientDashboard({ client }: CoachClientDashboardPro
             <div className="rounded-lg bg-zinc-950/50 p-2 col-span-2">
               <p className="text-zinc-600">Prioridades musculares</p>
               <p className="text-zinc-300 mt-0.5">
-                {client.trainingProfile.musclePriorities.map((p) => p.muscle).join(', ')}
+                {client.trainingProfile.musclePriorities.map((p: { muscle: string; intensity: string }) => p.muscle).join(', ')}
               </p>
             </div>
           )}
@@ -379,7 +385,7 @@ export default function CoachClientDashboard({ client }: CoachClientDashboardPro
             Señales para orientar
           </h3>
           <div className="space-y-2">
-            {insights.map((insight) => (
+            {insights.map((insight: CoachInsight) => (
               <div
                 key={insight.id}
                 className={`rounded-xl border p-3 text-sm ${
@@ -412,7 +418,7 @@ export default function CoachClientDashboard({ client }: CoachClientDashboardPro
             FitGen conserva hasta {client.sessionHistoryLimit} sesiones recientes por atleta en Firestore.
           </p>
           <div className="space-y-2">
-            {sessionHistory.map((session) => (
+            {sessionHistory.map((session: CoachSessionSummary) => (
               <SessionHistoryCard key={session.id} session={session} />
             ))}
           </div>
