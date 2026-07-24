@@ -49,6 +49,8 @@ export interface CoachInsight {
   title: string;
   message: string;
   suggestion: string;
+  category?: string;
+  systemAction?: string;
 }
 
 export interface CoachNote {
