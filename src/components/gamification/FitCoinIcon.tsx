@@ -7,5 +7,5 @@ type FitCoinIconProps = {
 
 /** Flat SVG FitCoin for UI chips (never 3D canvas). */
 export default function FitCoinIcon({ className = '', size = 20 }: FitCoinIconProps) {
-  return <VisualFitCoin size={size} variant="ui" className={className} spin={false} />;
+  return <VisualFitCoin size={size} variant="ui" className={className} />;
 }

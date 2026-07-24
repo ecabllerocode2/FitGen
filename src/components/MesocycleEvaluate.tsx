@@ -6,7 +6,8 @@ import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import MesocycleGenerationLoader from './MesocycleGenerationLoader';
 import LevelUpCelebration from './LevelUpCelebration';
 import AchievementUnlockModal from './gamification/AchievementUnlockModal';
-import type { GamificationAchievementUnlock } from '../types/gamification';
+import RewardsEarnedCelebration from './gamification/RewardsEarnedCelebration';
+import type { GamificationAchievementUnlock, GamificationDelta } from '../types/gamification';
 import type { MesocycleGenerationProfile } from '../utils/splitGenerationContext';
 import {
   AppBackButton,
@@ -89,6 +90,8 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [achievementUnlocks, setAchievementUnlocks] = useState<GamificationAchievementUnlock[]>([]);
   const [showAchievementModal, setShowAchievementModal] = useState(false);
+  const [rewardsDelta, setRewardsDelta] = useState<GamificationDelta | null>(null);
+  const [showRewardsModal, setShowRewardsModal] = useState(false);
 
   const isBusy = status === 'evaluating';
   const isLast = step === STEPS.length - 1;
@@ -169,6 +172,13 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
       }
 
       const evaluationData = await evaluationResponse.json();
+      if (evaluationData.gamificationDelta) {
+        setRewardsDelta(evaluationData.gamificationDelta);
+        const delta = evaluationData.gamificationDelta as GamificationDelta;
+        setShowRewardsModal(
+          (delta.seasonPointsEarned ?? 0) > 0 || (delta.fitCoinsEarned ?? 0) > 0,
+        );
+      }
       if (evaluationData.gamificationDelta?.newAchievements?.length) {
         setAchievementUnlocks(evaluationData.gamificationDelta.newAchievements);
         setShowAchievementModal(true);
@@ -251,9 +261,22 @@ export default function MesocycleEvaluate({ user, profileData }: MesocycleEvalua
             }}
           />
         )}
+        <RewardsEarnedCelebration
+          open={showRewardsModal}
+          delta={rewardsDelta}
+          previousSeasonPoints={Math.max(
+            0,
+            (rewardsDelta?.newSeasonPointsTotal ?? 0) - (rewardsDelta?.seasonPointsEarned ?? 0),
+          )}
+          previousFitCoins={Math.max(
+            0,
+            (rewardsDelta?.newFitCoinsTotal ?? 0) - (rewardsDelta?.fitCoinsEarned ?? 0),
+          )}
+          onContinue={() => setShowRewardsModal(false)}
+        />
         <AchievementUnlockModal
           achievements={achievementUnlocks}
-          open={showAchievementModal}
+          open={!showRewardsModal && showAchievementModal}
           onClose={() => setShowAchievementModal(false)}
         />
       </>

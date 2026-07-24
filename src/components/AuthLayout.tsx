@@ -1,11 +1,12 @@
 import { useState, type FC } from 'react';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
+import { Link, useLocation } from 'react-router-dom';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
-  type Auth 
+  type Auth,
 } from 'firebase/auth';
 
 // Definición de las Props que recibe de App.tsx
@@ -15,7 +16,9 @@ interface AuthLayoutProps {
 }
 
 const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
-    const [isLogin, setIsLogin] = useState(true); // true para Login, false para Registro
+    const location = useLocation();
+    const isCoachRegister = location.pathname === '/register/coach';
+    const [isLogin, setIsLogin] = useState(!isCoachRegister);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -142,7 +145,9 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
                     FitGen
                 </p>
                 <h1 className="text-2xl font-bold text-white text-center mb-8">
-                    {isLogin ? 'Iniciar sesión' : 'Crear cuenta'}
+                    {isCoachRegister
+                        ? (isLogin ? 'Acceso coach' : 'Crear cuenta coach')
+                        : (isLogin ? 'Iniciar sesión' : 'Crear cuenta')}
                 </h1>
                 
                 {error && (
@@ -288,8 +293,23 @@ const AuthLayout: FC<AuthLayoutProps> = ({ auth }) => {
                     </div>
 
                     <p className="text-center text-xs mt-4 text-zinc-600 leading-relaxed">
-                        {isLogin ? 'Introduce tus credenciales para continuar.' : 'Crea una cuenta para guardar tu progreso.'}
+                        {isCoachRegister
+                            ? 'Después del registro configurarás tu perfil de coach.'
+                            : (isLogin ? 'Introduce tus credenciales para continuar.' : 'Crea una cuenta para guardar tu progreso.')}
                     </p>
+                    {!isCoachRegister ? (
+                        <p className="text-center text-xs mt-3">
+                            <Link to="/register/coach" className="text-lime-400/90 hover:text-lime-300">
+                                ¿Eres entrenador? Regístrate como coach →
+                            </Link>
+                        </p>
+                    ) : (
+                        <p className="text-center text-xs mt-3">
+                            <Link to="/register" className="text-zinc-500 hover:text-zinc-300">
+                                ¿Buscas entrenar para ti? Registro de atleta →
+                            </Link>
+                        </p>
+                    )}
                 </div>
             </div>
         </div>

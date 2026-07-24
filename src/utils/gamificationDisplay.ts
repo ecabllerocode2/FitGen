@@ -26,8 +26,10 @@ export function formatFitCoins(amount: number): string {
 }
 
 export const FITCOIN_EARN_HINTS = [
-  { action: 'Completar sesión', fitCoins: '+2', points: '+10' },
-  { action: 'Feedback post-sesión', fitCoins: '—', points: '+2' },
+  { action: 'Completar sesión (≥80% volumen)', fitCoins: '+2', points: '+10' },
+  { action: 'Readiness pre-entreno', fitCoins: '—', points: '+2' },
+  { action: 'Feedback post-entreno', fitCoins: '—', points: '+2' },
+  { action: 'Récord e1RM propio', fitCoins: '—', points: '+5' },
   { action: 'Semana perfecta', fitCoins: '+5', points: '+25' },
   { action: 'Mesociclo evaluado (≥75%)', fitCoins: '+15', points: '+50' },
 ] as const;

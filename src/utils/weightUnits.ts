@@ -1,4 +1,5 @@
 import { LOAD_CONVENTIONS, type LoadConvention } from './loadConvention';
+import { snapToGymWeight } from './gymInventory';
 
 export type WeightUnit = 'kg' | 'lb';
 
@@ -69,10 +70,12 @@ export function toDisplayWeight(
   convention: LoadConvention,
 ): number | null {
   if (kg == null || Number.isNaN(kg) || kg <= 0) return null;
+  const snappedKg = snapToGymWeight(kg, convention, 'nearest');
+  if (snappedKg == null) return null;
   if (unit === 'kg') {
-    return snapInDisplayUnit(kg, 'kg', convention);
+    return snappedKg;
   }
-  return snapInDisplayUnit(kgToLb(kg), 'lb', convention);
+  return snapInDisplayUnit(kgToLb(snappedKg), 'lb', convention);
 }
 
 export function fromDisplayWeight(
@@ -81,9 +84,15 @@ export function fromDisplayWeight(
   convention: LoadConvention,
 ): number | null {
   if (display == null || Number.isNaN(display) || display < 0) return null;
-  const snapped = snapInDisplayUnit(display, unit, convention);
-  const kg = unit === 'kg' ? snapped : lbToKg(snapped);
-  return Math.round(kg * 1000) / 1000;
+  let kg: number;
+  if (unit === 'kg') {
+    kg = display;
+  } else {
+    const snappedLb = snapInDisplayUnit(display, 'lb', convention);
+    kg = lbToKg(snappedLb);
+  }
+  const snappedKg = snapToGymWeight(kg, convention, 'nearest');
+  return snappedKg == null ? null : Math.round(snappedKg * 1000) / 1000;
 }
 
 export function formatWeightNumber(value: number, _unit: WeightUnit): string {

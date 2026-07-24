@@ -31,7 +31,7 @@ import {
 import type { BodyCheckinStatus, BodyMetricEntry } from '../types/bodyMetrics';
 import ProgressArenaCard from './gamification/ProgressArenaCard';
 import AdminUsersPanel from './admin/AdminUsersPanel';
-import { resolveAvatarAppearance } from '../utils/avatarAppearanceStorage';
+import { resolveAvatarAppearance, resolveAvatarStartingBuildForDisplay } from '../utils/avatarAppearanceStorage';
 import MesocycleGenerationLoader from './MesocycleGenerationLoader';
 import {
     DashboardEyebrow,
@@ -52,6 +52,7 @@ import { MIN_SESSION_GENERATION_DISPLAY_MS, waitMs } from '../utils/sessionGener
 import { markSessionReviewed } from '../utils/sessionReviewContext';
 import { fetchGamificationSummary } from '../api/gamification';
 import type { GamificationSummary } from '../types/gamification';
+import type { AvatarStartingBuild } from '@fitgen/visual';
 
 // ====================================================================
 
@@ -94,6 +95,7 @@ interface CurrentSessionData {
     sessionFocus?: string;
 }
 interface UserProfile {
+    athleteOrigin?: 'direct' | 'coached';
     profileData?: {
         name: string;
         fitnessGoal?: string;
@@ -498,11 +500,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
     const userName = userProfile?.profileData?.name || userProfile?.name || 'Atleta';
 
     const avatarAppearance = useMemo(
-        () => resolveAvatarAppearance(
-            userProfile?.profileData?.gender as string | undefined,
-            user.uid,
-        ),
-        [userProfile?.profileData?.gender, user.uid],
+        () => {
+            const appearance = resolveAvatarAppearance(
+                userProfile?.profileData?.gender as string | undefined,
+                user.uid,
+                userProfile?.profileData?.avatarStartingBuild as AvatarStartingBuild | undefined,
+            );
+            const startingBuild = resolveAvatarStartingBuildForDisplay(
+                userProfile?.profileData?.gender as string | undefined,
+                user.uid,
+                userProfile?.profileData?.avatarStartingBuild as AvatarStartingBuild | undefined,
+            );
+            return { ...appearance, startingBuild };
+        },
+        [userProfile?.profileData?.gender, userProfile?.profileData?.avatarStartingBuild, user.uid],
     );
 
     const handleLogout = async () => {
@@ -792,7 +803,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                     <div className="flex items-center gap-0.5 shrink-0">
                         <DashboardIconButton
                             onClick={() => openProgressHub('home')}
-                            title="Arena FitGen"
+                            title="GYM FitGen"
                         >
                             <span className="relative">
                                 <Trophy className="w-4 h-4" />
@@ -892,7 +903,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                                     Ver tarjetas de sesión
                                 </DashboardPrimaryButton>
                                 <DashboardPrimaryButton variant="ghost" onClick={() => openProgressHub('home')}>
-                                    Abrir Arena FitGen
+                                    Abrir GYM FitGen
                                 </DashboardPrimaryButton>
                             </div>
                         </DashboardHero>
@@ -1079,10 +1090,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                             progress: userProfile.currentMesocycle.progress || 0,
                             mesocyclePlan: userProfile.currentMesocycle.mesocyclePlan,
                             startDate: userProfile.currentMesocycle.startDate,
+                            durationWeeks: userProfile.currentMesocycle.mesocyclePlan?.durationWeeks,
                         } : undefined,
                         profileData: userProfile.profileData,
                         bodyMetrics: userProfile.bodyMetrics,
                     }}
+                    seedGamification={gamificationSummary}
+                    onGamificationUpdated={setGamificationSummary}
                     initialTab={statsInitialTab}
                     onClose={() => setShowStatsModal(false)}
                 />

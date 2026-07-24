@@ -6,9 +6,10 @@ import {
   Crown,
   Home,
   Image,
+  ShoppingBag,
   Sparkles,
 } from 'lucide-react';
-import { format, differenceInDays, parseISO, startOfWeek, endOfWeek } from 'date-fns';
+import { format, differenceInDays, parseISO } from 'date-fns';
 import { fetchRecentSessions, type RecentSessionRow } from '../utils/recentSessions';
 import { db } from '../firebase';
 import { pickMotivationalPhraseForDate } from '../utils/motivationalPhrases';
@@ -24,22 +25,33 @@ import HubAchievementsTab from './gamification/HubAchievementsTab';
 import HubSeasonTab from './gamification/HubSeasonTab';
 import HubSessionsTab, { buildSessionHistoryItem } from './gamification/HubSessionsTab';
 import HubRankingTab from './gamification/HubRankingTab';
+import HubShopTab from './gamification/HubShopTab';
 import BodyMetricsTrendSection from './BodyMetricsTrendSection';
 import BodyMetricsCheckinModal from './BodyMetricsCheckinModal';
 import { fetchBodyCheckinStatus } from '../api/bodyMetrics';
 import type { BodyMetricEntry } from '../types/bodyMetrics';
-import type { AvatarAppearance } from '@fitgen/visual';
+import type { AvatarAppearance, AvatarStartingBuild } from '@fitgen/visual';
+import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
 import {
+  buildMesocycleWeekMessages,
+  resolveMesocycleCurrentWeek,
+} from '../utils/mesocycleWeekProgress';
+import {
+  profileGenderToAvatarGender,
   resolveAvatarAppearance,
+  resolveAvatarStartingBuildForDisplay,
+  saveAvatarStartingBuild,
+  hasAvatarStartingBuildChosen,
 } from '../utils/avatarAppearanceStorage';
 
-export type HubTab = 'home' | 'achievements' | 'season' | 'sessions' | 'ranking';
+export type HubTab = 'home' | 'achievements' | 'season' | 'sessions' | 'ranking' | 'shop';
 
 interface HistorySession {
   id: string;
   sessionFocus: string;
   completedAt: string | null;
   weekNumber?: number | null;
+  dayOfWeek?: string | null;
   summary?: {
     durationLabel?: string;
     exerciseCount?: number;
@@ -66,16 +78,18 @@ interface StatsAndAchievementsProps {
       mesocyclePlan?: {
         microcycles?: Array<{
           week: number;
-          sessions: Array<{ dayOfWeek: string; sessionFocus: string }>;
+          sessions: Array<{ dayOfWeek: string; sessionFocus: string; isRestDay?: boolean }>;
         }>;
       };
       startDate?: string;
+      durationWeeks?: number;
     };
     profileData?: {
       name?: string;
       gender?: string;
       currentWeightKg?: number;
       initialWeight?: number;
+      avatarStartingBuild?: AvatarStartingBuild;
     };
     bodyMetrics?: {
       entries?: BodyMetricEntry[];
@@ -84,6 +98,8 @@ interface StatsAndAchievementsProps {
   onClose: () => void;
   initialSection?: 'stats' | 'celebrations';
   initialTab?: HubTab;
+  seedGamification?: GamificationSummary | null;
+  onGamificationUpdated?: (summary: GamificationSummary) => void;
 }
 
 const HUB_TABS: Array<{ id: HubTab; label: string; icon: typeof Home }> = [
@@ -92,6 +108,7 @@ const HUB_TABS: Array<{ id: HubTab; label: string; icon: typeof Home }> = [
   { id: 'season', label: 'Temporada', icon: Calendar },
   { id: 'sessions', label: 'Sesiones', icon: Image },
   { id: 'ranking', label: 'Ranking', icon: Crown },
+  { id: 'shop', label: 'Tienda', icon: ShoppingBag },
 ];
 
 function resolveInitialTab(initialSection?: 'stats' | 'celebrations', initialTab?: HubTab): HubTab {
@@ -142,6 +159,7 @@ function mapRow(row: RecentSessionRow): HistorySession {
     sessionFocus: row.sessionFocus ?? 'Entrenamiento',
     completedAt: row.completedAt ?? row.archivedAt ?? null,
     weekNumber: row.weekNumber,
+    dayOfWeek: row.dayOfWeek ?? null,
     summary: {
       durationLabel: row.summary?.duracionEstimada ?? row.celebrationSummary?.durationLabel ?? '—',
       exerciseCount: row.summary?.ejerciciosTotales ?? row.celebrationSummary?.exerciseCount ?? 0,
@@ -209,18 +227,33 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   onClose,
   initialSection = 'stats',
   initialTab,
+  seedGamification = null,
+  onGamificationUpdated,
 }) => {
   const [history, setHistory] = useState<HistorySession[]>(() =>
     seedSessions.filter((s) => s.completed !== false).map(mapRow),
   );
   const [loadingHistory, setLoadingHistory] = useState(seedSessions.length === 0);
-  const [loadingGamification, setLoadingGamification] = useState(true);
-  const [gamification, setGamification] = useState<GamificationSummary | null>(null);
+  const [loadingGamification, setLoadingGamification] = useState(!seedGamification);
+  const [gamification, setGamification] = useState<GamificationSummary | null>(seedGamification);
   const [activeTab, setActiveTab] = useState<HubTab>(() =>
     resolveInitialTab(initialSection, initialTab),
   );
   const [avatarAppearance, setAvatarAppearance] = useState<AvatarAppearance>(() =>
-    resolveAvatarAppearance(userProfile.profileData?.gender, userId),
+    resolveAvatarAppearance(
+      userProfile.profileData?.gender,
+      userId,
+      userProfile.profileData?.avatarStartingBuild,
+    ),
+  );
+  const [savingAvatar, setSavingAvatar] = useState(false);
+  const profileStartingBuild = userProfile.profileData?.avatarStartingBuild ?? null;
+  const avatarGender = profileGenderToAvatarGender(userProfile.profileData?.gender);
+  const avatarChosen = hasAvatarStartingBuildChosen(profileStartingBuild, userId);
+  const displayStartingBuild = resolveAvatarStartingBuildForDisplay(
+    userProfile.profileData?.gender,
+    userId,
+    profileStartingBuild,
   );
   const [bodyMetricEntries, setBodyMetricEntries] = useState<BodyMetricEntry[]>(
     () => userProfile.bodyMetrics?.entries ?? [],
@@ -236,8 +269,44 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   }, [initialSection, initialTab]);
 
   useEffect(() => {
-    setAvatarAppearance(resolveAvatarAppearance(userProfile.profileData?.gender, userId));
-  }, [userProfile.profileData?.gender, userId]);
+    setAvatarAppearance(
+      resolveAvatarAppearance(
+        userProfile.profileData?.gender,
+        userId,
+        userProfile.profileData?.avatarStartingBuild,
+      ),
+    );
+  }, [
+    userProfile.profileData?.gender,
+    userProfile.profileData?.avatarStartingBuild,
+    userId,
+  ]);
+
+  const handleSaveAvatarStartingBuild = async (build: AvatarStartingBuild) => {
+    saveAvatarStartingBuild(build, userId);
+    setAvatarAppearance((prev) => ({ ...prev, startingBuild: build }));
+
+    if (!authToken) return;
+
+    setSavingAvatar(true);
+    try {
+      const res = await authenticatedFetch(API_ENDPOINTS.USER_PROFILE_SAVE, authToken, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'profile_metadata_update',
+          profileData: { avatarStartingBuild: build },
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        console.warn('No se pudo guardar avatar en perfil:', data?.error);
+      }
+    } catch (err) {
+      console.warn('Error guardando avatar:', err);
+    } finally {
+      setSavingAvatar(false);
+    }
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -267,14 +336,26 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   }, [userId, seedSessions]);
 
   useEffect(() => {
-    if (!authToken) return;
+    if (seedGamification) {
+      setGamification(seedGamification);
+    }
+  }, [seedGamification]);
+
+  useEffect(() => {
+    if (!authToken) {
+      setLoadingGamification(false);
+      return;
+    }
     let cancelled = false;
 
     const loadGamification = async () => {
       setLoadingGamification(true);
       try {
         const summary = await fetchGamificationSummary(authToken);
-        if (!cancelled && summary) setGamification(summary);
+        if (!cancelled && summary) {
+          setGamification(summary);
+          onGamificationUpdated?.(summary);
+        }
       } catch (err) {
         console.warn('No se pudo cargar gamificación:', err);
       } finally {
@@ -286,7 +367,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [authToken, userId]);
+  }, [authToken, userId, onGamificationUpdated]);
 
   useEffect(() => {
     if (!authToken) return;
@@ -337,39 +418,21 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
     }
 
     const weeksCompleted = gamification?.counters.lifetimeWeeksPerfect ?? 0;
-    let currentWeekProgress = 0;
-    let currentWeekTarget = 0;
-    let currentWeekMessage = '';
 
     const mesocycle = userProfile.currentMesocycle;
-    if (mesocycle?.mesocyclePlan?.microcycles && mesocycle.startDate) {
-      const mesocycleStartDate = parseISO(mesocycle.startDate);
-      const sessionsByWeek: Record<number, number> = {};
+    const currentWeek = resolveMesocycleCurrentWeek(mesocycle);
+    const microcycles = mesocycle?.mesocyclePlan?.microcycles;
 
-      datedSessions.forEach(({ date }) => {
-        if (date >= mesocycleStartDate) {
-          const weekIdx =
-            Math.floor(differenceInDays(date, mesocycleStartDate) / 7) + 1;
-          sessionsByWeek[weekIdx] = (sessionsByWeek[weekIdx] || 0) + 1;
-        }
-      });
+    const weekMessages = buildMesocycleWeekMessages(
+      microcycles,
+      currentWeek,
+      datedSessions.map(({ session }) => session),
+    );
 
-      mesocycle.mesocyclePlan.microcycles.forEach((microcycle) => {
-        const weekNum = microcycle.week;
-        const planned = microcycle.sessions.length;
-        const done = sessionsByWeek[weekNum] || 0;
-
-        if (weekNum === mesocycle.currentWeek) {
-          currentWeekProgress = done;
-          currentWeekTarget = planned;
-          const weekEnd = new Date(mesocycleStartDate);
-          weekEnd.setDate(weekEnd.getDate() + weekNum * 7);
-          if (new Date() > weekEnd && done < planned) {
-            currentWeekMessage = `Esta semana completaste ${done} de ${planned} sesiones. La siguiente es una nueva oportunidad.`;
-          }
-        }
-      });
-    }
+    const currentWeekProgress = weekMessages.done;
+    const currentWeekTarget = weekMessages.planned;
+    const currentWeekMessage = weekMessages.currentWeekMessage;
+    const previousWeekMessage = weekMessages.previousWeekMessage;
 
     const mesocyclesCompleted =
       gamification?.counters.lifetimeMesocyclesCompleted ?? 0;
@@ -387,6 +450,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       currentWeekProgress,
       currentWeekTarget,
       currentWeekMessage,
+      previousWeekMessage,
       lastSessionDate,
       seasonPoints: gamification?.counters.seasonPoints ?? 0,
       mesocyclesCompleted,
@@ -420,7 +484,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         icon: achievementIcon('first-week'),
         unlocked: stats.weeksCompleted >= 1,
         progress: stats.currentWeekProgress,
-        target: stats.currentWeekTarget || 4,
+        target: stats.currentWeekTarget || 1,
       },
       {
         id: 'first-month',
@@ -488,16 +552,6 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
     stats.lastSessionDate?.toISOString() ?? userProfile.lastWorkoutDate,
   );
 
-  const thisWeekCount = useMemo(() => {
-    const now = new Date();
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
-    return history.filter((s) => {
-      const d = sessionDate(s);
-      return d && d >= weekStart && d <= weekEnd;
-    }).length;
-  }, [history]);
-
   const sessionHistoryItems = useMemo(
     () =>
       history.map((item) => {
@@ -511,10 +565,11 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
     [history, profileBodyWeightKg],
   );
 
-  const fitCoins = gamification?.counters.fitCoinsBalance ?? 0;
-  const seasonId = gamification?.counters.currentSeasonId ?? '2026-07';
-  const seasonSessions = gamification?.counters.seasonSessionsCompleted ?? 0;
-  const seasonWeeksPerfect = gamification?.counters.seasonWeeksPerfect ?? 0;
+  const fitCoins = gamification?.counters.fitCoinsBalance ?? seedGamification?.counters.fitCoinsBalance ?? 0;
+  const seasonPoints = gamification?.counters.seasonPoints ?? seedGamification?.counters.seasonPoints ?? 0;
+  const seasonId = gamification?.counters.currentSeasonId ?? seedGamification?.counters.currentSeasonId ?? '2026-07';
+  const seasonSessions = gamification?.counters.seasonSessionsCompleted ?? seedGamification?.counters.seasonSessionsCompleted ?? 0;
+  const seasonWeeksPerfect = gamification?.counters.seasonWeeksPerfect ?? seedGamification?.counters.seasonWeeksPerfect ?? 0;
 
   return (
     <div className="fixed inset-0 bg-zinc-950/95 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -534,7 +589,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
               <div className="flex items-center gap-2">
                 <Sparkles className="w-3.5 h-3.5 text-lime-400" />
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-lime-400/90">
-                  Arena FitGen
+                  GYM FitGen
                 </p>
               </div>
               <h2 className="text-2xl font-bold text-white mt-2 leading-tight">
@@ -575,8 +630,8 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-6">
-          {loadingHistory || loadingGamification ? (
-            <p className="text-sm text-zinc-500 py-10 text-center">Cargando tu arena…</p>
+          {loadingHistory || (loadingGamification && !gamification) ? (
+            <p className="text-sm text-zinc-500 py-10 text-center">Cargando tu GYM…</p>
           ) : (
             <>
               {activeTab === 'home' && (
@@ -584,18 +639,27 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                   <HubHomeTab
                     athleteName={userProfile.profileData?.name || 'Atleta'}
                     fitCoins={fitCoins}
-                    seasonPoints={stats.seasonPoints}
+                    seasonPoints={seasonPoints}
                     totalSessions={stats.totalSessions}
                     currentStreak={stats.currentStreak}
                     weeksCompleted={stats.weeksCompleted}
                     mesocyclesCompleted={stats.mesocyclesCompleted}
                     activeDays={stats.activeDays}
-                    thisWeekCount={thisWeekCount}
                     lastSessionDate={stats.lastSessionDate}
                     motivationalMessage={motivationalMessage}
                     currentWeekMessage={stats.currentWeekMessage}
+                    previousWeekMessage={stats.previousWeekMessage}
+                    mesocycleWeekDone={stats.currentWeekProgress}
+                    mesocycleWeekPlanned={stats.currentWeekTarget}
                     avatarBaseStage={gamification?.avatar.baseStage ?? 0}
-                    avatarAppearance={avatarAppearance}
+                    avatarAppearance={{
+                      ...avatarAppearance,
+                      startingBuild: displayStartingBuild,
+                    }}
+                    avatarGender={avatarGender}
+                    avatarStartingBuild={avatarChosen ? displayStartingBuild : null}
+                    onSaveAvatarStartingBuild={handleSaveAvatarStartingBuild}
+                    savingAvatar={savingAvatar}
                     nextGoal={nextGoal ?? null}
                     onGoAchievements={() => setActiveTab('achievements')}
                     onGoSeason={() => setActiveTab('season')}
@@ -620,7 +684,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
               {activeTab === 'season' && (
                 <HubSeasonTab
                   seasonId={seasonId}
-                  seasonPoints={stats.seasonPoints}
+                  seasonPoints={seasonPoints}
                   seasonSessions={seasonSessions}
                   seasonWeeksPerfect={seasonWeeksPerfect}
                   fitCoins={fitCoins}
@@ -632,7 +696,28 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
               )}
 
               {activeTab === 'ranking' && (
-                <HubRankingTab seasonPoints={stats.seasonPoints} seasonId={seasonId} />
+                <HubRankingTab
+                  authToken={authToken}
+                  seasonPoints={seasonPoints}
+                  seasonId={seasonId}
+                />
+              )}
+
+              {activeTab === 'shop' && (
+                <HubShopTab
+                  authToken={authToken}
+                  fitCoins={fitCoins}
+                  onBalanceChange={(balance) => {
+                    setGamification((current) =>
+                      current
+                        ? {
+                            ...current,
+                            counters: { ...current.counters, fitCoinsBalance: balance },
+                          }
+                        : current,
+                    );
+                  }}
+                />
               )}
             </>
           )}

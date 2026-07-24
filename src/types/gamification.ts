@@ -31,20 +31,46 @@ export interface AchievementSection {
   nextLocked: AchievementView | null;
 }
 
+export interface GamificationPreferences {
+  showInLeaderboard: boolean;
+  publicDisplayName: string | null;
+}
+
+export interface GamificationInventory {
+  frames: string[];
+  celebrations: string[];
+  shareTemplates?: string[];
+}
+
 export interface GamificationSummary {
   success: boolean;
   counters: GamificationCounters;
   avatar: {
     baseStage: number;
-    equippedSkinId: string | null;
     equippedFrameId: string | null;
     equippedCelebrationId: string | null;
+    equippedShareTemplateId?: string | null;
   };
   achievements: AchievementView[];
   achievementSections?: AchievementSection[];
   unlockedCount: number;
   nextAchievement: AchievementView | null;
+  preferences?: GamificationPreferences;
+  inventory?: GamificationInventory;
   updatedAt: string;
+}
+
+export interface GamificationRewardBreakdown {
+  label: string;
+  points: number;
+  fitCoins: number;
+}
+
+export interface GamificationE1rmRecord {
+  exerciseId: string;
+  exerciseName: string;
+  previousE1RM?: number | null;
+  newE1RM?: number;
 }
 
 export interface GamificationAchievementUnlock {
@@ -62,9 +88,52 @@ export interface GamificationDelta {
   avatarStageUp: boolean;
   currentStreakDays?: number;
   weekPerfectBonus?: boolean;
+  volumeMetTarget?: boolean;
+  weeklyCapHit?: boolean;
   lifetimeSessionsCompleted?: number;
   mesocycleCounted?: boolean;
   lifetimeMesocyclesCompleted?: number;
+  breakdown?: GamificationRewardBreakdown[];
+  newSeasonPointsTotal?: number;
+  newFitCoinsTotal?: number;
+  e1rmRecords?: GamificationE1rmRecord[];
+}
+
+export interface LeaderboardEntry {
+  rank: number | null;
+  userId: string;
+  displayName: string;
+  seasonPoints: number;
+  seasonSessionsCompleted?: number;
+  avatarStage?: number;
+}
+
+export interface LeaderboardResponse {
+  success: boolean;
+  seasonId: string;
+  entries: LeaderboardEntry[];
+  myEntry: LeaderboardEntry | null;
+  myRank: number | null;
+  mySeasonPoints: number;
+  showInLeaderboard: boolean;
+  publicDisplayName: string | null;
+}
+
+export interface ShopItem {
+  id: string;
+  type: 'frame' | 'celebration' | 'shareTemplate';
+  name: string;
+  description: string;
+  price: number;
+  rarity: string;
+  previewKey: string;
+  owned: boolean;
+}
+
+export interface ShopCatalogResponse {
+  success: boolean;
+  fitCoinsBalance: number;
+  items: ShopItem[];
 }
 
 export const MILESTONE_ACHIEVEMENT_IDS = new Set([

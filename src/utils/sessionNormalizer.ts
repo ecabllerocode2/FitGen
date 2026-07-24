@@ -1,6 +1,7 @@
 import type { GeneratedSession } from '../types/session';
 import { formatLoadLabel, resolveLoadConvention } from './loadConvention';
 import { resolveExerciseMediaFromFields } from './exerciseMedia';
+import { enrichExerciseCoachingFields } from './exerciseCoachingLookup';
 import { normalizeWeightUnit, type WeightUnit } from './weightUnits';
 
 function buildPesoLabel(ex: any, unit: WeightUnit = 'kg'): string | undefined {
@@ -20,10 +21,11 @@ function buildPesoLabel(ex: any, unit: WeightUnit = 'kg'): string | undefined {
 }
 
 function mapExerciseFields(ex: any, unit: WeightUnit = 'kg') {
-  const { imageUrl, imageUrl2 } = resolveExerciseMediaFromFields(ex);
-  const loadConvention = ex.loadConvention ?? resolveLoadConvention(ex);
+  const enriched = enrichExerciseCoachingFields(ex);
+  const { imageUrl, imageUrl2 } = resolveExerciseMediaFromFields(enriched);
+  const loadConvention = enriched.loadConvention ?? resolveLoadConvention(enriched);
   const mapped = {
-    ...ex,
+    ...enriched,
     id: ex.exerciseId ?? ex.id,
     nombre: ex.exerciseName ?? ex.nombre ?? ex.name,
     parteCuerpo: ex.muscleGroup ?? ex.parteCuerpo,
@@ -35,9 +37,9 @@ function mapExerciseFields(ex: any, unit: WeightUnit = 'kg') {
     sets: ex.sets,
     reps: ex.repRange ?? ex.reps,
     restSeconds: ex.restSeconds,
-    descripcion: ex.descripcion,
-    correcciones: ex.correcciones,
-    instrucciones: ex.instrucciones,
+    descripcion: enriched.descripcion,
+    correcciones: enriched.correcciones,
+    instrucciones: enriched.instrucciones,
     loadMode: ex.loadMode,
     loadConvention,
     equipo: ex.equipo,
@@ -60,9 +62,10 @@ function mapExerciseFields(ex: any, unit: WeightUnit = 'kg') {
 }
 
 function mapCooldownExercise(ex: any) {
-  const { imageUrl, imageUrl2 } = resolveExerciseMediaFromFields(ex);
+  const enriched = enrichExerciseCoachingFields(ex);
+  const { imageUrl, imageUrl2 } = resolveExerciseMediaFromFields(enriched);
   return {
-    ...ex,
+    ...enriched,
     id: ex.id ?? ex.exerciseId,
     nombre: ex.nombre ?? ex.name,
     tiempo: ex.tiempo ?? (ex.durationSeconds ? `${ex.durationSeconds}s` : ex.reps),
@@ -134,9 +137,10 @@ export function normalizeSession(raw: any, options: { weightUnit?: WeightUnit } 
 
   if (Array.isArray(session.warmup)) {
     session.warmup = session.warmup.map((item: any) => {
-      const media = resolveExerciseMediaFromFields(item);
+      const enriched = enrichExerciseCoachingFields(item);
+      const media = resolveExerciseMediaFromFields(enriched);
       return {
-      ...item,
+      ...enriched,
       id: item.id ?? item.exerciseId,
       nombre: item.nombre ?? item.name,
       duracion: item.isRampSet

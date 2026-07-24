@@ -1,18 +1,7 @@
-import type { AvatarAppearance, AvatarGender } from '@fitgen/visual';
+import type { AvatarAppearance, AvatarGender, AvatarStartingBuild } from '@fitgen/visual';
+import { DEFAULT_STARTING_BUILD } from '@fitgen/visual';
 
 const STORAGE_KEY_PREFIX = 'fitgen.avatar.appearance';
-
-const DEFAULT_APPEARANCE: AvatarAppearance = {
-  gender: 'male',
-  skinTone: 'medium',
-  hairStyle: 'short',
-  eyeColor: 'brown',
-};
-
-type StoredAppearance = AvatarAppearance & {
-  /** When set, overrides profile gender (arena customizer). */
-  genderOverride?: AvatarGender | null;
-};
 
 function storageKey(userId?: string): string {
   return userId ? `${STORAGE_KEY_PREFIX}.${userId}` : STORAGE_KEY_PREFIX;
@@ -30,79 +19,106 @@ export function profileGenderToAvatarGender(gender?: string | null): AvatarGende
   return 'male';
 }
 
-function loadStoredAppearance(userId?: string): StoredAppearance {
+const LEGACY_BODY_BUILD_MAP: Record<string, AvatarStartingBuild> = {
+  robust: 'soft',
+  athletic: 'slender',
+  lean: 'ectomorph',
+};
+
+type StoredAppearance = {
+  genderOverride?: AvatarGender | null;
+  startingBuild?: AvatarStartingBuild;
+  /** @deprecated migrated to startingBuild */
+  bodyBuild?: string;
+};
+
+function loadStored(userId?: string): StoredAppearance {
   try {
     const raw = localStorage.getItem(storageKey(userId));
-    if (!raw) return { ...DEFAULT_APPEARANCE };
-    const parsed = JSON.parse(raw) as Partial<StoredAppearance>;
-    return {
-      ...DEFAULT_APPEARANCE,
-      ...parsed,
-      gender: parsed.gender === 'female' ? 'female' : 'male',
-    };
+    if (!raw) return {};
+    return JSON.parse(raw) as StoredAppearance;
   } catch {
-    return { ...DEFAULT_APPEARANCE };
+    return {};
   }
 }
 
-/**
- * Resolves avatar appearance for the current user.
- * Profile gender drives the base character unless the user picked an override in the arena.
- */
+function resolveExplicitStartingBuild(
+  stored: StoredAppearance,
+  profileStartingBuild?: AvatarStartingBuild | null,
+): AvatarStartingBuild | undefined {
+  if (stored.startingBuild) return stored.startingBuild;
+  if (stored.bodyBuild && LEGACY_BODY_BUILD_MAP[stored.bodyBuild]) {
+    return LEGACY_BODY_BUILD_MAP[stored.bodyBuild];
+  }
+  if (profileStartingBuild) return profileStartingBuild;
+  return undefined;
+}
+
+/** Resolves avatar gender and optional starting build (only when user has chosen). */
 export function resolveAvatarAppearance(
   profileGender?: string | null,
   userId?: string,
+  profileStartingBuild?: AvatarStartingBuild | null,
 ): AvatarAppearance {
-  const stored = loadStoredAppearance(userId);
+  const stored = loadStored(userId);
   const fromProfile = profileGenderToAvatarGender(profileGender);
-  const gender = stored.genderOverride ?? (profileGender ? fromProfile : stored.gender);
+  const gender = stored.genderOverride ?? (profileGender ? fromProfile : 'male');
+  const startingBuild = resolveExplicitStartingBuild(stored, profileStartingBuild);
 
-  return {
-    gender,
-    skinTone: stored.skinTone,
-    hairStyle: stored.hairStyle,
-    eyeColor: stored.eyeColor,
-    skinId: stored.skinId,
-  };
+  return startingBuild ? { gender, startingBuild } : { gender };
 }
 
-/** @deprecated Prefer resolveAvatarAppearance(profileGender, userId) */
-export function loadAvatarAppearance(): AvatarAppearance {
-  return { ...DEFAULT_APPEARANCE };
+/** Build used for rendering — falls back to default when user has not chosen yet. */
+export function resolveAvatarStartingBuildForDisplay(
+  _profileGender?: string | null,
+  userId?: string,
+  profileStartingBuild?: AvatarStartingBuild | null,
+): AvatarStartingBuild {
+  const stored = loadStored(userId);
+  return resolveExplicitStartingBuild(stored, profileStartingBuild) ?? DEFAULT_STARTING_BUILD;
 }
 
-export function saveAvatarAppearance(
-  appearance: AvatarAppearance,
-  options?: { userId?: string; genderOverride?: AvatarGender | null },
+export function saveAvatarStartingBuild(
+  startingBuild: AvatarStartingBuild,
+  userId?: string,
 ): void {
-  const payload: StoredAppearance = {
-    ...appearance,
-    genderOverride: options?.genderOverride ?? null,
-  };
+  const stored = loadStored(userId);
   try {
-    localStorage.setItem(storageKey(options?.userId), JSON.stringify(payload));
+    localStorage.setItem(
+      storageKey(userId),
+      JSON.stringify({ ...stored, startingBuild, bodyBuild: undefined }),
+    );
   } catch {
-    // ignore quota / private mode
+    // ignore
   }
 }
 
-export function saveAvatarGenderOverride(
-  gender: AvatarGender,
-  userId?: string,
-): void {
-  const current = resolveAvatarAppearance(undefined, userId);
-  saveAvatarAppearance(
-    { ...current, gender },
-    { userId, genderOverride: gender },
-  );
+/** @deprecated Use saveAvatarStartingBuild */
+export const saveAvatarBodyBuild = saveAvatarStartingBuild;
+
+export function saveAvatarGenderOverride(gender: AvatarGender, userId?: string): void {
+  const stored = loadStored(userId);
+  try {
+    localStorage.setItem(storageKey(userId), JSON.stringify({ ...stored, genderOverride: gender }));
+  } catch {
+    // ignore
+  }
 }
 
 export function clearAvatarGenderOverride(userId?: string): void {
-  const stored = loadStoredAppearance(userId);
+  const stored = loadStored(userId);
   const { genderOverride: _, ...rest } = stored;
   try {
     localStorage.setItem(storageKey(userId), JSON.stringify(rest));
   } catch {
     // ignore
   }
+}
+
+export function hasAvatarStartingBuildChosen(
+  profileStartingBuild?: AvatarStartingBuild | null,
+  userId?: string,
+): boolean {
+  const stored = loadStored(userId);
+  return Boolean(resolveExplicitStartingBuild(stored, profileStartingBuild));
 }

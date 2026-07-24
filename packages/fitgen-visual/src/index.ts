@@ -1,41 +1,43 @@
 export type {
   AvatarAppearance,
+  AvatarBodyBuild,
   AvatarConfig,
   AvatarGender,
-  AvatarLayer,
-  AvatarLayerId,
-  EyeColorId,
+  AvatarProgressStage,
+  AvatarStartingBuild,
   FitCoinVariant,
-  HairStyleId,
   PhysiqueTier,
-  SkinToneId,
 } from './types';
 
-export { default as FitCoin, FitCoinSvg, FitCoinZdogCanvas } from './fitcoin/FitCoin';
+export { AVATAR_STARTING_BUILDS } from './types';
+/** @deprecated Use AVATAR_STARTING_BUILDS */
+export { AVATAR_STARTING_BUILDS as AVATAR_BODY_BUILDS } from './types';
+
+export { default as FitCoin, FitCoinSvg } from './fitcoin/FitCoin';
 export { default as AvatarDisplay } from './avatar/AvatarDisplay';
 export { default as AvatarPreview } from './avatar/AvatarPreview';
 export {
   resolveAvatarBodySrc,
-  resolveAvatarLayerStack,
+  resolveAvatarStartingBuild,
   resolveAvatarPresentation,
-  resolveAvatarLayers,
   resolvePhysiqueTierAsset,
+  AVAILABLE_AVATAR_STAGES,
   AVAILABLE_PHYSIQUE_TIERS,
-  AVATAR_USE_LAYER_STACK,
-  BLENDER_LAYER_EXPORT_ORDER,
+  DEFAULT_STARTING_BUILD,
+  DEFAULT_BODY_BUILD,
+  GENDER_OPTIONS,
+  STARTING_BUILD_OPTIONS,
+  BODY_BUILD_OPTIONS,
+  resolveAvatarBodyBuild,
 } from './avatar/resolveAvatarAssets';
 export {
+  computeAvatarProgressStage,
   computePhysiqueTier,
-  physiqueMorph,
+  sessionsUntilNextAvatarStage,
+  nextAvatarStageThreshold,
+  AVATAR_STAGE_THRESHOLDS,
+  AVATAR_STAGE_LABELS,
+  AVATAR_STAGE_DESCRIPTIONS,
   PHYSIQUE_THRESHOLDS,
   PHYSIQUE_TIER_LABELS,
 } from './avatar/physique';
-export {
-  SKIN_TONES,
-  HAIR_COLORS,
-  EYE_COLORS,
-  GENDER_OPTIONS,
-  SKIN_TONE_OPTIONS,
-  HAIR_STYLE_OPTIONS,
-  EYE_COLOR_OPTIONS,
-} from './avatar/tokens';

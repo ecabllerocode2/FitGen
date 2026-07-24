@@ -59,8 +59,13 @@ const AppLoader = () => {
   }
 
   if (showAppDirectly) {
-    // App maneja AuthLayout / Dashboard / Onboarding internamente
-    return <App />;
+    // Mantener /join/:token en Routes para que useParams siga funcionando tras el login.
+    return (
+      <Routes>
+        <Route path="/join/:token" element={<App />} />
+        <Route path="*" element={<App />} />
+      </Routes>
+    );
   }
 
   // Modo navegador sin sesión: rutas mínimas para Landing y Auth
@@ -70,6 +75,8 @@ const AppLoader = () => {
       {/* App se encargará de renderizar AuthLayout al estar sin sesión */}
       <Route path="/login" element={<App />} />
       <Route path="/register" element={<App />} />
+      <Route path="/register/coach" element={<App />} />
+      <Route path="/join/:token" element={<App />} />
       <Route path="*" element={<LandingPage />} />
     </Routes>
   );

@@ -5,13 +5,10 @@ type AvatarDisplayProps = {
   config: AvatarConfig;
   size?: number;
   className?: string;
-  /** Show subtle prestige ring when baseStage > 0. */
   showPrestige?: boolean;
 };
 
-/**
- * Static avatar — composite PNG or stacked Blender layers (see resolveAvatarAssets).
- */
+/** Static avatar image (PNG) by gender and physique tier. */
 export default function AvatarDisplay({
   config,
   size = 168,
@@ -36,30 +33,16 @@ export default function AvatarDisplay({
       )}
 
       <div className="relative z-10 h-full w-full">
-        {presentation.kind === 'composite' ? (
-          <img
-            src={presentation.src}
-            alt=""
-            width={size}
-            height={size}
-            draggable={false}
-            className="h-full w-full object-contain object-bottom select-none"
-            loading="lazy"
-            decoding="async"
-          />
-        ) : (
-          presentation.layers.map((layer) => (
-            <img
-              key={layer.src}
-              src={layer.src}
-              alt=""
-              draggable={false}
-              className="absolute inset-0 h-full w-full object-contain object-bottom select-none"
-              loading="lazy"
-              decoding="async"
-            />
-          ))
-        )}
+        <img
+          src={presentation.src}
+          alt=""
+          width={size}
+          height={size}
+          draggable={false}
+          className="h-full w-full object-contain object-bottom select-none"
+          loading="lazy"
+          decoding="async"
+        />
       </div>
 
       {prestige && (

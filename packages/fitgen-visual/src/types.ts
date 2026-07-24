@@ -1,39 +1,30 @@
 export type AvatarGender = 'male' | 'female';
-export type SkinToneId = 'light' | 'medium' | 'tan' | 'brown' | 'dark';
-export type HairStyleId = 'short' | 'medium' | 'long' | 'buzz' | 'bald';
-export type EyeColorId = 'brown' | 'blue' | 'green' | 'hazel';
+
+/** Starting body the user picks (onboarding or GYM). */
+export type AvatarStartingBuild = 'soft' | 'slender' | 'ectomorph';
+
+/** @deprecated Use AvatarStartingBuild — kept for migration from localStorage. */
+export type AvatarBodyBuild = 'lean' | 'athletic' | 'robust';
 
 export type AvatarAppearance = {
   gender: AvatarGender;
-  skinTone: SkinToneId;
-  hairStyle: HairStyleId;
-  eyeColor: EyeColorId;
-  /** Cosmetic skin id from shop (future). */
-  skinId?: string | null;
+  startingBuild?: AvatarStartingBuild;
 };
 
-export type PhysiqueTier = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+/** Progress stage 0 (start) → 4 (peak fitness). Derived from completed sessions. */
+export type AvatarProgressStage = 0 | 1 | 2 | 3 | 4;
+
+/** @deprecated Use AvatarProgressStage */
+export type PhysiqueTier = AvatarProgressStage;
 
 export type AvatarConfig = {
   appearance: AvatarAppearance;
-  /** Derived from completed sessions; drives body morph. */
-  physiqueTier: PhysiqueTier;
+  /** Derived from completed sessions; drives stage image. */
+  progressStage: AvatarProgressStage;
   /** Prestige from perfect weeks (roadmap baseStage). */
   baseStage?: number;
 };
 
 export type FitCoinVariant = 'ui' | 'hero';
 
-export type AvatarLayerId =
-  | 'pedestal'
-  | 'body'
-  | 'outfit'
-  | 'hair'
-  | 'accessories'
-  | 'prestige';
-
-export type AvatarLayer = {
-  id: AvatarLayerId;
-  src: string;
-  alt?: string;
-};
+export const AVATAR_STARTING_BUILDS: AvatarStartingBuild[] = ['soft', 'slender', 'ectomorph'];
