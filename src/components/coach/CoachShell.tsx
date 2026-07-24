@@ -1,6 +1,8 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Users, Home, UserPlus } from 'lucide-react';
+import { signOut } from 'firebase/auth';
+import { Users, Home, UserPlus, LogOut } from 'lucide-react';
+import { auth } from '../../firebase';
 
 interface CoachShellProps {
   children: ReactNode;
@@ -9,17 +11,41 @@ interface CoachShellProps {
 
 export default function CoachShell({ children, title }: CoachShellProps) {
   const location = useLocation();
+  const [loggingOut, setLoggingOut] = useState(false);
   const nav = [
     { to: '/coach', label: 'Inicio', icon: Home },
     { to: '/coach/invite', label: 'Invitar', icon: UserPlus },
     { to: '/coach/clients', label: 'Clientes', icon: Users },
   ];
 
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error('Error al cerrar sesión:', err);
+      setLoggingOut(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
-      <header className="border-b border-zinc-800 px-4 py-4">
-        <p className="text-[10px] uppercase tracking-[0.2em] text-lime-500/80">FitGen Coach</p>
-        {title && <h1 className="text-xl font-bold mt-1">{title}</h1>}
+      <header className="border-b border-zinc-800 px-4 py-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-lime-500/80">FitGen Coach</p>
+          {title && <h1 className="text-xl font-bold mt-1 truncate">{title}</h1>}
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleLogout()}
+          disabled={loggingOut}
+          className="shrink-0 flex items-center gap-2 rounded-xl border border-zinc-800 px-3 py-2 text-xs text-zinc-400 hover:text-red-400 hover:border-zinc-700 transition-colors disabled:opacity-50"
+          aria-label="Cerrar sesión"
+        >
+          <LogOut className="w-4 h-4" />
+          <span className="hidden sm:inline">{loggingOut ? 'Saliendo…' : 'Cerrar sesión'}</span>
+        </button>
       </header>
 
       <main className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">{children}</main>

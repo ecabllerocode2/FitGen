@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import type { User } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
 import { registerCoach } from '../../api/coach';
+import { auth } from '../../firebase';
 import { AppPrimaryButton, AppShell } from '../ui/AppPrimitives';
 
 interface CoachRegisterPageProps {
@@ -34,6 +37,16 @@ export default function CoachRegisterPage({ user }: CoachRegisterPageProps) {
 
   return (
     <AppShell>
+      <div className="px-6 pt-[max(1rem,env(safe-area-inset-top))] flex justify-end max-w-sm mx-auto w-full">
+        <button
+          type="button"
+          onClick={() => void signOut(auth)}
+          className="flex items-center gap-2 text-xs text-zinc-500 hover:text-red-400 transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          Cerrar sesión
+        </button>
+      </div>
       <div className="flex-1 flex flex-col justify-center px-6 max-w-sm mx-auto w-full">
         <p className="text-[10px] uppercase tracking-[0.2em] text-lime-500/80 mb-2">FitGen Coach</p>
         <h1 className="text-2xl font-bold mb-2">Configura tu perfil</h1>
