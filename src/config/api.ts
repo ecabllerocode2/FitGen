@@ -66,6 +66,8 @@ export const API_ENDPOINTS = {
   SHOP_REDEEM_PREMIUM: `${API_BASE_URL}/api/shop/redeem-premium`,
   ADMIN_USERS_OVERVIEW: `${API_BASE_URL}/api/admin/users-overview`,
   ADMIN_USER_DETAIL: `${API_BASE_URL}/api/admin/user-detail`,
+  ADMIN_USERS_DASHBOARD_LIST: `${API_BASE_URL}/api/admin/users-dashboard-list`,
+  ADMIN_USER_DASHBOARD: `${API_BASE_URL}/api/admin/user-dashboard`,
   ADMIN_COACH_SET_PLAN: `${API_BASE_URL}/api/admin/coach-set-plan`,
 
   // Coach platform

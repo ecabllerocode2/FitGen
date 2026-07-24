@@ -8,6 +8,8 @@ import AdminUserDetailView from './AdminUserDetailView';
 type AdminUsersPanelProps = {
   authToken: string;
   onClose: () => void;
+  /** When true, renders inline inside CoachShell instead of a modal overlay */
+  embedded?: boolean;
 };
 
 function formatLastSession(iso: string | null): string {
@@ -20,7 +22,7 @@ function formatLastSession(iso: string | null): string {
   }
 }
 
-export default function AdminUsersPanel({ authToken, onClose }: AdminUsersPanelProps) {
+export default function AdminUsersPanel({ authToken, onClose, embedded = false }: AdminUsersPanelProps) {
   const [data, setData] = useState<AdminUsersOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,19 +47,36 @@ export default function AdminUsersPanel({ authToken, onClose }: AdminUsersPanelP
 
   const summary = data?.summary;
 
+  const shellClass = embedded
+    ? 'flex flex-col flex-1 min-h-0 w-full'
+    : 'bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92dvh] overflow-hidden flex flex-col';
+
   return (
-    <div className="fixed inset-0 bg-zinc-950/95 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92dvh] overflow-hidden flex flex-col">
+    <div
+      className={
+        embedded
+          ? 'flex flex-col flex-1 min-h-0 w-full'
+          : 'fixed inset-0 bg-zinc-950/95 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4'
+      }
+    >
+      <div className={shellClass}>
         {!selectedUser && (
-          <div className="shrink-0 px-6 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4 border-b border-zinc-800">
+          <div
+            className={`shrink-0 pb-4 border-b border-zinc-800 ${
+              embedded ? 'px-0 pt-0' : 'px-6 pt-[max(1.25rem,env(safe-area-inset-top))]'
+            }`}
+          >
             <div className="flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-2 -ml-2 text-zinc-500 hover:text-zinc-200 transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
+              {!embedded && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-2 -ml-2 text-zinc-500 hover:text-zinc-200 transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              )}
+              {embedded && <div />}
               <button
                 type="button"
                 onClick={() => void load()}
@@ -68,7 +87,9 @@ export default function AdminUsersPanel({ authToken, onClose }: AdminUsersPanelP
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </button>
             </div>
-            <h2 className="text-xl font-bold text-white mt-2">Panel de usuarios</h2>
+            <h2 className={`text-xl font-bold text-white ${embedded ? '' : 'mt-2'}`}>
+              Panel de usuarios
+            </h2>
             <p className="text-xs text-zinc-500 mt-1">
               Solo administrador · toca un usuario para ver estadísticas
             </p>
@@ -76,7 +97,11 @@ export default function AdminUsersPanel({ authToken, onClose }: AdminUsersPanelP
         )}
 
         {selectedUser ? (
-          <div className="pt-[max(0.75rem,env(safe-area-inset-top))] flex flex-col flex-1 min-h-0">
+          <div
+            className={`flex flex-col flex-1 min-h-0 ${
+              embedded ? '' : 'pt-[max(0.75rem,env(safe-area-inset-top))]'
+            }`}
+          >
             <AdminUserDetailView
               authToken={authToken}
               user={selectedUser}
@@ -84,7 +109,7 @@ export default function AdminUsersPanel({ authToken, onClose }: AdminUsersPanelP
             />
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          <div className={`flex-1 overflow-y-auto py-5 space-y-5 ${embedded ? 'px-0' : 'px-6'}`}>
             {loading && !data && (
               <p className="text-sm text-zinc-500 py-10 text-center">Cargando usuarios…</p>
             )}

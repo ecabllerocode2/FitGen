@@ -29,6 +29,8 @@ import CoachHome from './components/coach/CoachHome';
 import CoachInvitePage from './components/coach/CoachInvitePage';
 import CoachClientsList from './components/coach/CoachClientsList';
 import CoachClientDetailPage from './components/coach/CoachClientDetailPage';
+import CoachAdminUsersPage from './components/coach/CoachAdminUsersPage';
+import CoachAdminUserDetailPage from './components/coach/CoachAdminUserDetailPage';
 import JoinOnboarding from './components/join/JoinOnboarding';
 import CoachWaitingScreen from './components/join/CoachWaitingScreen';
 import type { ProfileCompleteness } from './types/coach';
@@ -279,6 +281,8 @@ const App: FC = () => {
                 <Route path="/coach/invite" element={<CoachInvitePage user={user} />} />
                 <Route path="/coach/clients" element={<CoachClientsList user={user} />} />
                 <Route path="/coach/clients/:athleteId" element={<CoachClientDetailPage user={user} />} />
+                <Route path="/coach/admin/users" element={<CoachAdminUsersPage user={user} />} />
+                <Route path="/coach/admin/users/:athleteId" element={<CoachAdminUserDetailPage user={user} />} />
                 <Route path="/register/coach" element={<CoachRegisterPage user={user} />} />
                 <Route path="*" element={<Navigate to="/coach" replace />} />
             </Routes>

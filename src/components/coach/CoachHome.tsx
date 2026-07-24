@@ -40,7 +40,7 @@ export default function CoachHome({ user }: CoachHomeProps) {
   const atLimit = seatsUsed >= seatLimit;
 
   return (
-    <CoachShell title={`Hola, ${coach?.displayName ?? 'Coach'}`}>
+    <CoachShell title={`Hola, ${coach?.displayName ?? 'Coach'}`} userUid={user.uid}>
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
       <div className="grid grid-cols-2 gap-3 mb-6">

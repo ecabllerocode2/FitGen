@@ -1,4 +1,6 @@
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
+import type { CoachClientSummary } from '../types/coach';
+import type { CoachClientDashboardData } from '../types/coachDashboard';
 
 export type AdminUserRow = {
   uid: string;
@@ -127,6 +129,37 @@ export type AdminUserDetail = {
   }>;
   sessions: AdminSessionSummary[];
 };
+
+export type AdminPwaUserSummary = CoachClientSummary & {
+  email?: string | null;
+  accountType?: string;
+};
+
+export async function fetchAdminUsersDashboardList(
+  authToken: string,
+): Promise<AdminPwaUserSummary[]> {
+  const res = await authenticatedFetch(API_ENDPOINTS.ADMIN_USERS_DASHBOARD_LIST, authToken);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Error ${res.status}`);
+  }
+  const json = await res.json();
+  return json.clients as AdminPwaUserSummary[];
+}
+
+export async function fetchAdminUserDashboard(
+  authToken: string,
+  uid: string,
+): Promise<CoachClientDashboardData> {
+  const url = `${API_ENDPOINTS.ADMIN_USER_DASHBOARD}?uid=${encodeURIComponent(uid)}`;
+  const res = await authenticatedFetch(url, authToken);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Error ${res.status}`);
+  }
+  const json = await res.json();
+  return json.client as CoachClientDashboardData;
+}
 
 export async function fetchAdminUsersOverview(authToken: string): Promise<AdminUsersOverview> {
   const res = await authenticatedFetch(API_ENDPOINTS.ADMIN_USERS_OVERVIEW, authToken);

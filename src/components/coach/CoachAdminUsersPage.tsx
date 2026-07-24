@@ -1,50 +1,62 @@
 import { useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Activity, AlertCircle, ChevronRight } from 'lucide-react';
-import { fetchCoachClients } from '../../api/coach';
-import type { CoachClientSummary } from '../../types/coach';
+import { fetchAdminUsersDashboardList, type AdminPwaUserSummary } from '../../api/admin';
+import { isAdminUser } from '../../constants/admin';
 import CoachShell from './CoachShell';
 
-interface CoachClientsListProps {
+interface CoachAdminUsersPageProps {
   user: User;
 }
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Activo',
-  onboarding_client: 'Esperando coach',
+  onboarding_client: 'Onboarding',
   onboarding_coach: 'Configurar plan',
-  invited: 'Invitado',
+  invited: 'Pendiente',
   released: 'Archivado',
+  coach: 'Coach',
+  pending_onboarding: 'Onboarding',
+  approved: 'Activo',
 };
 
-export default function CoachClientsList({ user }: CoachClientsListProps) {
-  const [clients, setClients] = useState<CoachClientSummary[]>([]);
+export default function CoachAdminUsersPage({ user }: CoachAdminUsersPageProps) {
+  const [clients, setClients] = useState<AdminPwaUserSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     void (async () => {
       try {
         const token = await user.getIdToken();
-        setClients(await fetchCoachClients(token));
+        setClients(await fetchAdminUsersDashboardList(token));
       } catch (err) {
         setError((err as Error).message);
+      } finally {
+        setLoading(false);
       }
     })();
   }, [user]);
 
+  if (!isAdminUser(user.uid)) {
+    return <Navigate to="/coach" replace />;
+  }
+
   return (
-    <CoachShell title="Clientes" userUid={user.uid}>
+    <CoachShell title="Usuarios PWA" wide userUid={user.uid}>
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
-      {clients.length === 0 ? (
-        <p className="text-sm text-zinc-500 text-center py-12">Aún no tienes clientes. Invita al primero.</p>
+      {loading ? (
+        <p className="text-sm text-zinc-500 text-center py-12">Cargando usuarios…</p>
+      ) : clients.length === 0 ? (
+        <p className="text-sm text-zinc-500 text-center py-12">No hay usuarios registrados.</p>
       ) : (
         <ul className="space-y-3">
           {clients.map((client) => (
             <li key={client.athleteId}>
               <Link
-                to={`/coach/clients/${client.athleteId}`}
+                to={`/coach/admin/users/${client.athleteId}`}
                 className={`block rounded-xl border p-4 hover:border-zinc-700 transition-colors ${
                   client.isTrainingNow
                     ? 'border-lime-500/40 bg-lime-500/5'
@@ -63,8 +75,13 @@ export default function CoachClientsList({ user }: CoachClientsListProps) {
                       )}
                     </div>
                     <p className="text-xs text-zinc-500 mt-1">
-                      {client.fitnessGoal ?? 'Sin objetivo'} · {STATUS_LABELS[client.status] ?? client.status}
+                      {client.fitnessGoal ?? 'Sin objetivo'} ·{' '}
+                      {STATUS_LABELS[client.status] ?? client.status}
+                      {client.accountType === 'coach' ? ' · Coach' : ''}
                     </p>
+                    {client.email && (
+                      <p className="text-[11px] text-zinc-600 mt-0.5 truncate">{client.email}</p>
+                    )}
                     {client.isTrainingNow && client.currentSessionFocus && (
                       <p className="text-[11px] text-lime-400/80 mt-1 truncate">
                         {client.currentSessionFocus}
@@ -81,7 +98,9 @@ export default function CoachClientsList({ user }: CoachClientsListProps) {
                       Plan activo
                     </span>
                   ) : (
-                    <span className="text-[10px] uppercase tracking-wide text-amber-400/80">Pendiente setup</span>
+                    <span className="text-[10px] uppercase tracking-wide text-amber-400/80">
+                      Pendiente setup
+                    </span>
                   )}
                   {client.checkinDue && (
                     <span
