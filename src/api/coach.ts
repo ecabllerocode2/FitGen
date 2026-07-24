@@ -85,7 +85,12 @@ export async function saveClientTrainingProfile(
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error ?? 'Error al guardar perfil técnico');
-  return json;
+  return json as {
+    success: boolean;
+    profileChange?: { tier: string; message: string; requiresSessionClear?: boolean };
+    profileCompleteness?: { readyForMesocycle: boolean };
+    mesocycle?: unknown;
+  };
 }
 
 export async function generateClientMesocycle(token: string, athleteId: string) {

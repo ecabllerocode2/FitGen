@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -9,7 +9,9 @@ import {
 } from '../../api/coach';
 import type { CoachClientDashboardData } from '../../types/coachDashboard';
 import CoachShell from './CoachShell';
-import CoachTrainingProfileForm from './CoachTrainingProfileForm';
+import CoachTrainingProfileForm, {
+  type TrainingProfileFormState,
+} from './CoachTrainingProfileForm';
 import CoachClientDashboard from './dashboard/CoachClientDashboard';
 
 interface CoachClientDetailPageProps {
@@ -24,12 +26,14 @@ export default function CoachClientDetailPage({ user }: CoachClientDetailPagePro
   const [noteText, setNoteText] = useState('');
   const [saving, setSaving] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!athleteId) return;
     const token = await user.getIdToken();
     setClient(await fetchCoachClientDetail(token, athleteId));
-  };
+  }, [athleteId, user]);
 
   useEffect(() => {
     void load().catch((err) => setError((err as Error).message));
@@ -37,7 +41,7 @@ export default function CoachClientDetailPage({ user }: CoachClientDetailPagePro
       void load().catch(() => undefined);
     }, 45000);
     return () => window.clearInterval(interval);
-  }, [user, athleteId]);
+  }, [load]);
 
   if (!athleteId) return null;
   if (!client && !error) {
@@ -52,15 +56,53 @@ export default function CoachClientDetailPage({ user }: CoachClientDetailPagePro
   const needsSetup = !client?.profileCompleteness?.readyForMesocycle;
   const clientName = (profile?.name as string) ?? 'Cliente';
 
+  const trainingInitial: Partial<TrainingProfileFormState> = {
+    fitnessGoal: profile?.fitnessGoal as TrainingProfileFormState['fitnessGoal'],
+    trainingAgeMonths: profile?.trainingAgeMonths as number,
+    weeklyScheduleContext: profile?.weeklyScheduleContext as TrainingProfileFormState['weeklyScheduleContext'],
+    focusArea: profile?.focusArea as TrainingProfileFormState['focusArea'],
+    bodyCompositionGoal: profile?.bodyCompositionGoal as TrainingProfileFormState['bodyCompositionGoal'],
+    musclePriorities: profile?.musclePriorities as TrainingProfileFormState['musclePriorities'],
+    injuriesOrLimitations: profile?.injuriesOrLimitations as string[],
+  };
+
+  const handleSaveTrainingProfile = async (data: TrainingProfileFormState, generateMesocycle: boolean) => {
+    setSaving(true);
+    setError(null);
+    setSaveMessage(null);
+    try {
+      const token = await user.getIdToken();
+      const result = await saveClientTrainingProfile(
+        token,
+        athleteId,
+        data as unknown as Record<string, unknown>,
+        generateMesocycle,
+      );
+      setSaveMessage(result.profileChange?.message ?? 'Perfil técnico actualizado correctamente.');
+      await load();
+      setShowSetup(false);
+      if (!generateMesocycle) setShowEdit(false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <CoachShell title={clientName}>
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+      {saveMessage && (
+        <p className="text-sm text-lime-300/90 mb-4 rounded-xl border border-lime-500/20 bg-lime-500/5 px-4 py-3">
+          {saveMessage}
+        </p>
+      )}
 
       {client && (
         <>
           <CoachClientDashboard client={client} />
 
-          {needsSetup && (
+          {needsSetup ? (
             <section className="mt-8 border-t border-zinc-800 pt-6">
               <button
                 type="button"
@@ -72,35 +114,29 @@ export default function CoachClientDetailPage({ user }: CoachClientDetailPagePro
               </button>
               {showSetup && (
                 <CoachTrainingProfileForm
-                  initial={{
-                    fitnessGoal: profile?.fitnessGoal as never,
-                    trainingAgeMonths: profile?.trainingAgeMonths as number,
-                    weeklyScheduleContext: profile?.weeklyScheduleContext as never,
-                    focusArea: profile?.focusArea as never,
-                    bodyCompositionGoal: profile?.bodyCompositionGoal as never,
-                    musclePriorities: profile?.musclePriorities as never,
-                    injuriesOrLimitations: profile?.injuriesOrLimitations as string[],
-                  }}
+                  mode="setup"
+                  initial={trainingInitial}
                   loading={saving}
-                  onSubmit={async (data, generateMesocycle) => {
-                    setSaving(true);
-                    setError(null);
-                    try {
-                      const token = await user.getIdToken();
-                      await saveClientTrainingProfile(
-                        token,
-                        athleteId,
-                        data as unknown as Record<string, unknown>,
-                        generateMesocycle,
-                      );
-                      await load();
-                      setShowSetup(false);
-                    } catch (err) {
-                      setError((err as Error).message);
-                    } finally {
-                      setSaving(false);
-                    }
-                  }}
+                  onSubmit={handleSaveTrainingProfile}
+                />
+              )}
+            </section>
+          ) : (
+            <section className="mt-8 border-t border-zinc-800 pt-6">
+              <button
+                type="button"
+                onClick={() => setShowEdit((v) => !v)}
+                className="w-full flex items-center justify-between text-sm font-semibold text-zinc-200 mb-3"
+              >
+                Editar contexto fisiológico y días
+                <span className="text-xs text-lime-400">{showEdit ? 'Ocultar' : 'Mostrar'}</span>
+              </button>
+              {showEdit && (
+                <CoachTrainingProfileForm
+                  mode="edit"
+                  initial={trainingInitial}
+                  loading={saving}
+                  onSubmit={handleSaveTrainingProfile}
                 />
               )}
             </section>

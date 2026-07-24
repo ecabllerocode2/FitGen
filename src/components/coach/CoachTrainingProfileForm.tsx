@@ -21,12 +21,14 @@ export interface TrainingProfileFormState {
 
 interface CoachTrainingProfileFormProps {
   initial?: Partial<TrainingProfileFormState>;
+  mode?: 'setup' | 'edit';
   onSubmit: (data: TrainingProfileFormState, generateMesocycle: boolean) => Promise<void>;
   loading?: boolean;
 }
 
 export default function CoachTrainingProfileForm({
   initial,
+  mode = 'setup',
   onSubmit,
   loading = false,
 }: CoachTrainingProfileFormProps) {
@@ -42,11 +44,14 @@ export default function CoachTrainingProfileForm({
   const [musclePriorities, setMusclePriorities] = useState<MusclePriority[]>(initial?.musclePriorities ?? []);
   const [injuries, setInjuries] = useState<string[]>(initial?.injuriesOrLimitations ?? []);
 
-  const weeklyScheduleContext = DAYS.map((day) => ({
-    day,
-    canTrain: selectedDays.has(day),
-    externalLoad: 'ninguna',
-  }));
+  const weeklyScheduleContext = DAYS.map((day) => {
+    const existing = initial?.weeklyScheduleContext?.find((d) => d.day === day);
+    return {
+      day,
+      canTrain: selectedDays.has(day),
+      externalLoad: existing?.externalLoad ?? 'ninguna',
+    };
+  });
 
   const buildPayload = (): TrainingProfileFormState => ({
     fitnessGoal: goal,
@@ -68,12 +73,14 @@ export default function CoachTrainingProfileForm({
     });
   };
 
+  const isSetup = mode === 'setup';
+
   return (
     <form
       className="space-y-5"
       onSubmit={(e) => {
         e.preventDefault();
-        void onSubmit(buildPayload(), true);
+        void onSubmit(buildPayload(), isSetup);
       }}
     >
       <section>
@@ -128,6 +135,9 @@ export default function CoachTrainingProfileForm({
             </button>
           ))}
         </div>
+        <p className="text-[11px] text-zinc-600 mt-2">
+          {selectedDays.size} día{selectedDays.size === 1 ? '' : 's'} seleccionado{selectedDays.size === 1 ? '' : 's'}
+        </p>
       </section>
 
       <section>
@@ -181,12 +191,23 @@ export default function CoachTrainingProfileForm({
         </select>
       </section>
 
+      {!isSetup && (
+        <p className="text-[11px] text-zinc-500 leading-relaxed">
+          Los cambios se aplican con las mismas reglas que cuando el atleta edita su perfil: el mesociclo
+          activo se adapta (remap de días, seguridad o regeneración parcial) sin perder historial.
+        </p>
+      )}
+
       <button
         type="submit"
         disabled={loading || selectedDays.size < 2}
         className="w-full rounded-xl bg-lime-500 text-zinc-900 font-semibold py-4 disabled:opacity-50"
       >
-        {loading ? 'Guardando…' : 'Guardar y generar mesociclo'}
+        {loading
+          ? 'Guardando…'
+          : isSetup
+            ? 'Guardar y generar mesociclo'
+            : 'Guardar cambios en el plan'}
       </button>
     </form>
   );
