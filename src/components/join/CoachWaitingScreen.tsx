@@ -1,6 +1,7 @@
 import type { User } from 'firebase/auth';
 import { Clock } from 'lucide-react';
 import { AppShell } from '../ui/AppPrimitives';
+import InstallPwaBanner from '../InstallPwaBanner';
 
 interface CoachWaitingScreenProps {
   user: User;
@@ -19,9 +20,10 @@ export default function CoachWaitingScreen({ coachName }: CoachWaitingScreenProp
           entrenamiento. Te avisaremos cuando puedas empezar.
         </p>
         <p className="text-xs text-zinc-600 mt-6">
-          Mientras tanto, asegúrate de tener la app instalada y tus notificaciones activas.
+          Mientras tanto, instala la app para recibir avisos cuando tu plan esté listo.
         </p>
       </div>
+      <InstallPwaBanner />
     </AppShell>
   );
 }
