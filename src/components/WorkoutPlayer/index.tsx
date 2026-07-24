@@ -2444,21 +2444,6 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     }
   }, [currentPhase, warmupIndex, mainStationIndex, mainExerciseIndex, mainSetNumber, coreIndex, cooldownPhaseIndex, cooldownExerciseIndex, session, getMainBlocks]);
 
-  const handleLogSubmit = useCallback((data: SetLog) => {
-    if (!currentExercise || !currentExercise.exercise.id) return;
-    
-    setExerciseLogs(prev => {
-      const exId = currentExercise.exercise.id as string;
-      const currentLogs = prev[exId] || [];
-      const next = {
-        ...prev,
-        [exId]: [...currentLogs, data],
-      };
-      saveExerciseLogs(sessionStorageId, next);
-      return next;
-    });
-  }, [currentExercise, sessionStorageId]);
-
   const handleWeightOverride = useCallback((exerciseId: string, kg: number | null) => {
     setWeightOverrides((prev) => {
       if (kg == null) {
@@ -2469,6 +2454,31 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
       return { ...prev, [exerciseId]: kg };
     });
   }, []);
+
+  const handleLogSubmit = useCallback((data: SetLog) => {
+    if (!currentExercise || !currentExercise.exercise.id) return;
+
+    const exId = currentExercise.exercise.id as string;
+
+    if (
+      currentExercise.type === 'main'
+      && data.weight != null
+      && !Number.isNaN(data.weight)
+      && !isBodyweightExercise(currentExercise.exercise)
+    ) {
+      handleWeightOverride(exId, data.weight);
+    }
+
+    setExerciseLogs(prev => {
+      const currentLogs = prev[exId] || [];
+      const next = {
+        ...prev,
+        [exId]: [...currentLogs, data],
+      };
+      saveExerciseLogs(sessionStorageId, next);
+      return next;
+    });
+  }, [currentExercise, sessionStorageId, handleWeightOverride]);
 
   const handleCompleteExercise = useCallback(() => {
     if (!currentExercise) return;
