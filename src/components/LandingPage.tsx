@@ -20,13 +20,24 @@ const LandingPage = () => {
         <div className="hidden md:flex gap-8 text-sm font-medium text-slate-400">
           <a href="#features" className="hover:text-white transition">El Motor</a>
           <a href="#adaptability" className="hover:text-white transition">Tu Estilo de Vida</a>
+          <Link to="/register/coach" className="hover:text-lime-400 transition text-lime-400/90">
+            Soy coach
+          </Link>
         </div>
-        <Link 
-          to="/login" 
-          className="text-sm font-bold text-white hover:text-lime-400 transition"
-        >
-          Entrar
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link
+            to="/register/coach"
+            className="hidden sm:inline text-sm font-semibold text-lime-400/90 hover:text-lime-300 transition"
+          >
+            Soy coach
+          </Link>
+          <Link 
+            to="/login" 
+            className="text-sm font-bold text-white hover:text-lime-400 transition"
+          >
+            Entrar
+          </Link>
+        </div>
       </nav>
 
       {/* --- HERO SECTION --- */}
@@ -56,6 +67,12 @@ const LandingPage = () => {
             className="w-full sm:w-auto px-8 py-4 bg-lime-500 hover:bg-lime-400 text-slate-950 font-black rounded-xl text-lg transition-all transform hover:scale-[1.02] shadow-[0_0_30px_rgba(132,204,22,0.3)]"
           >
             Comenzar mi Plan
+          </Link>
+          <Link
+            to="/register/coach"
+            className="w-full sm:w-auto px-8 py-4 bg-slate-900 hover:bg-slate-800 text-lime-400 font-bold rounded-xl text-lg border border-lime-500/30 transition-all"
+          >
+            Soy coach / entrenador
           </Link>
           <p className="text-xs text-slate-500 font-medium mt-2 sm:mt-0">
             Beta gratuita — regístrate y empieza hoy

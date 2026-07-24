@@ -137,6 +137,18 @@ export async function fetchAdminUsersOverview(authToken: string): Promise<AdminU
   return res.json() as Promise<AdminUsersOverview>;
 }
 
+export async function setCoachPlan(authToken: string, coachId: string, plan: 'free' | 'premium') {
+  const res = await authenticatedFetch(API_ENDPOINTS.ADMIN_COACH_SET_PLAN, authToken, {
+    method: 'POST',
+    body: JSON.stringify({ coachId, plan }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Error ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function fetchAdminUserDetail(authToken: string, uid: string): Promise<AdminUserDetail> {
   const url = `${API_ENDPOINTS.ADMIN_USER_DETAIL}?uid=${encodeURIComponent(uid)}`;
   const res = await authenticatedFetch(url, authToken);

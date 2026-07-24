@@ -24,6 +24,14 @@ import type { GeneratedSession } from './types/session';
 import { isOnboardingFlowActive, endOnboardingFlowLock } from './utils/onboardingFlowLock';
 import { readOnboardingCompletion, clearOnboardingCompletionStorage } from './utils/onboardingCompletion';
 import OnboardingCompletionFlow from './components/onboarding/OnboardingCompletionFlow';
+import CoachRegisterPage from './components/coach/CoachRegisterPage';
+import CoachHome from './components/coach/CoachHome';
+import CoachInvitePage from './components/coach/CoachInvitePage';
+import CoachClientsList from './components/coach/CoachClientsList';
+import CoachClientDetailPage from './components/coach/CoachClientDetailPage';
+import JoinOnboarding from './components/join/JoinOnboarding';
+import CoachWaitingScreen from './components/join/CoachWaitingScreen';
+import type { ProfileCompleteness } from './types/coach';
 
 // ====================================================================
 // TIPOS Y ESTADOS
@@ -34,6 +42,10 @@ type AppStatus = 'unauthenticated' | 'loading_profile' | UserStatus;
 
 export interface UserProfile extends DocumentData {
     status: UserStatus;
+    accountType?: 'athlete' | 'coach';
+    athleteOrigin?: 'direct' | 'coached';
+    coachId?: string;
+    profileCompleteness?: ProfileCompleteness;
     onboardingData?: any;
     name?: string;
     fitnessGoal?: string;
@@ -236,8 +248,45 @@ const App: FC = () => {
         );
     }
 
+    const isJoinPath = location.pathname.startsWith('/join/');
+    const isCoachRegisterPath = location.pathname === '/register/coach';
+    const isWaitingCoachPath = location.pathname === '/waiting-coach';
+    const isCoachAccount = userProfile?.accountType === 'coach';
+    const isCoachedAthlete = userProfile?.athleteOrigin === 'coached';
+    const waitingForCoach =
+        isCoachedAthlete &&
+        (!userProfile?.profileCompleteness?.readyForMesocycle || !userProfile?.currentMesocycle);
+
     if (currentStatus === 'unauthenticated' && authServices) {
+        if (isJoinPath || isCoachRegisterPath) {
+            return <AuthLayout onAuthSuccess={() => { }} auth={authServices.auth} />;
+        }
         return <AuthLayout onAuthSuccess={() => { }} auth={authServices.auth} />;
+    }
+
+    if (user && authServices && isJoinPath) {
+        return <JoinOnboarding user={user} />;
+    }
+
+    if (user && authServices && isCoachRegisterPath) {
+        return <CoachRegisterPage user={user} />;
+    }
+
+    if (user && authServices && isCoachAccount && currentStatus === 'approved') {
+        return (
+            <Routes>
+                <Route path="/coach" element={<CoachHome user={user} />} />
+                <Route path="/coach/invite" element={<CoachInvitePage user={user} />} />
+                <Route path="/coach/clients" element={<CoachClientsList user={user} />} />
+                <Route path="/coach/clients/:athleteId" element={<CoachClientDetailPage user={user} />} />
+                <Route path="/register/coach" element={<CoachRegisterPage user={user} />} />
+                <Route path="*" element={<Navigate to="/coach" replace />} />
+            </Routes>
+        );
+    }
+
+    if (user && authServices && waitingForCoach && (isWaitingCoachPath || location.pathname === '/')) {
+        return <CoachWaitingScreen user={user} />;
     }
 
     if (showOnboarding) {
@@ -328,6 +377,8 @@ const App: FC = () => {
                 } />
 
                 <Route path="/settings/training-units" element={<TrainingUnitsSettingsScreen />} />
+
+                <Route path="/waiting-coach" element={<CoachWaitingScreen user={user} />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
