@@ -1,23 +1,29 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { Users, Home, UserPlus, LogOut } from 'lucide-react';
+import { Users, Home, UserPlus, LogOut, Shield } from 'lucide-react';
 import { auth } from '../../firebase';
+import { isAdminUser } from '../../constants/admin';
 
 interface CoachShellProps {
   children: ReactNode;
   title?: string;
   /** Wider content for rich client dashboards */
   wide?: boolean;
+  /** When set and matches ADMIN_UID, shows the all-users admin nav item */
+  userUid?: string;
 }
 
-export default function CoachShell({ children, title, wide = false }: CoachShellProps) {
+export default function CoachShell({ children, title, wide = false, userUid }: CoachShellProps) {
   const location = useLocation();
   const [loggingOut, setLoggingOut] = useState(false);
   const nav = [
     { to: '/coach', label: 'Inicio', icon: Home },
     { to: '/coach/invite', label: 'Invitar', icon: UserPlus },
     { to: '/coach/clients', label: 'Clientes', icon: Users },
+    ...(isAdminUser(userUid)
+      ? [{ to: '/coach/admin/users', label: 'Usuarios', icon: Shield }]
+      : []),
   ];
 
   const handleLogout = async () => {

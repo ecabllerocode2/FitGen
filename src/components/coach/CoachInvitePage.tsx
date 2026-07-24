@@ -45,7 +45,7 @@ export default function CoachInvitePage({ user }: CoachInvitePageProps) {
   };
 
   return (
-    <CoachShell title="Invitar cliente">
+    <CoachShell title="Invitar cliente" userUid={user.uid}>
       <p className="text-sm text-zinc-400 mb-6">
         Genera un enlace único. Tu cliente se registra con datos personales; tú completas la configuración técnica.
       </p>

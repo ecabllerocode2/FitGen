@@ -46,7 +46,7 @@ export default function CoachClientDetailPage({ user }: CoachClientDetailPagePro
   if (!athleteId) return null;
   if (!client && !error) {
     return (
-      <CoachShell title="Cliente" wide>
+      <CoachShell title="Cliente" wide userUid={user.uid}>
         <p className="text-zinc-500 text-sm">Cargando…</p>
       </CoachShell>
     );
@@ -90,7 +90,7 @@ export default function CoachClientDetailPage({ user }: CoachClientDetailPagePro
   };
 
   return (
-    <CoachShell title={clientName} wide>
+    <CoachShell title={clientName} wide userUid={user.uid}>
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
       {saveMessage && (
         <p className="text-sm text-lime-300/90 mb-4 rounded-xl border border-lime-500/20 bg-lime-500/5 px-4 py-3">
