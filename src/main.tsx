@@ -18,10 +18,20 @@ window.addEventListener('beforeinstallprompt', (e) => {
   console.log("Evento PWA capturado globalmente en main.tsx 🚀");
 });
 
+function isCriticalOnboardingFlowActive(): boolean {
+  try {
+    return sessionStorage.getItem('fitgen_onboarding_flow') === '1';
+  } catch {
+    return false;
+  }
+}
+
 // --- REGISTRO AUTOMÁTICO DEL SERVICE WORKER ---
 // - Comprueba actualizaciones periódicamente
 // - Aplica la actualización automáticamente y recarga cuando el nuevo SW toma control
 // - Basado en `virtual:pwa-register` de vite-plugin-pwa
+// - NUNCA recarga durante el guardado de perfil / generación de mesociclo (iOS aborta el fetch → "Load failed")
+let pendingSWUpdate = false;
 const updateSW = registerSW({
   onRegistered(registration: any) {
     if (!registration) return;
@@ -32,7 +42,11 @@ const updateSW = registerSW({
     window.addEventListener('beforeunload', () => clearInterval(periodic));
   },
   onNeedRefresh() {
-    // Aplicamos la actualización inmediatamente y recargamos cuando esté lista
+    if (isCriticalOnboardingFlowActive()) {
+      pendingSWUpdate = true;
+      console.log('[PWA] Update deferred — onboarding completion in progress');
+      return;
+    }
     updateSW?.(true);
   },
   onOfflineReady() {
@@ -45,6 +59,11 @@ if ('serviceWorker' in navigator) {
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (refreshing) return;
+    if (isCriticalOnboardingFlowActive()) {
+      pendingSWUpdate = true;
+      console.log('[PWA] Reload deferred — onboarding completion in progress');
+      return;
+    }
     refreshing = true;
     window.location.reload();
   });
@@ -53,7 +72,19 @@ if ('serviceWorker' in navigator) {
 // Cuando el usuario vuelve a la pestaña, comprobamos si hay nueva versión y la aplicamos
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
+    if (isCriticalOnboardingFlowActive()) return;
     try { updateSW?.(); } catch (err) { console.warn('Error al forzar check SW', err); }
+  }
+});
+
+// Apply deferred SW update once onboarding unlocks
+window.addEventListener('fitgen-onboarding-flow', () => {
+  if (!pendingSWUpdate || isCriticalOnboardingFlowActive()) return;
+  pendingSWUpdate = false;
+  try {
+    updateSW?.(true);
+  } catch (err) {
+    console.warn('[PWA] Deferred update failed', err);
   }
 });
 
