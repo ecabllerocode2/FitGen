@@ -45,7 +45,7 @@ export default function CoachTrainingProfileForm({
   const weeklyScheduleContext = DAYS.map((day) => ({
     day,
     canTrain: selectedDays.has(day),
-    externalLoad: 'none',
+    externalLoad: 'ninguna',
   }));
 
   const buildPayload = (): TrainingProfileFormState => ({
