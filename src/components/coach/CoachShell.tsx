@@ -30,7 +30,7 @@ export default function CoachShell({ children, title }: CoachShellProps) {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
+    <div className="h-[100dvh] bg-zinc-950 text-white flex flex-col overflow-hidden">
       <header className="border-b border-zinc-800 px-4 py-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-[0.2em] text-lime-500/80">FitGen Coach</p>
@@ -48,7 +48,9 @@ export default function CoachShell({ children, title }: CoachShellProps) {
         </button>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 py-6 max-w-lg mx-auto w-full">{children}</main>
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain touch-pan-y px-4 py-6 pb-28 max-w-lg mx-auto w-full">
+        {children}
+      </main>
 
       <nav className="border-t border-zinc-800 px-2 py-2 flex justify-around bg-zinc-900/80">
         {nav.map(({ to, label, icon: Icon }) => {

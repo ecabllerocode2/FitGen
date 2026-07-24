@@ -19,20 +19,18 @@ describe('weightUnits', () => {
     expect(snapInDisplayUnit(58.8, 'lb', LOAD_CONVENTIONS.BARBELL_TOTAL)).toBe(60);
   });
 
-  it('round-trips kg through lb display for barbell', () => {
+  it('round-trips kg through lb display for barbell using gym inventory', () => {
     const kg = 60;
     const displayLb = toDisplayWeight(kg, 'lb', LOAD_CONVENTIONS.BARBELL_TOTAL);
     expect(displayLb).toBe(130);
     const backKg = fromDisplayWeight(displayLb, 'lb', LOAD_CONVENTIONS.BARBELL_TOTAL);
-    expect(backKg).toBeCloseTo(lbToKg(130), 2);
+    expect(backKg).toBe(60);
   });
 
-  it('round-trips kg through lb display for dumbbells', () => {
-    const kg = 22.5;
-    const displayLb = toDisplayWeight(kg, 'lb', LOAD_CONVENTIONS.DUMBBELL_PER_HAND);
-    expect(displayLb).toBe(50);
-    const backKg = fromDisplayWeight(displayLb, 'lb', LOAD_CONVENTIONS.DUMBBELL_PER_HAND);
-    expect(backKg).toBeCloseTo(lbToKg(50), 2);
+  it('keeps per-hand dumbbell loads on gym inventory when displaying kg', () => {
+    expect(toDisplayWeight(20, 'kg', LOAD_CONVENTIONS.DUMBBELL_PER_HAND)).toBe(20);
+    expect(fromDisplayWeight(20, 'kg', LOAD_CONVENTIONS.DUMBBELL_PER_HAND)).toBe(20);
+    expect(toDisplayWeight(22.5, 'kg', LOAD_CONVENTIONS.DUMBBELL_PER_HAND)).toBe(22);
   });
 
   it('keeps kg display snapped in metric increments', () => {

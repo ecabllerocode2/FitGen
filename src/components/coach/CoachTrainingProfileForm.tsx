@@ -76,13 +76,7 @@ export default function CoachTrainingProfileForm({
   const isSetup = mode === 'setup';
 
   return (
-    <form
-      className="space-y-5"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void onSubmit(buildPayload(), isSetup);
-      }}
-    >
+    <div className="space-y-5 touch-pan-y">
       <section>
         <p className="text-xs text-zinc-500 mb-2">Objetivo</p>
         <div className="flex gap-2">
@@ -199,8 +193,9 @@ export default function CoachTrainingProfileForm({
       )}
 
       <button
-        type="submit"
+        type="button"
         disabled={loading || selectedDays.size < 2}
+        onClick={() => void onSubmit(buildPayload(), isSetup)}
         className="w-full rounded-xl bg-lime-500 text-zinc-900 font-semibold py-4 disabled:opacity-50"
       >
         {loading
@@ -209,6 +204,6 @@ export default function CoachTrainingProfileForm({
             ? 'Guardar y generar mesociclo'
             : 'Guardar cambios en el plan'}
       </button>
-    </form>
+    </div>
   );
 }
