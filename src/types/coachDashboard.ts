@@ -26,9 +26,43 @@ export interface CoachSessionSummary {
   setsCompleted: number;
   setsPrescribed: number;
   readinessEnergy: number | null;
+  readinessVolumeMultiplier?: number | null;
   jointPain: boolean;
   totalVolumeKg: number | null;
+  avgRir?: number | null;
+  failureSetCount?: number;
   exercises: SessionExerciseSummary[];
+}
+
+export interface CoachProgressCharts {
+  volumeBySession: Array<{
+    date: string | null;
+    label: string;
+    volumeKg: number | null;
+    avgRir: number | null;
+    failureSetCount: number;
+    setsCompleted: number;
+    setsPrescribed: number;
+    completionRate: number | null;
+    loadOver: number;
+    loadUnder: number;
+    loadOnTarget: number;
+  }>;
+  weightHistory: Array<{
+    date: string;
+    weightKg: number;
+    waistCm: number | null;
+    hipCm: number | null;
+  }>;
+  strengthHighlights: Array<{
+    exerciseId: string | null;
+    name: string;
+    e1RM: number;
+    previousE1RM: number | null;
+    lastWeightKg: number | null;
+    lastRir: number | null;
+    updatedAt: string | null;
+  }>;
 }
 
 export interface CoachLiveSession {
@@ -109,7 +143,11 @@ export interface CoachClientDashboardData {
     adherence28: number;
     daysSinceLastSession: number | null;
     expectedSessionsPerWeek: number;
+    failureCompoundCount?: number;
+    loadOverCount?: number;
+    loadUnderCount?: number;
   };
+  charts?: CoachProgressCharts;
   trainingProfile: {
     fitnessGoal: string | null;
     trainingDaysPerWeek: number | null;
