@@ -37,6 +37,10 @@ export interface CoachClientSummary {
   hasMesocycle: boolean;
   lastSessionAt: string | null;
   activatedAt?: string;
+  isTrainingNow?: boolean;
+  checkinDue?: boolean;
+  checkinOverdue?: boolean;
+  currentSessionFocus?: string | null;
 }
 
 export interface CoachInsight {

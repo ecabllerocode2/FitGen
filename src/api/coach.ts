@@ -1,12 +1,10 @@
 import { API_BASE_URL, authenticatedFetch } from '../config/api';
 import type {
-  CoachClientDetail,
   CoachClientSummary,
   CoachProfile,
-  CoachInsight,
-  CoachNote,
   ShareBranding,
 } from '../types/coach';
+import type { CoachClientDashboardData } from '../types/coachDashboard';
 
 const COACH_BASE = `${API_BASE_URL}/api/coach`;
 const JOIN_BASE = `${API_BASE_URL}/api/join`;
@@ -70,7 +68,7 @@ export async function fetchCoachClientDetail(token: string, athleteId: string) {
   const res = await authenticatedFetch(`${COACH_BASE}/clients/${athleteId}`, token);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error ?? 'Error al cargar cliente');
-  return json.client as CoachClientDetail;
+  return json.client as CoachClientDashboardData;
 }
 
 export async function saveClientTrainingProfile(

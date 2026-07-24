@@ -48,7 +48,7 @@ export default function CoachShell({ children, title }: CoachShellProps) {
         </button>
       </header>
 
-      <main className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">{children}</main>
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 py-6 max-w-lg mx-auto w-full">{children}</main>
 
       <nav className="border-t border-zinc-800 px-2 py-2 flex justify-around bg-zinc-900/80">
         {nav.map(({ to, label, icon: Icon }) => {
