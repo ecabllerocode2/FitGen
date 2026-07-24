@@ -758,7 +758,27 @@ const RestScreen: React.FC<RestScreenProps> = ({
     value: string,
     setter: (v: string) => void,
   ) => {
-    if (value === defaultsRef.current[field]) setter('');
+    const defaultValue = defaultsRef.current[field];
+    if (value === defaultValue) {
+      setter('');
+      return;
+    }
+    if (field === 'weight') {
+      const current = parseFloat(value);
+      const fallback = parseFloat(defaultValue);
+      if (!Number.isNaN(current) && !Number.isNaN(fallback) && current === fallback) {
+        setter('');
+      }
+    }
+  };
+
+  const restoreDefaultIfEmpty = (
+    field: 'reps' | 'weight' | 'rir',
+    value: string,
+    setter: (v: string) => void,
+  ) => {
+    if (value.trim() !== '') return;
+    setter(defaultsRef.current[field]);
   };
 
   const resolveFieldValue = (
@@ -880,12 +900,20 @@ const RestScreen: React.FC<RestScreenProps> = ({
                    </div>
                    <input 
                      type="number" 
+                     inputMode="decimal"
                      value={weight}
                      onFocus={() => clearIfDefault('weight', weight, setWeight)}
                      onChange={e => setWeight(e.target.value)}
                      onBlur={() => {
+                       if (weight.trim() === '') {
+                         restoreDefaultIfEmpty('weight', weight, setWeight);
+                         return;
+                       }
                        const parsed = parseFloat(weight);
-                       if (Number.isNaN(parsed)) return;
+                       if (Number.isNaN(parsed)) {
+                         restoreDefaultIfEmpty('weight', weight, setWeight);
+                         return;
+                       }
                        const snapped = snapInDisplayUnit(
                          parsed,
                          weightUnit,
@@ -1270,7 +1298,17 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
                   min="0"
                   value={localWeight}
                   onFocus={() => {
-                    if (localWeight === defaultWeightRef.current) setLocalWeight('');
+                    const defaultValue = defaultWeightRef.current;
+                    if (
+                      localWeight === defaultValue
+                      || (
+                        localWeight !== ''
+                        && defaultValue !== ''
+                        && parseFloat(localWeight) === parseFloat(defaultValue)
+                      )
+                    ) {
+                      setLocalWeight('');
+                    }
                   }}
                   onChange={(e) => {
                     setLocalWeight(e.target.value);
