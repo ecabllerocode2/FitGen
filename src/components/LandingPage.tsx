@@ -18,8 +18,8 @@ import {
 
 const BENCH_IMG_0 = '/landing-bench-0.webp';
 const BENCH_IMG_1 = '/landing-bench-1.webp';
-const AVATAR_MALE = '/assets/avatar/male/soft/stage-4.png';
-const AVATAR_FEMALE = '/assets/avatar/female/soft/stage-4.png';
+const AVATAR_MALE = '/assets/avatar/male/ectomorph/stage-3.png';
+const AVATAR_FEMALE = '/assets/avatar/female/slender/stage-2.png';
 
 function useReveal() {
   useEffect(() => {
@@ -417,7 +417,7 @@ const LandingPage = () => {
               No es una lista fija. Es un plan que piensa contigo.
             </h2>
             <p className="text-zinc-400 leading-relaxed mb-8">
-              Basado en cómo recuperas, cuánto duermes, si te duele algo y qué peso usaste la vez anterior. Si un día llegas agotado, FitGen suaviza la sesión. Si te pasas de intensidad, la próxima vez ajusta sola.
+              Basado en cómo recuperas, cuánto duermes, si te duele algo y qué peso usaste la vez anterior. Si un día llegas agotado, FitGen suaviza la sesión. Si te pasas de intensidad, la próxima vez ajusta sola. Todo anclado a evidencia científica y fisiología del ejercicio de alta calidad: progresar de forma sostenida, con menos riesgo de lesión.
             </p>
             <div className="space-y-4">
               {[
