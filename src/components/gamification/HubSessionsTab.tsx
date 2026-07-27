@@ -10,14 +10,16 @@ type HistoryItem = {
   completedAt: string | null;
   shareData: ShareCardData;
   completedLabel: string | null;
+  celebrationCardUrl?: string | null;
 };
 
 type HubSessionsTabProps = {
   loading: boolean;
   items: HistoryItem[];
+  onCardPersisted?: (sessionId: string, url: string, expiresAt: string | null) => void;
 };
 
-export default function HubSessionsTab({ loading, items }: HubSessionsTabProps) {
+export default function HubSessionsTab({ loading, items, onCardPersisted }: HubSessionsTabProps) {
   if (loading) {
     return <p className="text-sm text-zinc-500 py-8 text-center">Cargando historial…</p>;
   }
@@ -36,7 +38,8 @@ export default function HubSessionsTab({ loading, items }: HubSessionsTabProps) 
   return (
     <div className="space-y-4">
       <p className="text-sm text-zinc-400 leading-relaxed">
-        Tus sesiones recientes. Personaliza la tarjeta con foto, elige Feed o Story y comparte tu progreso.
+        Tus sesiones recientes. Personaliza la tarjeta con foto, elige Feed o Story y comparte tu
+        progreso. Las fotos se guardan 30 días con la tarjeta.
       </p>
       {items.map((item) => (
         <article
@@ -49,7 +52,15 @@ export default function HubSessionsTab({ loading, items }: HubSessionsTabProps) 
               <p className="text-xs text-zinc-500 mt-0.5 capitalize">{item.completedLabel}</p>
             )}
           </div>
-          <SessionShareCard data={item.shareData} showPhotoOptions showAspectToggle compact />
+          <SessionShareCard
+            data={item.shareData}
+            showPhotoOptions
+            showAspectToggle
+            compact
+            archivedSessionId={item.id}
+            persistedCardUrl={item.celebrationCardUrl}
+            onCardPersisted={(url, expiresAt) => onCardPersisted?.(item.id, url, expiresAt)}
+          />
         </article>
       ))}
     </div>
@@ -61,6 +72,7 @@ export function buildSessionHistoryItem(
     id: string;
     sessionFocus: string;
     completedAt: string | null;
+    celebrationCardUrl?: string | null;
   },
   shareData: ShareCardData,
   completed: Date | null,
@@ -70,6 +82,7 @@ export function buildSessionHistoryItem(
     sessionFocus: item.sessionFocus ?? 'Entrenamiento',
     completedAt: item.completedAt,
     shareData,
+    celebrationCardUrl: item.celebrationCardUrl ?? null,
     completedLabel: completed
       ? format(completed, 'EEEE d MMM · HH:mm', { locale: es })
       : null,

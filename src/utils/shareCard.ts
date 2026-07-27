@@ -73,6 +73,7 @@ function wrapTextCentered(
   const words = text.split(/\s+/);
   let line = '';
   let cursorY = y;
+  const previousAlign = ctx.textAlign;
   ctx.textAlign = 'center';
   for (const word of words) {
     const test = line ? `${line} ${word}` : word;
@@ -85,7 +86,7 @@ function wrapTextCentered(
     }
   }
   if (line) ctx.fillText(line, centerX, cursorY);
-  ctx.textAlign = 'left';
+  ctx.textAlign = previousAlign;
   return cursorY;
 }
 
@@ -311,6 +312,7 @@ function renderDesignShareCard(
   ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
   wrapTextCentered(ctx, data.sessionFocus, width / 2, centerY - 8, maxTextWidth, 34);
 
+  ctx.textAlign = 'center';
   if (weightLabel) {
     ctx.fillStyle = '#a3e635';
     ctx.font = 'bold 42px system-ui, -apple-system, sans-serif';

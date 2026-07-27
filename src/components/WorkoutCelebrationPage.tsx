@@ -1,11 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import SessionCelebration, { type SessionCelebrationData } from './SessionCelebration';
-import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
-import { renderShareCardCanvas } from '../utils/shareCard';
 import { fetchShareBranding } from '../api/coach';
-import { pickMotivationalPhrase } from '../utils/motivationalPhrases';
 import AchievementUnlockModal, {
   consumePendingAchievementUnlocks,
 } from './gamification/AchievementUnlockModal';
@@ -42,7 +39,6 @@ export function clearPendingCelebration() {
 export default function WorkoutCelebrationPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const uploadedRef = useRef(false);
   const [rewardsDelta, setRewardsDelta] = useState<GamificationDelta | null>(null);
   const [showRewards, setShowRewards] = useState(false);
   const [achievementUnlocks, setAchievementUnlocks] = useState<GamificationAchievementUnlock[]>(
@@ -81,43 +77,6 @@ export default function WorkoutCelebrationPage() {
     }
   }, [payload, navigate]);
 
-  useEffect(() => {
-    if (!payload?.archivedSessionId || uploadedRef.current) return;
-
-    const uploadCard = async () => {
-      uploadedRef.current = true;
-      try {
-        const user = getAuth().currentUser;
-        if (!user) return;
-        const token = await user.getIdToken();
-        const imageBase64 = await renderShareCardCanvas({
-          sessionFocus: payload.data.sessionFocus,
-          durationLabel: payload.data.durationLabel,
-          exerciseCount: payload.data.exerciseCount,
-          totalSets: payload.data.totalSets,
-          totalWeightKg: payload.data.totalWeightKg,
-          muscles: payload.data.muscles,
-          phrase: pickMotivationalPhrase(),
-          completedAt: payload.data.completedAt ?? new Date().toISOString(),
-          aspect: '4:5',
-          footerText,
-        });
-        await authenticatedFetch(API_ENDPOINTS.SESSION_CELEBRATION_CARD, token, {
-          method: 'POST',
-          body: JSON.stringify({
-            archivedSessionId: payload.archivedSessionId,
-            imageBase64,
-          }),
-        });
-      } catch (err) {
-        console.warn('No se pudo guardar tarjeta de celebración:', err);
-      }
-    };
-
-    const timer = window.setTimeout(uploadCard, 800);
-    return () => window.clearTimeout(timer);
-  }, [payload?.archivedSessionId, payload?.data, footerText]);
-
   if (!payload) return null;
 
   const previousSeasonPoints = Math.max(
@@ -143,6 +102,7 @@ export default function WorkoutCelebrationPage() {
         <SessionCelebration
           data={payload.data}
           footerText={footerText}
+          archivedSessionId={payload.archivedSessionId}
           onDone={() => {
             clearPendingCelebration();
             navigate('/', { replace: true });
