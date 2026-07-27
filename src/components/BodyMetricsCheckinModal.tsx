@@ -89,8 +89,8 @@ export default function BodyMetricsCheckinModal({
             </h2>
             <p className="text-sm text-zinc-500 mt-1">
               {isFull
-                ? 'Opcional: cadera, brazo y muslo. Nos ayuda a calibrar tu próximo bloque.'
-                : 'Toma ~20 segundos. Puedes omitirlo y hacerlo después.'}
+                ? 'Peso obligatorio. Cintura, cadera, brazo y muslo ayudan a ver progreso real entre bloques.'
+                : 'Toma ~20 segundos. Puedes omitirlo y hacerlo después desde tu progreso.'}
             </p>
           </div>
           <button

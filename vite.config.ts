@@ -70,5 +70,17 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary', 'json-summary'],
+      reportsDirectory: './coverage',
+      include: ['src/utils/mesocyclePhaseCopy.ts'],
+      thresholds: {
+        lines: 90,
+        functions: 90,
+        branches: 80,
+        statements: 90,
+      },
+    },
   },
 })

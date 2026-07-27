@@ -29,6 +29,7 @@ import {
   shouldShowBodyCheckinBanner,
 } from '../utils/bodyMetricsReminders';
 import type { BodyCheckinStatus, BodyMetricEntry } from '../types/bodyMetrics';
+import { getMesocyclePhaseCopy } from '../utils/mesocyclePhaseCopy';
 import ProgressArenaCard from './gamification/ProgressArenaCard';
 import AdminUsersPanel from './admin/AdminUsersPanel';
 import { resolveAvatarAppearance, resolveAvatarStartingBuildForDisplay } from '../utils/avatarAppearanceStorage';
@@ -62,9 +63,11 @@ interface SessionPlan {
 }
 interface Microcycle {
     week: number;
-    focus: string;
-    intensityRpe: string;
-    notes: string;
+    focus?: string;
+    phase?: string;
+    rirObjetivo?: number;
+    intensityRpe?: string;
+    notes?: string;
     sessions: SessionPlan[];
 }
 interface MesocycleData {
@@ -827,9 +830,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                 </div>
                 <DashboardProgress
                     value={(currentWeek / duration) * 100}
-                    label={currentMicrocycle?.focus ?? 'Mesociclo activo'}
+                    label={getMesocyclePhaseCopy(currentMicrocycle?.phase, currentMicrocycle?.focus).title}
                     meta={`${currentWeek} / ${duration}`}
                 />
+                {(() => {
+                    const phaseCopy = getMesocyclePhaseCopy(
+                        currentMicrocycle?.phase,
+                        currentMicrocycle?.focus,
+                    );
+                    return (
+                        <p className="mt-2 text-xs text-zinc-500 leading-relaxed max-w-md">
+                            {phaseCopy.explanation}
+                        </p>
+                    );
+                })()}
             </header>
 
             <main className="flex-1 flex flex-col min-h-0 px-6">
@@ -963,6 +977,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                                         <span className="text-lime-500/80 font-normal"> · activa</span>
                                     ) : null}
                                 </p>
+                                {(() => {
+                                    const viewed =
+                                        dashboardState.allMicrocycles?.[viewWeekIndex] as
+                                            | Microcycle
+                                            | undefined;
+                                    const copy = getMesocyclePhaseCopy(viewed?.phase, viewed?.focus);
+                                    return (
+                                        <>
+                                            <p className="text-xs font-medium text-lime-400/90 mt-1">
+                                                {copy.title}
+                                            </p>
+                                            <p className="text-[11px] text-zinc-500 mt-1 max-w-[16rem] mx-auto leading-relaxed">
+                                                {copy.explanation}
+                                            </p>
+                                        </>
+                                    );
+                                })()}
                             </div>
                             <button
                                 type="button"
@@ -1041,9 +1072,22 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                                     <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 mb-1">
                                         Semana {weekIdx + 1}
                                     </p>
-                                    <p className="text-sm font-semibold text-zinc-300 mb-3">
-                                        {microcycle.focus}
-                                    </p>
+                                    {(() => {
+                                        const copy = getMesocyclePhaseCopy(
+                                            microcycle.phase,
+                                            microcycle.focus,
+                                        );
+                                        return (
+                                            <>
+                                                <p className="text-sm font-semibold text-zinc-200 mb-1">
+                                                    {copy.title}
+                                                </p>
+                                                <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
+                                                    {copy.explanation}
+                                                </p>
+                                            </>
+                                        );
+                                    })()}
                                     <WeekSessionList days={rows} />
                                 </div>
                             );
