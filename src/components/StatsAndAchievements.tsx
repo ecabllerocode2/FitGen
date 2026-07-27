@@ -692,7 +692,23 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
               )}
 
               {activeTab === 'sessions' && (
-                <HubSessionsTab loading={loadingHistory} items={sessionHistoryItems} />
+                <HubSessionsTab
+                  loading={loadingHistory}
+                  items={sessionHistoryItems}
+                  onCardPersisted={(sessionId, url, expiresAt) => {
+                    setHistory((prev) =>
+                      prev.map((row) =>
+                        row.id === sessionId
+                          ? {
+                              ...row,
+                              celebrationCardUrl: url,
+                              celebrationCardExpiresAt: expiresAt,
+                            }
+                          : row,
+                      ),
+                    );
+                  }}
+                />
               )}
 
               {activeTab === 'ranking' && (

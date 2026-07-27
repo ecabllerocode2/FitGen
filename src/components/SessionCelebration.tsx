@@ -18,9 +18,15 @@ interface SessionCelebrationProps {
   data: SessionCelebrationData;
   onDone: () => void;
   footerText?: string;
+  archivedSessionId?: string | null;
 }
 
-export default function SessionCelebration({ data, onDone, footerText }: SessionCelebrationProps) {
+export default function SessionCelebration({
+  data,
+  onDone,
+  footerText,
+  archivedSessionId = null,
+}: SessionCelebrationProps) {
   const phrase = useMemo(() => pickMotivationalPhrase(), []);
   const { activeUnit } = useWeightUnit();
 
@@ -48,11 +54,17 @@ export default function SessionCelebration({ data, onDone, footerText }: Session
           <p className="text-[10px] uppercase tracking-[0.2em] text-lime-500/80 mb-2">Sesión completada</p>
           <h1 className="text-2xl font-bold text-white leading-snug">¡Buen trabajo!</h1>
           <p className="text-sm text-zinc-500 mt-2">
-            Personaliza tu tarjeta con foto opcional y compártela.
+            Personaliza tu tarjeta con foto opcional y compártela. Si agregas foto, se guarda 30 días.
           </p>
         </div>
 
-        <SessionShareCard data={shareData} showPhotoOptions showAspectToggle />
+        <SessionShareCard
+          data={shareData}
+          showPhotoOptions
+          showAspectToggle
+          archivedSessionId={archivedSessionId}
+          persistOnMount
+        />
 
         <div className="w-full mt-4">
           <AppPrimaryButton onClick={onDone}>Listo</AppPrimaryButton>
