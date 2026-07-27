@@ -1282,6 +1282,13 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
         <div className="mt-6 flex-1 flex flex-col min-h-0">
           <h1 className="text-2xl font-bold text-white leading-tight tracking-tight">{name}</h1>
 
+          {(exercise as FlexibleExercise & { isUnilateral?: boolean; unilateralCue?: string }).isUnilateral ? (
+            <p className="mt-2 text-sm text-sky-300/90 leading-snug">
+              {(exercise as FlexibleExercise & { unilateralCue?: string }).unilateralCue
+                ?? 'Ejercicio unilateral: primero un lado, luego el otro. El tiempo cubre ambos.'}
+            </p>
+          ) : null}
+
           <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-2">
             {duracion ? (
               <span className="text-3xl font-bold text-lime-400 tabular-nums">{duracion}</span>

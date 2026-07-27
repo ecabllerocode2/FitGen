@@ -727,6 +727,7 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
       <BodyMetricsCheckinModal
         open={showBodyCheckinModal}
         authToken={authToken}
+        kind="full"
         initialWeightKg={
           userProfile.profileData?.currentWeightKg ?? userProfile.profileData?.initialWeight
         }

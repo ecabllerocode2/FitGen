@@ -23,7 +23,7 @@ export default function ExerciseSwapReasonModal({
   onConfirm,
   loading = false,
 }: ExerciseSwapReasonModalProps) {
-  const [reason, setReason] = useState<SwapReason>('preference');
+  const [reason, setReason] = useState<SwapReason>('unavailable');
   const [excludeEquipment, setExcludeEquipment] = useState(true);
   const [useAsContinuity, setUseAsContinuity] = useState(true);
 

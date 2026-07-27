@@ -148,12 +148,16 @@ export function normalizeSession(raw: any, options: { weightUnit?: WeightUnit } 
         : item.duracion ?? (item.durationSeconds ? `${item.durationSeconds} seg` : item.reps),
       faseRAMP: item.faseRAMP ?? item.phase,
       patronMovimiento: item.patronMovimiento ?? item.movementPattern,
+      isUnilateral: item.isUnilateral === true,
+      unilateralCue: item.unilateralCue ?? null,
+      reps: item.reps,
       imageUrl: media.imageUrl ?? null,
       imageUrl2: media.imageUrl2 ?? null,
       url_img_0: media.imageUrl ?? null,
       url_img_1: media.imageUrl2 ?? null,
       descripcion: item.descripcion ?? item.instrucciones,
       correcciones: item.correcciones,
+      instrucciones: item.instrucciones ?? item.descripcion,
     };
     });
   }
