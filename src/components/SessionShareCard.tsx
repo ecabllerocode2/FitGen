@@ -10,6 +10,7 @@ import {
   type ShareCardData,
 } from '../utils/shareCard';
 import { API_ENDPOINTS, authenticatedFetch } from '../config/api';
+import { compressImageFileToDataUrl } from '../utils/compressImageFile';
 
 interface SessionShareCardProps {
   data: ShareCardData;
@@ -63,7 +64,10 @@ export default function SessionShareCard({
   const [previewUrl, setPreviewUrl] = useState<string>(persistedCardUrl ?? '');
   const [busy, setBusy] = useState<'download' | 'share' | null>(null);
   const [persistNotice, setPersistNotice] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadTimerRef = useRef<number | null>(null);
   const photoTouchedRef = useRef(false);
   const mountPersistedRef = useRef(false);
@@ -150,17 +154,31 @@ export default function SessionShareCard({
     return () => window.clearTimeout(timer);
   }, [persistNotice]);
 
-  const handlePhotoFile = (file: File | null) => {
-    if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        photoTouchedRef.current = true;
-        uploadGenRef.current += 1; // invalidate in-flight design-only uploads
-        setPhotoDataUrl(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+  const handlePhotoFile = async (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('Elige una imagen válida (JPG o PNG).');
+      return;
+    }
+
+    setPhotoError(null);
+    setPhotoBusy(true);
+    try {
+      // Compress before keeping in memory — full camera JPEGs OOM on low-RAM Android.
+      const dataUrl = await compressImageFileToDataUrl(file, { maxEdge: 1280, quality: 0.82 });
+      photoTouchedRef.current = true;
+      uploadGenRef.current += 1; // invalidate in-flight design-only uploads
+      setPhotoDataUrl(dataUrl);
+    } catch (err) {
+      console.warn('No se pudo procesar la foto:', err);
+      setPhotoError(
+        'No hay memoria suficiente para procesar esa foto. Prueba de nuevo o usa una imagen de la galería más pequeña.',
+      );
+    } finally {
+      setPhotoBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+    }
   };
 
   const handleDownload = async () => {
@@ -233,45 +251,63 @@ export default function SessionShareCard({
           )}
 
           {showPhotoOptions && (
-            <div className="flex gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => handlePhotoFile(e.target.files?.[0] ?? null)}
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700"
-              >
-                <ImagePlus className="w-4 h-4" />
-                Galería
-              </button>
-              <label className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 cursor-pointer">
-                <Camera className="w-4 h-4" />
-                Cámara
+            <div className="space-y-2">
+              <div className="flex gap-2">
                 <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    void handlePhotoFile(e.target.files?.[0] ?? null);
+                  }}
+                />
+                <input
+                  ref={cameraInputRef}
                   type="file"
                   accept="image/*"
                   capture="environment"
                   className="hidden"
-                  onChange={(e) => handlePhotoFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => {
+                    void handlePhotoFile(e.target.files?.[0] ?? null);
+                  }}
                 />
-              </label>
-              {photoDataUrl && (
                 <button
                   type="button"
-                  onClick={() => {
-                    photoTouchedRef.current = true;
-                    uploadGenRef.current += 1;
-                    setPhotoDataUrl(null);
-                  }}
-                  className="rounded-xl border border-zinc-800 px-3 text-xs text-zinc-500 hover:text-zinc-300"
+                  disabled={photoBusy}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 disabled:opacity-50"
                 >
-                  Quitar
+                  <ImagePlus className="w-4 h-4" />
+                  {photoBusy ? 'Procesando…' : 'Galería'}
                 </button>
+                <button
+                  type="button"
+                  disabled={photoBusy}
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 disabled:opacity-50"
+                >
+                  <Camera className="w-4 h-4" />
+                  Cámara
+                </button>
+                {photoDataUrl && (
+                  <button
+                    type="button"
+                    disabled={photoBusy}
+                    onClick={() => {
+                      photoTouchedRef.current = true;
+                      uploadGenRef.current += 1;
+                      setPhotoDataUrl(null);
+                      setPhotoError(null);
+                    }}
+                    className="rounded-xl border border-zinc-800 px-3 text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50"
+                  >
+                    Quitar
+                  </button>
+                )}
+              </div>
+              {photoError && (
+                <p className="text-[11px] text-amber-300/95 text-center leading-snug">{photoError}</p>
               )}
             </div>
           )}

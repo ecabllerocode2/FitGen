@@ -39,6 +39,14 @@ function inferConventionFromMetadata(exercise: Record<string, unknown>): LoadCon
     return LOAD_CONVENTIONS.DUMBBELL_PER_HAND;
   }
 
+  // Common DB isolation patterns whose id/name omit "dumbbell" (e.g. Seated_Side_Lateral_Raise).
+  if (
+    /lateral[_\s-]?raise|elevaci[oó]n\s+lateral|side[_\s-]?lateral/i.test(haystack)
+    && !/cable|polea|band|banda|machine|m[aá]quina/i.test(haystack)
+  ) {
+    return LOAD_CONVENTIONS.DUMBBELL_PER_HAND;
+  }
+
   if (/\bmancuerna\b|\bdumbbell\b|\bkettlebell\b/i.test(haystack)) {
     return exercise.isUnilateral === true
       ? LOAD_CONVENTIONS.UNILATERAL
@@ -60,6 +68,17 @@ export function resolveLoadConvention(exercise: object = {}): LoadConvention {
   const ex = exercise as Record<string, unknown>;
   const stored = ex.loadConvention;
   if (typeof stored === 'string' && Object.values(LOAD_CONVENTIONS).includes(stored as LoadConvention)) {
+    // Repair stale barbell_total on clear dumbbell-only catalog rows (e.g. lateral raise).
+    if (stored === LOAD_CONVENTIONS.BARBELL_TOTAL) {
+      const equipo = normalizeEquipo(ex.equipo).join(' ').toLowerCase();
+      const isDumbbellOnly = /mancuerna|dumbbell|kettlebell/i.test(equipo)
+        && !/barra|barbell|smith/i.test(equipo);
+      if (isDumbbellOnly || inferConventionFromMetadata(ex) === LOAD_CONVENTIONS.DUMBBELL_PER_HAND) {
+        return ex.isUnilateral === true
+          ? LOAD_CONVENTIONS.UNILATERAL
+          : LOAD_CONVENTIONS.DUMBBELL_PER_HAND;
+      }
+    }
     return stored as LoadConvention;
   }
   if (ex.loadMode === 'bodyweight' || ex.isBodyweight === true) {

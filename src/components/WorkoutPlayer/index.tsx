@@ -27,6 +27,7 @@ import WorkoutSessionPlanModal from '../WorkoutSessionPlanModal';
 import { storePendingCelebration, type PendingCelebration } from '../WorkoutCelebrationPage';
 import type { SessionCelebrationData } from '../SessionCelebration';
 import { storePendingAchievementUnlocks } from '../gamification/AchievementUnlockModal';
+import { storePendingRetentionMilestones } from '../gamification/RetentionMilestoneModal';
 import { storePendingRewardsDelta } from '../gamification/RewardsEarnedCelebration';
 import { computeMainBlockVolumeFromLogs } from '../../utils/sessionWeight';
 import {
@@ -342,6 +343,16 @@ const getExerciseDescription = (ex: FlexibleExercise): string | undefined => {
 // Detectar si el ejercicio tiene duración en tiempo (no reps)
 const getExerciseDurationInSeconds = (ex: FlexibleExercise): number | null => {
   if ((ex as any).isRampSet) return null;
+
+  const explicitDuration = (ex as any).durationSeconds;
+  if (typeof explicitDuration === 'number' && explicitDuration > 0) {
+    const perSide = (ex as any).perSideSeconds;
+    if ((ex as any).isUnilateral && typeof perSide === 'number' && perSide > 0) {
+      return perSide;
+    }
+    return explicitDuration;
+  }
+
   const repsField = ex.reps ?? ex.prescripcion?.reps;
   if (repsField && !ex.duracion && !ex.tiempo) return null;
 
@@ -1124,6 +1135,7 @@ interface ExerciseScreenProps {
   remainingSeconds: number;
   totalDurationSeconds: number;
   isTimedExercise: boolean;
+  unilateralPhaseLabel?: string | null;
   onComplete: () => void;
   onPauseToggle: () => void;
   onExit: () => void;
@@ -1167,6 +1179,7 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   remainingSeconds,
   totalDurationSeconds,
   isTimedExercise,
+  unilateralPhaseLabel = null,
   onComplete,
   onPauseToggle,
   onExit,
@@ -1284,8 +1297,11 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
 
           {(exercise as FlexibleExercise & { isUnilateral?: boolean; unilateralCue?: string }).isUnilateral ? (
             <p className="mt-2 text-sm text-sky-300/90 leading-snug">
+              {unilateralPhaseLabel ? (
+                <span className="block font-semibold text-sky-200 mb-1">{unilateralPhaseLabel}</span>
+              ) : null}
               {(exercise as FlexibleExercise & { unilateralCue?: string }).unilateralCue
-                ?? 'Ejercicio unilateral: primero un lado, luego el otro. El tiempo cubre ambos.'}
+                ?? 'Ejercicio unilateral: primero un lado, luego el otro.'}
             </p>
           ) : null}
 
@@ -1348,6 +1364,9 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
                   placeholder={weightUnitSuffix}
                   className="w-24 bg-zinc-900/80 border border-zinc-700 rounded-xl px-3 py-2 text-2xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-lime-500/50"
                 />
+                <span className="text-sm font-medium text-zinc-400 tabular-nums shrink-0">
+                  {weightUnitSuffix}
+                </span>
                 <WeightUnitToggle unit={activeUnit} onChange={setActiveUnit} />
                 <button type="button" onClick={() => setActiveTooltip('peso')} className="p-1">
                   <Info className="w-4 h-4 text-zinc-600" />
@@ -1434,8 +1453,14 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
             <div className="w-24 h-24 bg-lime-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
               <Check className="w-12 h-12 text-zinc-900" />
             </div>
-            <h3 className="text-3xl font-bold text-white mb-2">¡Ejercicio Completado!</h3>
-            <p className="text-zinc-400 mb-6">El tiempo ha finalizado</p>
+            <h3 className="text-3xl font-bold text-white mb-2">
+              {unilateralPhaseLabel === 'Cambia de lado' ? '¡Cambia de lado!' : '¡Ejercicio Completado!'}
+            </h3>
+            <p className="text-zinc-400 mb-6">
+              {unilateralPhaseLabel === 'Cambia de lado'
+                ? 'Prepárate para el otro lado'
+                : 'El tiempo ha finalizado'}
+            </p>
             <button
               onClick={() => {
                 console.log('👆 CONTINUAR clicked');
@@ -1556,6 +1581,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
   });
   const [exerciseRemainingSeconds, setExerciseRemainingSeconds] = useState(0);
   const [exerciseTotalSeconds, setExerciseTotalSeconds] = useState(0);
+  const [unilateralPhase, setUnilateralPhase] = useState<'A' | 'switch' | 'B' | null>(null);
   const [alarmActive, setAlarmActive] = useState(() => {
     if (checkpoint?.isResting && checkpoint.restEndsAt && !checkpoint.isPaused) {
       return remainingSecondsFromEndsAt(checkpoint.restEndsAt) <= 0;
@@ -1636,6 +1662,9 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     }
     if (result.gamificationDelta) {
       storePendingRewardsDelta(result.gamificationDelta);
+    }
+    if (Array.isArray(result.retentionMilestones) && result.retentionMilestones.length) {
+      storePendingRetentionMilestones(result.retentionMilestones);
     }
 
     if (result.weeklyAdjustment && Object.keys(result.weeklyAdjustment).length > 0) {
@@ -2007,22 +2036,29 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
   useEffect(() => {
     if (!currentExercise) return;
     
-    const duration = getExerciseDurationInSeconds(currentExercise.exercise);
+    const ex = currentExercise.exercise as FlexibleExercise & {
+      isUnilateral?: boolean;
+      perSideSeconds?: number;
+      sideSwitchRestSeconds?: number;
+    };
+    const perSide = ex.perSideSeconds;
+    const isUnilateralTimed = ex.isUnilateral && typeof perSide === 'number' && perSide > 0;
+
     void cancelTimerAlarm('exercise');
     exerciseEndsAtRef.current = null;
     exerciseAlarmFiredRef.current = false;
     lastExerciseTickSecondRef.current = null;
+    setUnilateralPhase(isUnilateralTimed ? 'A' : null);
+
+    const duration = getExerciseDurationInSeconds(ex);
 
     if (duration && duration > 0) {
       setExerciseTotalSeconds(duration);
       setExerciseRemainingSeconds(duration);
-      // Para ejercicios temporizados, empezar en pausa para que el usuario haga clic en PLAY
       setIsPaused(true);
-      console.log('⏱️ Timed exercise detected - starting PAUSED. User must click PLAY to start.');
     } else {
       setExerciseTotalSeconds(0);
       setExerciseRemainingSeconds(0);
-      // Para ejercicios por repeticiones, no pausar
       setIsPaused(false);
     }
   }, [currentExercise]);
@@ -2531,7 +2567,12 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     } else if (currentExercise.type === 'core') {
       restTime = currentExercise.exercise.prescripcion?.descanso || 20;
     } else if (currentExercise.type === 'warmup') {
-      restTime = 15;
+      const ex = currentExercise.exercise as FlexibleExercise & { isRampSet?: boolean; restAfterSeconds?: number };
+      if (ex.isRampSet && typeof ex.restAfterSeconds === 'number') {
+        restTime = ex.restAfterSeconds;
+      } else {
+        restTime = 15;
+      }
     } else {
       restTime = 30;
     }
@@ -2545,6 +2586,68 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     endRest();
     advanceToNext();
   }, [endRest, advanceToNext]);
+
+  const startUnilateralPhase = useCallback((
+    phase: 'switch' | 'B',
+    ex: FlexibleExercise & { perSideSeconds?: number; sideSwitchRestSeconds?: number },
+  ) => {
+    exerciseEndsAtRef.current = null;
+    exerciseAlarmFiredRef.current = false;
+    lastExerciseTickSecondRef.current = null;
+    void cancelTimerAlarm('exercise');
+
+    if (phase === 'switch') {
+      const switchSec = ex.sideSwitchRestSeconds ?? 5;
+      setUnilateralPhase('switch');
+      setExerciseTotalSeconds(switchSec);
+      setExerciseRemainingSeconds(switchSec);
+      setIsPaused(false);
+      return;
+    }
+
+    const perSide = ex.perSideSeconds ?? 45;
+    setUnilateralPhase('B');
+    setExerciseTotalSeconds(perSide);
+    setExerciseRemainingSeconds(perSide);
+    setIsPaused(false);
+  }, []);
+
+  const handleExerciseTimerAlarmDismiss = useCallback(() => {
+    stopAlarmSound();
+    setAlarmActive(false);
+
+    if (!currentExercise) return;
+
+    const ex = currentExercise.exercise as FlexibleExercise & {
+      isUnilateral?: boolean;
+      perSideSeconds?: number;
+      sideSwitchRestSeconds?: number;
+    };
+    const isUnilateralTimed = ex.isUnilateral
+      && typeof ex.perSideSeconds === 'number'
+      && ex.perSideSeconds > 0;
+
+    if (isUnilateralTimed && unilateralPhase === 'A') {
+      startUnilateralPhase('switch', ex);
+      return;
+    }
+    if (isUnilateralTimed && unilateralPhase === 'switch') {
+      startUnilateralPhase('B', ex);
+      return;
+    }
+
+    handleCompleteExercise();
+  }, [currentExercise, unilateralPhase, startUnilateralPhase, handleCompleteExercise]);
+
+  const unilateralPhaseLabel = (() => {
+    if (!currentExercise) return null;
+    const ex = currentExercise.exercise as FlexibleExercise & { isUnilateral?: boolean; perSideSeconds?: number };
+    if (!ex.isUnilateral || !ex.perSideSeconds) return null;
+    if (unilateralPhase === 'A') return 'Lado 1';
+    if (unilateralPhase === 'switch') return 'Cambia de lado';
+    if (unilateralPhase === 'B') return 'Lado 2';
+    return null;
+  })();
 
   const handleSkipRest = useCallback(() => {
     stopAlarmSound();
@@ -2930,7 +3033,8 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
           soundEnabled={soundEnabled}
           onToggleSound={() => setSoundEnabled(!soundEnabled)}
           alarmActive={alarmActive}
-          onDismissAlarm={handleDismissAlarm}
+          onDismissAlarm={handleExerciseTimerAlarmDismiss}
+          unilateralPhaseLabel={unilateralPhaseLabel}
           isBodyweight={isBodyweightExercise(currentExercise.exercise)}
           prescribedWeightKg={
             currentExercise.exercise.id

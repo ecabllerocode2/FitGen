@@ -26,7 +26,28 @@ function normalizeGamificationSummary(payload: unknown): GamificationSummary | n
     preferences: raw.preferences as GamificationSummary['preferences'],
     inventory: raw.inventory as GamificationSummary['inventory'],
     updatedAt: String(raw.updatedAt ?? new Date().toISOString()),
+    retentionFeed: (raw.retentionFeed as GamificationSummary['retentionFeed']) ?? [],
+    unreadRetentionCount: Number(raw.unreadRetentionCount ?? 0),
+    strengthHighlights: (raw.strengthHighlights as GamificationSummary['strengthHighlights']) ?? [],
   };
+}
+
+export async function markRetentionMilestonesRead(
+  token: string,
+  ids: string[],
+): Promise<boolean> {
+  if (!ids.length) return true;
+  try {
+    const query = encodeURIComponent(ids.join(','));
+    const response = await authenticatedFetch(
+      `${API_ENDPOINTS.GAMIFICATION_SUMMARY}?markRetentionRead=${query}`,
+      token,
+      { method: 'GET' },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function fetchGamificationSummary(token: string): Promise<GamificationSummary | null> {

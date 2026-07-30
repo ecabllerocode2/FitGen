@@ -6,10 +6,13 @@ import { fetchShareBranding } from '../api/coach';
 import AchievementUnlockModal, {
   consumePendingAchievementUnlocks,
 } from './gamification/AchievementUnlockModal';
+import RetentionMilestoneModal, {
+  consumePendingRetentionMilestones,
+} from './gamification/RetentionMilestoneModal';
 import RewardsEarnedCelebration, {
   consumePendingRewardsDelta,
 } from './gamification/RewardsEarnedCelebration';
-import type { GamificationAchievementUnlock, GamificationDelta } from '../types/gamification';
+import type { GamificationAchievementUnlock, GamificationDelta, RetentionMilestone } from '../types/gamification';
 
 const STORAGE_KEY = 'fitgen.pendingCelebration';
 
@@ -43,6 +46,9 @@ export default function WorkoutCelebrationPage() {
   const [showRewards, setShowRewards] = useState(false);
   const [achievementUnlocks, setAchievementUnlocks] = useState<GamificationAchievementUnlock[]>(
     () => consumePendingAchievementUnlocks(),
+  );
+  const [retentionMilestones, setRetentionMilestones] = useState<RetentionMilestone[]>(
+    () => consumePendingRetentionMilestones(),
   );
 
   const [footerText, setFooterText] = useState<string | undefined>(undefined);
@@ -111,8 +117,13 @@ export default function WorkoutCelebrationPage() {
       )}
       <AchievementUnlockModal
         achievements={achievementUnlocks}
-        open={!showRewards && achievementUnlocks.length > 0}
+        open={!showRewards && achievementUnlocks.length > 0 && retentionMilestones.length === 0}
         onClose={() => setAchievementUnlocks([])}
+      />
+      <RetentionMilestoneModal
+        milestones={retentionMilestones}
+        open={!showRewards && retentionMilestones.length > 0}
+        onClose={() => setRetentionMilestones([])}
       />
     </>
   );
