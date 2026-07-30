@@ -58,6 +58,30 @@ export interface GamificationSummary {
   preferences?: GamificationPreferences;
   inventory?: GamificationInventory;
   updatedAt: string;
+  retentionFeed?: RetentionMilestone[];
+  unreadRetentionCount?: number;
+  strengthHighlights?: StrengthHighlight[];
+}
+
+export interface RetentionMilestone {
+  id: string;
+  type: 'mesocycle_midpoint' | 'e1rm_gain' | 'e1rm_pr' | string;
+  title: string;
+  body: string;
+  dedupeKey?: string;
+  createdAt: string;
+  readAt: string | null;
+  meta?: Record<string, unknown>;
+}
+
+export interface StrengthHighlight {
+  exerciseId: string;
+  name: string;
+  e1RM: number;
+  previousE1RM: number | null;
+  movementPattern?: string;
+  lastWeightKg?: number;
+  updatedAt?: string;
 }
 
 export interface GamificationRewardBreakdown {

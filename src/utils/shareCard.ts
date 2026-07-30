@@ -105,15 +105,17 @@ function drawCoverImage(
 }
 
 function drawBrandGradient(ctx: CanvasRenderingContext2D, width: number, height: number) {
-  const gradient = ctx.createLinearGradient(0, height * 0.35, 0, height);
-  gradient.addColorStop(0, 'rgba(9, 9, 11, 0.05)');
-  gradient.addColorStop(0.45, 'rgba(9, 9, 11, 0.55)');
-  gradient.addColorStop(1, 'rgba(9, 9, 11, 0.94)');
+  // Keep upper/mid body visible; only gently darken toward the text band.
+  const gradient = ctx.createLinearGradient(0, height * 0.58, 0, height);
+  gradient.addColorStop(0, 'rgba(9, 9, 11, 0)');
+  gradient.addColorStop(0.4, 'rgba(9, 9, 11, 0.18)');
+  gradient.addColorStop(0.75, 'rgba(9, 9, 11, 0.42)');
+  gradient.addColorStop(1, 'rgba(9, 9, 11, 0.62)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
   const accent = ctx.createLinearGradient(0, 0, width, height);
-  accent.addColorStop(0, 'rgba(132, 204, 22, 0.08)');
+  accent.addColorStop(0, 'rgba(132, 204, 22, 0.06)');
   accent.addColorStop(1, 'rgba(132, 204, 22, 0)');
   ctx.fillStyle = accent;
   ctx.fillRect(0, 0, width, height);
@@ -252,12 +254,15 @@ function drawBottomScrim(
   panelStartRatio: number,
 ) {
   const panelStart = height * panelStartRatio;
-  const gradient = ctx.createLinearGradient(0, panelStart - 48, 0, height);
+  // Short fade just above the text block — legs stay readable above ~60%.
+  const fadeStart = Math.max(0, panelStart - 28);
+  const gradient = ctx.createLinearGradient(0, fadeStart, 0, height);
   gradient.addColorStop(0, 'rgba(9, 9, 11, 0)');
-  gradient.addColorStop(0.25, 'rgba(9, 9, 11, 0.72)');
-  gradient.addColorStop(1, 'rgba(9, 9, 11, 0.96)');
+  gradient.addColorStop(0.35, 'rgba(9, 9, 11, 0.35)');
+  gradient.addColorStop(0.7, 'rgba(9, 9, 11, 0.72)');
+  gradient.addColorStop(1, 'rgba(9, 9, 11, 0.88)');
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, panelStart - 48, width, height - panelStart + 48);
+  ctx.fillRect(0, fadeStart, width, height - fadeStart);
   return panelStart;
 }
 
@@ -366,7 +371,7 @@ function renderPhotoOverlayShareCard(
 ) {
   const pad = 28;
   const maxTextWidth = width - pad * 2;
-  drawBottomScrim(ctx, width, height, aspect === '9:16' ? 0.48 : 0.45);
+  drawBottomScrim(ctx, width, height, aspect === '9:16' ? 0.62 : 0.60);
   drawHeaderBadges(ctx, width, pad, aspect);
 
   const footerY = height - 22;
@@ -377,7 +382,7 @@ function renderPhotoOverlayShareCard(
   const dateLabel = formatCompletedLabel(data.completedAt);
   const weightLabel = formatVolumeKg(data.totalWeightKg ?? null, data.volumeUnit ?? 'kg');
   const bullets = buildBullets(data);
-  const panelStart = height * (aspect === '9:16' ? 0.48 : 0.45);
+  const panelStart = height * (aspect === '9:16' ? 0.62 : 0.60);
 
   ctx.font = 'bold 26px system-ui, -apple-system, sans-serif';
   const titleHeight = measureWrapText(ctx, data.sessionFocus, maxTextWidth, 32);
@@ -454,7 +459,9 @@ export async function renderShareCardCanvas(
 }
 
 export async function renderShareCardPreviewUrl(data: ShareCardData): Promise<string> {
-  return renderShareCardCanvas(data, 2);
+  // Lower scale with photos to keep peak RAM down on mid/low Android devices.
+  const scale = data.photoDataUrl ? 1 : 2;
+  return renderShareCardCanvas(data, scale);
 }
 
 /** Sync legacy renderer — delegates to design-only card. */

@@ -13,7 +13,7 @@ import { format, differenceInDays, parseISO } from 'date-fns';
 import { fetchRecentSessions, type RecentSessionRow } from '../utils/recentSessions';
 import { db } from '../firebase';
 import { pickMotivationalPhraseForDate } from '../utils/motivationalPhrases';
-import { fetchGamificationSummary } from '../api/gamification';
+import { fetchGamificationSummary, markRetentionMilestonesRead } from '../api/gamification';
 import type { AchievementSection, AchievementView, GamificationSummary } from '../types/gamification';
 import { achievementIcon } from '../utils/achievementIcons';
 import { computeMainBlockVolumeKg, resolveProfileBodyWeightKg } from '../utils/sessionWeight';
@@ -28,6 +28,8 @@ import HubRankingTab from './gamification/HubRankingTab';
 import HubShopTab from './gamification/HubShopTab';
 import BodyMetricsTrendSection from './BodyMetricsTrendSection';
 import BodyMetricsCheckinModal from './BodyMetricsCheckinModal';
+import StrengthProgressSection from './StrengthProgressSection';
+import RetentionFeedBanner from './RetentionFeedBanner';
 import { fetchBodyCheckinStatus } from '../api/bodyMetrics';
 import type { BodyMetricEntry } from '../types/bodyMetrics';
 import type { AvatarAppearance, AvatarStartingBuild } from '@fitgen/visual';
@@ -570,6 +572,23 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
   const seasonId = gamification?.counters.currentSeasonId ?? seedGamification?.counters.currentSeasonId ?? '2026-07';
   const seasonSessions = gamification?.counters.seasonSessionsCompleted ?? seedGamification?.counters.seasonSessionsCompleted ?? 0;
   const seasonWeeksPerfect = gamification?.counters.seasonWeeksPerfect ?? seedGamification?.counters.seasonWeeksPerfect ?? 0;
+  const strengthHighlights = gamification?.strengthHighlights ?? [];
+  const retentionFeed = gamification?.retentionFeed ?? [];
+
+  const handleDismissRetentionBanner = async (id: string) => {
+    const ok = await markRetentionMilestonesRead(authToken, [id]);
+    if (!ok) return;
+    setGamification((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        retentionFeed: (current.retentionFeed ?? []).map((item) =>
+          item.id === id ? { ...item, readAt: new Date().toISOString() } : item,
+        ),
+        unreadRetentionCount: Math.max(0, (current.unreadRetentionCount ?? 0) - 1),
+      };
+    });
+  };
 
   return (
     <div className="fixed inset-0 bg-zinc-950/95 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -636,6 +655,10 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
             <>
               {activeTab === 'home' && (
                 <>
+                  <RetentionFeedBanner
+                    items={retentionFeed}
+                    onDismiss={handleDismissRetentionBanner}
+                  />
                   <HubHomeTab
                     athleteName={userProfile.profileData?.name || 'Atleta'}
                     fitCoins={fitCoins}
@@ -664,7 +687,8 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
                     onGoAchievements={() => setActiveTab('achievements')}
                     onGoSeason={() => setActiveTab('season')}
                   />
-                  <div className="mt-5">
+                  <div className="mt-5 space-y-5">
+                    <StrengthProgressSection highlights={strengthHighlights} />
                     <BodyMetricsTrendSection
                       entries={bodyMetricEntries}
                       onRegister={() => setShowBodyCheckinModal(true)}
