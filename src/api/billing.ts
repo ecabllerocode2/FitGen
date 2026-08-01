@@ -61,3 +61,19 @@ export async function syncAthleteSubscription(token: string): Promise<{
   }
   return json;
 }
+
+export async function cancelAthleteSubscription(token: string): Promise<{
+  success: boolean;
+  subscriptionStatus: string | null;
+  message?: string;
+}> {
+  const res = await authenticatedFetch(`${BILLING_BASE}/mp/cancel`, token, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error ?? 'No se pudo cancelar la suscripción');
+  }
+  return json;
+}
