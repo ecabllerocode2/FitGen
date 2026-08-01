@@ -21,7 +21,10 @@ export async function fetchBillingStatus(token: string): Promise<BillingStatus> 
   return json as BillingStatus;
 }
 
-export async function createAthleteSubscription(token: string): Promise<{
+export async function createAthleteSubscription(
+  token: string,
+  options?: { payerEmail?: string },
+): Promise<{
   initPoint: string;
   alreadyActive?: boolean;
   preapprovalId?: string;
@@ -29,7 +32,9 @@ export async function createAthleteSubscription(token: string): Promise<{
 }> {
   const res = await authenticatedFetch(`${BILLING_BASE}/mp/create-subscription`, token, {
     method: 'POST',
-    body: JSON.stringify({}),
+    body: JSON.stringify({
+      payerEmail: options?.payerEmail?.trim() || undefined,
+    }),
   });
   const json = await res.json();
   if (!res.ok) {
