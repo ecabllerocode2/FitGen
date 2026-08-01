@@ -1,7 +1,11 @@
 import { useEffect, useState, type FC } from 'react';
 import type { User } from 'firebase/auth';
 import { ArrowRight, Loader2 } from 'lucide-react';
-import { createAthleteSubscription, syncAthleteSubscription } from '../api/billing';
+import {
+  createAthleteSubscription,
+  syncAthleteSubscription,
+  validateBillingCoupon,
+} from '../api/billing';
 
 type Props = {
   user: User;
@@ -28,9 +32,19 @@ function formatDate(iso?: string | null) {
 const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payerEmail, setPayerEmail] = useState(user.email ?? '');
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    amountMxn: number;
+    remaining?: number;
+  } | null>(null);
   const endedLabel = formatDate(trialEndsAt);
+
+  const displayAmount = appliedCoupon?.amountMxn ?? amountMxn;
+  const hasDiscount = Boolean(appliedCoupon && appliedCoupon.amountMxn < amountMxn);
 
   const syncAfterReturn = async () => {
     setSyncing(true);
@@ -66,6 +80,44 @@ const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.uid]);
 
+  const applyCoupon = async () => {
+    const code = couponInput.trim();
+    if (!code) {
+      setAppliedCoupon(null);
+      setError('Escribe un código de cupón.');
+      return;
+    }
+
+    setValidatingCoupon(true);
+    setError(null);
+    try {
+      const token = await user.getIdToken();
+      const result = await validateBillingCoupon(token, code);
+      if (!result.valid || !result.amountMxn || !result.code) {
+        setAppliedCoupon(null);
+        setError(result.error ?? 'Cupón no válido');
+        return;
+      }
+      setAppliedCoupon({
+        code: result.code,
+        amountMxn: result.amountMxn,
+        remaining: result.remaining,
+      });
+      setCouponInput(result.code);
+    } catch (err) {
+      setAppliedCoupon(null);
+      setError(err instanceof Error ? err.message : 'No se pudo validar el cupón');
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const clearCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setError(null);
+  };
+
   const startCheckout = async () => {
     const email = payerEmail.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -77,7 +129,10 @@ const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
     setError(null);
     try {
       const token = await user.getIdToken();
-      const result = await createAthleteSubscription(token, { payerEmail: email });
+      const result = await createAthleteSubscription(token, {
+        payerEmail: email,
+        couponCode: appliedCoupon?.code || couponInput.trim() || undefined,
+      });
       if (result.alreadyActive) {
         window.location.replace('/');
         return;
@@ -115,15 +170,24 @@ const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
 
         <div className="rounded-3xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-8 ring-1 ring-white/5">
           <div className="flex items-baseline justify-center gap-2 mb-1">
+            {hasDiscount ? (
+              <span className="text-2xl font-semibold text-zinc-500 line-through tabular-nums">
+                ${amountMxn}
+              </span>
+            ) : null}
             <span
               className="text-5xl font-extrabold tabular-nums tracking-tight"
               style={{ fontFamily: 'Syne, sans-serif' }}
             >
-              ${amountMxn}
+              ${displayAmount}
             </span>
             <span className="text-zinc-500 text-sm font-medium">MXN / mes</span>
           </div>
-          <p className="text-center text-zinc-400 text-sm mb-6">Cancela cuando quieras</p>
+          <p className="text-center text-zinc-400 text-sm mb-6">
+            {hasDiscount
+              ? `Cupón ${appliedCoupon?.code} aplicado · precio especial mientras tu suscripción esté activa`
+              : 'Cancela cuando quieras'}
+          </p>
 
           <ul className="space-y-2 text-sm text-zinc-300 mb-6">
             {[
@@ -149,10 +213,53 @@ const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
             placeholder="el email con el que pagas en MP"
             className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-sm text-white placeholder:text-zinc-600 mb-2 focus:outline-none focus:border-lime-500"
           />
-          <p className="text-[11px] text-zinc-500 leading-relaxed mb-6">
+          <p className="text-[11px] text-zinc-500 leading-relaxed mb-5">
             Debe ser exactamente el mismo email con el que inicias sesión o pagas en Mercado Pago.
             Si no coincide, MP rechaza el cobro.
           </p>
+
+          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">
+            Código de cupón <span className="normal-case tracking-normal font-normal">(opcional)</span>
+          </label>
+          <div className="flex gap-2 mb-2">
+            <input
+              type="text"
+              value={couponInput}
+              onChange={(e) => {
+                setCouponInput(e.target.value.toUpperCase());
+                if (appliedCoupon) setAppliedCoupon(null);
+              }}
+              placeholder="Ej. FITGEN125"
+              autoComplete="off"
+              className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-lime-500 uppercase tracking-wide"
+            />
+            {appliedCoupon ? (
+              <button
+                type="button"
+                onClick={clearCoupon}
+                disabled={loading || syncing}
+                className="shrink-0 px-3 rounded-xl border border-zinc-700 text-sm text-zinc-300 hover:border-zinc-500 disabled:opacity-60"
+              >
+                Quitar
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void applyCoupon()}
+                disabled={loading || syncing || validatingCoupon || !couponInput.trim()}
+                className="shrink-0 px-3 rounded-xl border border-lime-500/40 text-sm font-semibold text-lime-400 hover:bg-lime-500/10 disabled:opacity-60"
+              >
+                {validatingCoupon ? '…' : 'Aplicar'}
+              </button>
+            )}
+          </div>
+          {appliedCoupon?.remaining != null ? (
+            <p className="text-[11px] text-lime-500/80 mb-5">
+              Cupón válido · quedan {appliedCoupon.remaining} usos
+            </p>
+          ) : (
+            <p className="text-[11px] text-zinc-600 mb-5">Si tienes un código, aplícalo antes de pagar.</p>
+          )}
 
           {syncing && (
             <p className="text-sm text-lime-400 mb-4 text-center">Confirmando tu pago con Mercado Pago…</p>

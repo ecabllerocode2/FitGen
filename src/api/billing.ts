@@ -14,6 +14,16 @@ export type BillingStatus = {
   mpPreapprovalId: string | null;
 };
 
+export type CouponValidation = {
+  valid: boolean;
+  code?: string;
+  amountMxn?: number;
+  remaining?: number;
+  label?: string;
+  error?: string;
+  codeError?: string;
+};
+
 export async function fetchBillingStatus(token: string): Promise<BillingStatus> {
   const res = await authenticatedFetch(`${BILLING_BASE}/status`, token);
   const json = await res.json();
@@ -21,19 +31,40 @@ export async function fetchBillingStatus(token: string): Promise<BillingStatus> 
   return json as BillingStatus;
 }
 
+export async function validateBillingCoupon(
+  token: string,
+  couponCode: string,
+): Promise<CouponValidation> {
+  const res = await authenticatedFetch(`${BILLING_BASE}/coupons/validate`, token, {
+    method: 'POST',
+    body: JSON.stringify({ couponCode: couponCode.trim() }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    return {
+      valid: false,
+      error: json.error ?? 'Cupón no válido',
+      codeError: json.code,
+    };
+  }
+  return json as CouponValidation;
+}
+
 export async function createAthleteSubscription(
   token: string,
-  options?: { payerEmail?: string },
+  options?: { payerEmail?: string; couponCode?: string },
 ): Promise<{
   initPoint: string;
   alreadyActive?: boolean;
   preapprovalId?: string;
   amountMxn?: number;
+  couponCode?: string | null;
 }> {
   const res = await authenticatedFetch(`${BILLING_BASE}/mp/create-subscription`, token, {
     method: 'POST',
     body: JSON.stringify({
       payerEmail: options?.payerEmail?.trim() || undefined,
+      couponCode: options?.couponCode?.trim() || undefined,
     }),
   });
   const json = await res.json();
