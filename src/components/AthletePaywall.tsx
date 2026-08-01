@@ -28,14 +28,21 @@ function formatDate(iso?: string | null) {
 const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [payerEmail, setPayerEmail] = useState(user.email ?? '');
   const endedLabel = formatDate(trialEndsAt);
 
   const startCheckout = async () => {
+    const email = payerEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Escribe el email con el que vas a pagar en Mercado Pago.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const token = await user.getIdToken();
-      const result = await createAthleteSubscription(token);
+      const result = await createAthleteSubscription(token, { payerEmail: email });
       if (result.alreadyActive) {
         window.location.reload();
         return;
@@ -83,7 +90,7 @@ const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
           </div>
           <p className="text-center text-zinc-400 text-sm mb-6">Cancela cuando quieras</p>
 
-          <ul className="space-y-2 text-sm text-zinc-300 mb-8">
+          <ul className="space-y-2 text-sm text-zinc-300 mb-6">
             {[
               'Plan adaptativo según cómo llegas al gym',
               'Arena, progreso y avatar',
@@ -95,6 +102,22 @@ const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
               </li>
             ))}
           </ul>
+
+          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">
+            Email de Mercado Pago
+          </label>
+          <input
+            type="email"
+            value={payerEmail}
+            onChange={(e) => setPayerEmail(e.target.value)}
+            autoComplete="email"
+            placeholder="el email con el que pagas en MP"
+            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-sm text-white placeholder:text-zinc-600 mb-2 focus:outline-none focus:border-lime-500"
+          />
+          <p className="text-[11px] text-zinc-500 leading-relaxed mb-6">
+            Debe ser exactamente el mismo email con el que inicias sesión o pagas en Mercado Pago.
+            Si no coincide, MP rechaza el cobro.
+          </p>
 
           {error && (
             <p className="text-sm text-red-400 mb-4 text-center leading-relaxed">{error}</p>
