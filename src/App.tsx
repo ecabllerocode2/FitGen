@@ -33,6 +33,8 @@ import CoachAdminUsersPage from './components/coach/CoachAdminUsersPage';
 import CoachAdminUserDetailPage from './components/coach/CoachAdminUserDetailPage';
 import JoinOnboarding from './components/join/JoinOnboarding';
 import CoachWaitingScreen from './components/join/CoachWaitingScreen';
+import AthletePaywall from './components/AthletePaywall';
+import { fetchBillingStatus } from './api/billing';
 import type { ProfileCompleteness } from './types/coach';
 
 // ====================================================================
@@ -41,6 +43,13 @@ import type { ProfileCompleteness } from './types/coach';
 
 type UserStatus = 'pending_onboarding' | 'pending_approval' | 'approved';
 type AppStatus = 'unauthenticated' | 'loading_profile' | UserStatus;
+type SubscriptionStatus =
+    | 'trialing'
+    | 'pending_checkout'
+    | 'active'
+    | 'past_due'
+    | 'canceled'
+    | 'expired';
 
 export interface UserProfile extends DocumentData {
     status: UserStatus;
@@ -55,6 +64,11 @@ export interface UserProfile extends DocumentData {
     currentSession?: any;
     currentMesocycle?: any; // Añadido para evitar errores de tipo en el guard de ruta
     exercisePreferences?: ExercisePreferences;
+    subscriptionStatus?: SubscriptionStatus;
+    trialStartedAt?: string;
+    trialEndsAt?: string;
+    subscriptionAmountMxn?: number;
+    mpPreapprovalId?: string;
     profileData?: {
         name: string;
         age: number;
@@ -68,6 +82,26 @@ export interface UserProfile extends DocumentData {
         trainingDaysPerWeek: number;
         [key: string]: any;
     };
+}
+
+function isDirectAthlete(profile: UserProfile | null | undefined): boolean {
+    if (!profile) return false;
+    if (profile.accountType === 'coach') return false;
+    if (profile.athleteOrigin === 'coached') return false;
+    return true;
+}
+
+/** Independent athletes need active trial or paid subscription. */
+function athleteNeedsPaywall(profile: UserProfile): boolean {
+    if (!isDirectAthlete(profile)) return false;
+    const status = profile.subscriptionStatus;
+    if (!status) return false; // wait for billing bootstrap
+    if (status === 'active' || status === 'past_due') return false;
+    if (status === 'trialing') {
+        if (!profile.trialEndsAt) return false;
+        return new Date(profile.trialEndsAt).getTime() <= Date.now();
+    }
+    return true;
 }
 
 // ====================================================================
@@ -213,6 +247,27 @@ const App: FC = () => {
         return () => { if (unsubscribeProfile) unsubscribeProfile(); };
     }, [user, authServices]);
 
+    // Bootstrap trial/billing fields for existing direct athletes (idempotent server-side).
+    useEffect(() => {
+        if (!user || !userProfile) return;
+        if (userProfile.status !== 'approved') return;
+        if (!isDirectAthlete(userProfile)) return;
+        if (userProfile.subscriptionStatus) return;
+
+        let cancelled = false;
+        (async () => {
+            try {
+                const token = await user.getIdToken();
+                await fetchBillingStatus(token);
+            } catch (err) {
+                if (!cancelled) console.error('billing bootstrap:', err);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [user, userProfile?.status, userProfile?.subscriptionStatus, userProfile?.athleteOrigin, userProfile?.accountType]);
+
     // Lógica de Estado
     const currentStatus: AppStatus = useMemo(() => {
         if (!isAuthReady) return 'unauthenticated';
@@ -299,6 +354,22 @@ const App: FC = () => {
 
     if (currentStatus === 'pending_approval' && user) {
         return <PendingAccessView user={user} />;
+    }
+
+    // Paywall día 15+ para atletas independientes
+    if (
+        currentStatus === 'approved' &&
+        user &&
+        userProfile &&
+        athleteNeedsPaywall(userProfile)
+    ) {
+        return (
+            <AthletePaywall
+                user={user}
+                trialEndsAt={userProfile.trialEndsAt}
+                amountMxn={userProfile.subscriptionAmountMxn ?? 249}
+            />
+        );
     }
 
     // 4. APROBADO: CONFIGURACIÓN DE RUTAS
