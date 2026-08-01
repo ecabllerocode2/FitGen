@@ -24,6 +24,7 @@ import LevelUpCelebration from './LevelUpCelebration';
 import StatsAndAchievements, { type HubTab } from './StatsAndAchievements';
 import BodyMetricsCheckinModal from './BodyMetricsCheckinModal';
 import { fetchBodyCheckinStatus } from '../api/bodyMetrics';
+import { cancelAthleteSubscription } from '../api/billing';
 import {
   bodyCheckinBannerMessage,
   shouldShowBodyCheckinBanner,
@@ -106,6 +107,9 @@ interface UserProfile {
     };
     plan?: 'free';
     planStatus?: string;
+    subscriptionStatus?: string;
+    lifetimeAccess?: boolean;
+    mpPreapprovalId?: string;
     currentMesocycle?: CurrentMesocycleData;
     currentSession?: CurrentSessionData;
     name?: string;
@@ -501,6 +505,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
 
     // C. Acciones
     const userName = userProfile?.profileData?.name || userProfile?.name || 'Atleta';
+    const canCancelSubscription =
+        !userProfile?.lifetimeAccess &&
+        (userProfile?.subscriptionStatus === 'active' || userProfile?.subscriptionStatus === 'past_due') &&
+        Boolean(userProfile?.mpPreapprovalId);
+
+    const handleCancelSubscription = useCallback(async () => {
+        const token = await user.getIdToken();
+        await cancelAthleteSubscription(token);
+        await user.getIdToken(true);
+    }, [user]);
 
     const avatarAppearance = useMemo(
         () => {
@@ -720,6 +734,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         onLogout={handleLogout}
                         onNavigateToProfile={handleNavigateToProfile}
                         onOpenAdmin={() => setShowAdminPanel(true)}
+                        canCancelSubscription={canCancelSubscription}
+                        onCancelSubscription={handleCancelSubscription}
                     />
                 </header>
                 <div className="flex-1 flex flex-col items-center justify-center px-8">
@@ -825,6 +841,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                             onLogout={handleLogout}
                             onNavigateToProfile={handleNavigateToProfile}
                             onOpenAdmin={() => setShowAdminPanel(true)}
+                            canCancelSubscription={canCancelSubscription}
+                            onCancelSubscription={handleCancelSubscription}
                         />
                     </div>
                 </div>
