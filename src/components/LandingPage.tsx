@@ -260,6 +260,7 @@ const LandingPage = () => {
             <a href="#arena" className="hover:text-white transition">Arena</a>
             <a href="#avatares" className="hover:text-white transition">Progreso</a>
             <a href="#coaches" className="hover:text-white transition">Coaches</a>
+            <a href="#precios" className="hover:text-white transition">Precios</a>
             <a href="#caminos" className="hover:text-white transition">Cómo empezar</a>
           </div>
           <div className="flex items-center gap-3">
@@ -612,6 +613,59 @@ const LandingPage = () => {
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="precios" className="px-5 py-20">
+        <div
+          data-reveal
+          className="opacity-0 translate-y-6 transition-all duration-700 max-w-xl mx-auto"
+        >
+          <p className="text-[10px] uppercase tracking-[0.25em] text-lime-500/80 mb-3 text-center">Para atletas</p>
+          <h2
+            className="text-3xl md:text-4xl font-bold text-white leading-tight mb-3 text-center"
+            style={{ fontFamily: 'Syne, sans-serif' }}
+          >
+            Entrena con FitGen sin compromiso al inicio.
+          </h2>
+          <p className="text-zinc-400 text-center text-sm leading-relaxed mb-8 max-w-md mx-auto">
+            14 días de prueba gratis. A partir del día 15, $249 MXN al mes. Cancela cuando quieras.
+          </p>
+          <div className="rounded-3xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-8 ring-1 ring-white/5">
+            <div className="flex items-baseline justify-center gap-2 mb-1">
+              <span
+                className="text-5xl font-extrabold text-white tabular-nums tracking-tight"
+                style={{ fontFamily: 'Syne, sans-serif' }}
+              >
+                $249
+              </span>
+              <span className="text-zinc-500 text-sm font-medium">MXN / mes</span>
+            </div>
+            <p className="text-center text-lime-400 text-sm font-semibold mb-6">14 días de prueba gratis</p>
+            <ul className="space-y-3 text-sm text-zinc-300 mb-8">
+              {[
+                'Plan que se adapta a cómo llegas cada día',
+                'Arena, temporadas y recompensas al entrenar',
+                'Progreso visual con tu avatar',
+                'App instalable en iOS y Android',
+              ].map((t) => (
+                <li key={t} className="flex gap-2">
+                  <Check className="w-4 h-4 text-lime-400 shrink-0 mt-0.5" />
+                  <span>{t}</span>
+                </li>
+              ))}
+            </ul>
+            <Link
+              to="/register"
+              className="flex items-center justify-center gap-2 w-full px-6 py-3.5 rounded-xl bg-lime-500 hover:bg-lime-400 text-zinc-950 font-extrabold transition"
+            >
+              Empezar prueba gratis
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <p className="text-center text-xs text-zinc-500 mt-5 leading-relaxed">
+              Si te invita un coach, usa solo tu enlace <span className="text-zinc-400">/join/…</span> — este plan es para atletas independientes.
+            </p>
           </div>
         </div>
       </section>
