@@ -44,3 +44,20 @@ export async function createAthleteSubscription(
   }
   return json;
 }
+
+export async function syncAthleteSubscription(token: string): Promise<{
+  allowed: boolean;
+  subscriptionStatus: string | null;
+  synced?: boolean;
+  alreadyActive?: boolean;
+}> {
+  const res = await authenticatedFetch(`${BILLING_BASE}/mp/sync`, token, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error ?? 'No se pudo sincronizar la suscripción');
+  }
+  return json;
+}
