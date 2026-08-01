@@ -69,6 +69,7 @@ export interface UserProfile extends DocumentData {
     trialEndsAt?: string;
     subscriptionAmountMxn?: number;
     mpPreapprovalId?: string;
+    lifetimeAccess?: boolean;
     profileData?: {
         name: string;
         age: number;
@@ -94,6 +95,7 @@ function isDirectAthlete(profile: UserProfile | null | undefined): boolean {
 /** Independent athletes need active trial or paid subscription. */
 function athleteNeedsPaywall(profile: UserProfile): boolean {
     if (!isDirectAthlete(profile)) return false;
+    if (profile.lifetimeAccess === true) return false;
     const status = profile.subscriptionStatus;
     if (!status) return false; // wait for billing bootstrap
     if (status === 'active' || status === 'past_due') return false;
@@ -252,6 +254,7 @@ const App: FC = () => {
         if (!user || !userProfile) return;
         if (userProfile.status !== 'approved') return;
         if (!isDirectAthlete(userProfile)) return;
+        if (userProfile.lifetimeAccess === true) return;
         if (userProfile.subscriptionStatus) return;
 
         let cancelled = false;
