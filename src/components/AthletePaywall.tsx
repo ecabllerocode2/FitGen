@@ -1,7 +1,7 @@
-import { useState, type FC } from 'react';
+import { useEffect, useState, type FC } from 'react';
 import type { User } from 'firebase/auth';
 import { ArrowRight, Loader2 } from 'lucide-react';
-import { createAthleteSubscription } from '../api/billing';
+import { createAthleteSubscription, syncAthleteSubscription } from '../api/billing';
 
 type Props = {
   user: User;
@@ -27,9 +27,44 @@ function formatDate(iso?: string | null) {
  */
 const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payerEmail, setPayerEmail] = useState(user.email ?? '');
   const endedLabel = formatDate(trialEndsAt);
+
+  const syncAfterReturn = async () => {
+    setSyncing(true);
+    setLoading(false);
+    setError(null);
+    try {
+      const token = await user.getIdToken();
+      const result = await syncAthleteSubscription(token);
+      if (result.allowed || result.alreadyActive || result.subscriptionStatus === 'active') {
+        window.location.replace('/');
+        return;
+      }
+    } catch (err) {
+      console.error('billing sync:', err);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('billing') === 'return') {
+      void syncAfterReturn();
+    }
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      // bfcache restore after Mercado Pago — never keep the button stuck loading
+      if (event.persisted) setLoading(false);
+      if (params.get('billing') === 'return') void syncAfterReturn();
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.uid]);
 
   const startCheckout = async () => {
     const email = payerEmail.trim().toLowerCase();
@@ -44,13 +79,13 @@ const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
       const token = await user.getIdToken();
       const result = await createAthleteSubscription(token, { payerEmail: email });
       if (result.alreadyActive) {
-        window.location.reload();
+        window.location.replace('/');
         return;
       }
       if (!result.initPoint) {
         throw new Error('No se recibió el enlace de Mercado Pago');
       }
-      window.location.href = result.initPoint;
+      window.location.assign(result.initPoint);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'No se pudo abrir Mercado Pago. Inténtalo de nuevo.';
@@ -119,6 +154,10 @@ const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
             Si no coincide, MP rechaza el cobro.
           </p>
 
+          {syncing && (
+            <p className="text-sm text-lime-400 mb-4 text-center">Confirmando tu pago con Mercado Pago…</p>
+          )}
+
           {error && (
             <p className="text-sm text-red-400 mb-4 text-center leading-relaxed">{error}</p>
           )}
@@ -126,13 +165,13 @@ const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
           <button
             type="button"
             onClick={startCheckout}
-            disabled={loading}
+            disabled={loading || syncing}
             className="flex items-center justify-center gap-2 w-full px-6 py-3.5 rounded-xl bg-lime-500 hover:bg-lime-400 disabled:opacity-60 text-zinc-950 font-extrabold transition"
           >
-            {loading ? (
+            {loading || syncing ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Abriendo Mercado Pago…
+                {syncing ? 'Confirmando pago…' : 'Abriendo Mercado Pago…'}
               </>
             ) : (
               <>
@@ -140,6 +179,15 @@ const AthletePaywall: FC<Props> = ({ user, trialEndsAt, amountMxn = 249 }) => {
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void syncAfterReturn()}
+            disabled={loading || syncing}
+            className="mt-3 w-full rounded-xl border border-zinc-700 py-3 text-sm font-semibold text-zinc-300 hover:border-zinc-500 transition disabled:opacity-60"
+          >
+            Ya pagué — actualizar acceso
           </button>
         </div>
 
