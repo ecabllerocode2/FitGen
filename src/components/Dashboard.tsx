@@ -29,6 +29,11 @@ import {
   bodyCheckinBannerMessage,
   shouldShowBodyCheckinBanner,
 } from '../utils/bodyMetricsReminders';
+import {
+  dismissTrialReminder,
+  shouldShowTrialReminder,
+  trialReminderCopy,
+} from '../utils/trialReminder';
 import type { BodyCheckinStatus, BodyMetricEntry } from '../types/bodyMetrics';
 import { getMesocyclePhaseCopy } from '../utils/mesocyclePhaseCopy';
 import ProgressArenaCard from './gamification/ProgressArenaCard';
@@ -108,6 +113,7 @@ interface UserProfile {
     plan?: 'free';
     planStatus?: string;
     subscriptionStatus?: string;
+    trialEndsAt?: string;
     lifetimeAccess?: boolean;
     mpPreapprovalId?: string;
     currentMesocycle?: CurrentMesocycleData;
@@ -510,6 +516,31 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         (userProfile?.subscriptionStatus === 'active' || userProfile?.subscriptionStatus === 'past_due') &&
         Boolean(userProfile?.mpPreapprovalId);
 
+    const [trialNoticeDismissed, setTrialNoticeDismissed] = useState(false);
+    const trialReminder = useMemo(() => {
+        if (trialNoticeDismissed) return null;
+        return shouldShowTrialReminder({
+            subscriptionStatus: userProfile?.subscriptionStatus,
+            trialEndsAt: userProfile?.trialEndsAt,
+            lifetimeAccess: userProfile?.lifetimeAccess,
+            athleteOrigin: userProfile?.athleteOrigin,
+            userId: user.uid,
+        });
+    }, [
+        trialNoticeDismissed,
+        user.uid,
+        userProfile?.subscriptionStatus,
+        userProfile?.trialEndsAt,
+        userProfile?.lifetimeAccess,
+        userProfile?.athleteOrigin,
+    ]);
+
+    const handleDismissTrialReminder = useCallback(() => {
+        if (!userProfile?.trialEndsAt) return;
+        dismissTrialReminder(user.uid, userProfile.trialEndsAt);
+        setTrialNoticeDismissed(true);
+    }, [user.uid, userProfile?.trialEndsAt]);
+
     const handleCancelSubscription = useCallback(async () => {
         const token = await user.getIdToken();
         await cancelAthleteSubscription(token);
@@ -727,7 +758,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
         const needsPlan = userProfile?.planStatus === 'needs_regeneration';
         return (
             <DashboardShell>
-                <header className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] flex justify-end">
+                <header className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] flex flex-col gap-3">
+                    {trialReminder ? (
+                        <div className="px-4 py-3 rounded-xl border border-amber-500/25 bg-amber-500/10 text-sm text-zinc-300 leading-relaxed">
+                            <p>{trialReminderCopy(trialReminder)}</p>
+                            <button
+                                type="button"
+                                onClick={handleDismissTrialReminder}
+                                className="mt-2 text-xs text-amber-300/90 hover:text-amber-200"
+                            >
+                                Entendido
+                            </button>
+                        </div>
+                    ) : null}
+                    <div className="flex justify-end">
                     <ProfileMenu
                         userName={userName}
                         userId={user.uid}
@@ -737,6 +781,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
                         canCancelSubscription={canCancelSubscription}
                         onCancelSubscription={handleCancelSubscription}
                     />
+                    </div>
                 </header>
                 <div className="flex-1 flex flex-col items-center justify-center px-8">
                     <DashboardHero
@@ -798,6 +843,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, db, auth }) => {
             />
 
             <header className="px-6 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4 shrink-0">
+                {trialReminder ? (
+                    <div className="mb-4 px-4 py-3 rounded-xl border border-amber-500/25 bg-amber-500/10 text-sm text-zinc-300 leading-relaxed">
+                        <p>{trialReminderCopy(trialReminder)}</p>
+                        <button
+                            type="button"
+                            onClick={handleDismissTrialReminder}
+                            className="mt-2 text-xs text-amber-300/90 hover:text-amber-200"
+                        >
+                            Entendido
+                        </button>
+                    </div>
+                ) : null}
                 {profileUpdateNotice ? (
                     <div className="mb-4 px-4 py-3 rounded-xl border border-lime-500/30 bg-lime-500/10 text-sm text-zinc-300 leading-relaxed">
                         {profileUpdateNotice}
