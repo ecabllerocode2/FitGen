@@ -70,6 +70,9 @@ export const API_ENDPOINTS = {
   ADMIN_USER_DASHBOARD: `${API_BASE_URL}/api/admin/user-dashboard`,
   ADMIN_COACH_SET_PLAN: `${API_BASE_URL}/api/admin/coach-set-plan`,
 
+  BILLING_STATUS: `${API_BASE_URL}/api/billing/status`,
+  BILLING_CREATE_SUBSCRIPTION: `${API_BASE_URL}/api/billing/mp/create-subscription`,
+
   // Coach platform
   COACH_REGISTER: `${API_BASE_URL}/api/coach/register`,
   COACH_ME: `${API_BASE_URL}/api/coach/me`,
