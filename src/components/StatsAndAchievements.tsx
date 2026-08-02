@@ -569,7 +569,9 @@ const StatsAndAchievements: React.FC<StatsAndAchievementsProps> = ({
 
   const fitCoins = gamification?.counters.fitCoinsBalance ?? seedGamification?.counters.fitCoinsBalance ?? 0;
   const seasonPoints = gamification?.counters.seasonPoints ?? seedGamification?.counters.seasonPoints ?? 0;
-  const seasonId = gamification?.counters.currentSeasonId ?? seedGamification?.counters.currentSeasonId ?? '2026-07';
+  const seasonId = gamification?.counters.currentSeasonId
+    ?? seedGamification?.counters.currentSeasonId
+    ?? new Date().toISOString().slice(0, 7);
   const seasonSessions = gamification?.counters.seasonSessionsCompleted ?? seedGamification?.counters.seasonSessionsCompleted ?? 0;
   const seasonWeeksPerfect = gamification?.counters.seasonWeeksPerfect ?? seedGamification?.counters.seasonWeeksPerfect ?? 0;
   const strengthHighlights = gamification?.strengthHighlights ?? [];
