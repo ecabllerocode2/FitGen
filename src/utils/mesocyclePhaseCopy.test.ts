@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getMesocyclePhaseCopy } from './mesocyclePhaseCopy';
+import {
+  getDeloadSessionCue,
+  getMesocyclePhaseCopy,
+  isDeloadPhase,
+} from './mesocyclePhaseCopy';
 
 describe('mesocyclePhaseCopy', () => {
   it('explains accumulation week', () => {
@@ -19,6 +23,19 @@ describe('mesocyclePhaseCopy', () => {
     const copy = getMesocyclePhaseCopy('deload');
     expect(copy.title).toMatch(/Descarga/i);
     expect(copy.explanation.toLowerCase()).toMatch(/recuper/);
+    expect(copy.explanation.toLowerCase()).toMatch(/peso|rir/);
+  });
+
+  it('detects deload phase', () => {
+    expect(isDeloadPhase('deload')).toBe(true);
+    expect(isDeloadPhase('DELOAD')).toBe(true);
+    expect(isDeloadPhase('acumulacion')).toBe(false);
+  });
+
+  it('builds deload session cue with RIR target', () => {
+    expect(getDeloadSessionCue(3)).toMatch(/RIR 3/);
+    expect(getDeloadSessionCue(null)).toMatch(/RIR 3/);
+    expect(getDeloadSessionCue(3).toLowerCase()).toMatch(/peso prescrito|fallo/);
   });
 
   it('falls back to focus label when phase unknown', () => {

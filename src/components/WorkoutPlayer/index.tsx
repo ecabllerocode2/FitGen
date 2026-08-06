@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import type { GeneratedSession } from '../../types/session';
 import { normalizeSession } from '../../utils/sessionNormalizer';
+import { getDeloadSessionCue, isDeloadPhase } from '../../utils/mesocyclePhaseCopy';
 import ExerciseSwapReasonModal, { type SwapReason } from '../ExerciseSwapReasonModal';
 import WorkoutSessionPlanModal from '../WorkoutSessionPlanModal';
 import { storePendingCelebration, type PendingCelebration } from '../WorkoutCelebrationPage';
@@ -735,7 +736,9 @@ const RestScreen: React.FC<RestScreenProps> = ({
   const [reps, setReps] = useState<string>('');
   const [rir, setRir] = useState<string>('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [rirError, setRirError] = useState<string | null>(null);
   const defaultsRef = useRef({ reps: '', weight: '', rir: '' });
+  const rirSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!pendingLogContext) {
@@ -743,6 +746,7 @@ const RestScreen: React.FC<RestScreenProps> = ({
       return;
     }
     setHasSubmitted(false);
+    setRirError(null);
     const defaultReps = pendingLogContext.defaultReps?.toString() ?? '';
     const defaultWeightKg = pendingLogContext.defaultWeight;
     const displayDefault =
@@ -758,6 +762,16 @@ const RestScreen: React.FC<RestScreenProps> = ({
     setWeight(defaultWeight);
     setRir('');
   }, [pendingLogContext, weightUnit]);
+
+  const needsRirBeforeContinue =
+    Boolean(pendingLogContext?.isLastSet) && !hasSubmitted && rir === '';
+  const showRirAlarmBanner =
+    alarmActive && Boolean(pendingLogContext?.isLastSet) && !hasSubmitted;
+
+  useEffect(() => {
+    if (!alarmActive || !needsRirBeforeContinue) return;
+    rirSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [alarmActive, needsRirBeforeContinue]);
 
   useEffect(() => {
     if (!nextExercise) return;
@@ -854,13 +868,15 @@ const RestScreen: React.FC<RestScreenProps> = ({
 
      let rirNum: number | undefined = undefined;
      if (pendingLogContext.isLastSet) {
-        if (!rir && rir !== '0') {
-            alert('Por favor indica el RIR de la última serie.');
+        if (rir === '') {
+            setRirError('Indica el RIR de la última serie para continuar.');
+            rirSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return false;
         }
-        rirNum = rir !== '' ? parseInt(rir, 10) : undefined;
+        rirNum = parseInt(rir, 10);
      }
 
+     setRirError(null);
      onLogSubmit({
        reps: resolveFieldValue('reps', reps, pendingLogContext.defaultReps) as number,
        weight: weightNum,
@@ -872,7 +888,11 @@ const RestScreen: React.FC<RestScreenProps> = ({
 
   const handleSkip = () => {
     if (!hasSubmitted && pendingLogContext) {
-       submitWithDefaults();
+       if (pendingLogContext.isLastSet) {
+         if (!validateAndSubmit()) return;
+       } else {
+         submitWithDefaults();
+       }
     }
     onSkip();
   };
@@ -951,7 +971,14 @@ const RestScreen: React.FC<RestScreenProps> = ({
             </div>
 
             {pendingLogContext.isLastSet && (
-               <div className="mb-3">
+               <div
+                 ref={rirSectionRef}
+                 className={`mb-3 rounded-xl transition-all ${
+                   showRirAlarmBanner && needsRirBeforeContinue
+                     ? 'ring-2 ring-lime-500/70 bg-lime-500/5 p-2 -mx-1'
+                     : ''
+                 }`}
+               >
                    <div className="flex items-center justify-between mb-2">
                      <label className="text-[10px] text-zinc-400 uppercase font-bold">RIR (Reservas)</label>
                      <span className="text-[10px] text-zinc-500 italic">¿Cuántas más podías?</span>
@@ -963,7 +990,10 @@ const RestScreen: React.FC<RestScreenProps> = ({
                        <button
                          key={value}
                          type="button"
-                         onClick={() => setRir(value.toString())}
+                         onClick={() => {
+                           setRir(value.toString());
+                           setRirError(null);
+                         }}
                          className={`py-2 rounded-lg text-xs font-bold transition-all ${
                            rir === value.toString()
                              ? 'bg-lime-500 text-zinc-900 scale-105'
@@ -985,6 +1015,10 @@ const RestScreen: React.FC<RestScreenProps> = ({
                      {rir === '5' && '🟢 Ligero - 5+ reps más posibles'}
                      {!rir && '👆 Selecciona cuántas repeticiones más podrías haber hecho'}
                    </div>
+
+                   {rirError && (
+                     <p className="mt-2 text-[11px] text-amber-300 font-medium leading-snug">{rirError}</p>
+                   )}
                    
                    {/* RPE auto-calculado */}
                    {rir && (
@@ -1096,7 +1130,34 @@ const RestScreen: React.FC<RestScreenProps> = ({
         </div>
       </div>
 
-      {alarmActive && (
+      {/* Missing RIR: keep form reachable — full overlay would block the RIR buttons */}
+      {showRirAlarmBanner && (
+        <div className="sticky bottom-0 z-40 -mx-6 mt-2 px-6 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 bg-gradient-to-t from-zinc-950 via-zinc-950/95 to-transparent">
+          <div className="max-w-sm mx-auto rounded-2xl border border-lime-500/40 bg-zinc-900/95 p-4 shadow-lg">
+            <h3 className="text-lg font-bold text-white text-center">¡Tiempo!</h3>
+            <p className="text-xs text-zinc-400 text-center mt-1 mb-3 leading-relaxed">
+              {needsRirBeforeContinue
+                ? 'Indica el RIR de la última serie arriba para continuar.'
+                : nextExercise
+                  ? `Siguiente: ${nextExercise.name}`
+                  : 'Listo para continuar.'}
+            </p>
+            <button
+              type="button"
+              disabled={needsRirBeforeContinue}
+              onClick={() => {
+                stopAlarmSound();
+                handleDismiss();
+              }}
+              className="w-full bg-lime-500 text-zinc-900 font-bold px-6 py-3 rounded-xl text-base active:scale-95 transition-transform disabled:opacity-40 disabled:pointer-events-none"
+            >
+              CONTINUAR
+            </button>
+          </div>
+        </div>
+      )}
+
+      {alarmActive && !showRirAlarmBanner && (
         <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50 animate-pulse">
           <div className="text-center px-6">
             <div className="w-24 h-24 bg-lime-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
@@ -1149,6 +1210,7 @@ interface ExerciseScreenProps {
   onSwap?: () => void;
   isSwapping?: boolean;
   onOpenPlan?: () => void;
+  deloadCue?: string | null;
 }
 
 function parsePrescribedKg(ex: FlexibleExercise): number | null {
@@ -1193,6 +1255,7 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   onSwap,
   isSwapping = false,
   onOpenPlan,
+  deloadCue = null,
 }) => {
   const { activeUnit, setActiveUnit } = useWeightUnit();
   const [showDescription, setShowDescription] = useState(true);
@@ -1386,6 +1449,15 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
             <p className="text-xs text-zinc-500 mt-2">{loadHint}</p>
           )}
 
+          {type === 'main' && deloadCue && (
+            <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-300/90 mb-1">
+                Semana de descarga
+              </p>
+              <p className="text-xs text-amber-100/90 leading-relaxed">{deloadCue}</p>
+            </div>
+          )}
+
           {/* Description toggle */}
           {description && (
             <button
@@ -1565,6 +1637,18 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     (checkpoint?.currentPhase as WorkoutPhase) ?? 'warmup',
   );
   const [currentExercise, setCurrentExercise] = useState<CurrentExercise | null>(null);
+  const isDeloadWeek =
+    Boolean((session as GeneratedSession & { isDeload?: boolean }).isDeload) ||
+    isDeloadPhase(session.phase) ||
+    Boolean(session.coachingBrief?.items?.some((item) => item.id === 'deload_week'));
+  const deloadCue = isDeloadWeek
+    ? getDeloadSessionCue(
+        currentExercise?.exercise?.rirTarget ??
+          (currentExercise?.exercise as { rirObjetivo?: number } | undefined)?.rirObjetivo ??
+          session.trainingParameters?.rirTarget ??
+          null,
+      )
+    : null;
   const [isResting, setIsResting] = useState(Boolean(checkpoint?.isResting));
   const [isPaused, setIsPaused] = useState(Boolean(checkpoint?.isPaused));
   const [soundEnabled, setSoundEnabled] = useState(checkpoint?.soundEnabled ?? true);
@@ -3049,6 +3133,7 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
           onSwap={currentExercise.type === 'warmup' ? handleWarmupSwapRequest : undefined}
           isSwapping={swappingExerciseId === currentExercise.exercise.id}
           onOpenPlan={() => setShowSessionPlan(true)}
+          deloadCue={deloadCue}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center">
