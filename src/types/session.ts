@@ -135,6 +135,7 @@ export interface GeneratedSession {
   dayOfWeek: string;
   phase: string;
   weekNumber: number;
+  isDeload?: boolean;
   
   // Parámetros de entrenamiento
   trainingParameters: TrainingParameters;

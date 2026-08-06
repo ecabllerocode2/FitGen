@@ -25,6 +25,7 @@ import { resolveExerciseMediaFromFields } from '../utils/exerciseMedia';
 import { ExerciseMediaImage } from './ExerciseMediaImage';
 import ExerciseSwapReasonModal, { type SwapReason } from './ExerciseSwapReasonModal';
 import SessionCoachingBrief from './SessionCoachingBrief';
+import { getMesocyclePhaseCopy, isDeloadPhase } from '../utils/mesocyclePhaseCopy';
 import {
   AppAccordion,
   AppBackButton,
@@ -514,6 +515,11 @@ const WorkoutOverview: React.FC<WorkoutOverviewProps> = ({ session: initialSessi
           {isPreflight ? (
             <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
               Revisa o cambia ejercicios antes de empezar. Cuando estés listo, pulsa empezar.
+            </p>
+          ) : isDeloadPhase(currentSession.phase) ||
+            (currentSession as GeneratedSession & { isDeload?: boolean }).isDeload ? (
+            <p className="text-sm text-amber-200/80 mt-2 leading-relaxed">
+              {getMesocyclePhaseCopy('deload').explanation}
             </p>
           ) : currentSession.phase ? (
             <p className="text-sm text-zinc-500 mt-2">{currentSession.phase}</p>

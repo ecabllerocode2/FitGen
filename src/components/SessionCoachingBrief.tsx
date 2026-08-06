@@ -1,4 +1,4 @@
-import { Flame, Target, Sparkles, Footprints } from 'lucide-react';
+import { Flame, Target, Sparkles, Footprints, Leaf } from 'lucide-react';
 
 export interface CoachingBriefItem {
   id: string;
@@ -33,18 +33,24 @@ export default function SessionCoachingBrief({ brief }: { brief?: SessionCoachin
         </p>
       </div>
       {brief.items.map((item) => {
-        const Icon = ICONS[item.type] ?? Sparkles;
+        const Icon = item.id === 'deload_week' ? Leaf : ICONS[item.type] ?? Sparkles;
         const accent =
-          item.type === 'finisher'
-            ? 'border-sky-500/25 bg-sky-500/10'
-            : item.type === 'muscle_priority'
-              ? 'border-lime-500/25 bg-lime-500/10'
-              : 'border-zinc-800 bg-zinc-900/60';
+          item.id === 'deload_week'
+            ? 'border-amber-500/30 bg-amber-500/10'
+            : item.type === 'finisher'
+              ? 'border-sky-500/25 bg-sky-500/10'
+              : item.type === 'muscle_priority'
+                ? 'border-lime-500/25 bg-lime-500/10'
+                : 'border-zinc-800 bg-zinc-900/60';
 
         return (
           <div key={item.id} className={`rounded-xl border px-4 py-3 ${accent}`}>
             <div className="flex items-start gap-3">
-              <Icon className="w-4 h-4 shrink-0 mt-0.5 text-lime-400/90" />
+              <Icon
+                className={`w-4 h-4 shrink-0 mt-0.5 ${
+                  item.id === 'deload_week' ? 'text-amber-300' : 'text-lime-400/90'
+                }`}
+              />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white leading-snug">{item.title}</p>
                 <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{item.message}</p>
