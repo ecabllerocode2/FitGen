@@ -1262,6 +1262,7 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   const [activeTooltip, setActiveTooltip] = useState<'peso' | null>(null);
   const [localWeight, setLocalWeight] = useState('');
   const defaultWeightRef = useRef('');
+  const weightFocusedRef = useRef(false);
   
   const name = getExerciseName(exercise);
   const corrections = getExerciseCorrections(exercise);
@@ -1278,6 +1279,8 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
   const duracion = exercise.duracion || exercise.tiempo;
 
   useEffect(() => {
+    // Avoid overwriting mid-typing: parent weightOverrides updates must not reset the field while focused.
+    if (weightFocusedRef.current) return;
     const initialKg = prescribedWeightKg ?? parsedWeight;
     const initialDisplay = initialKg != null
       ? toDisplayWeight(initialKg, activeUnit, loadConvention)
@@ -1313,13 +1316,13 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
                 <List className="w-4 h-4 text-zinc-500" />
               </button>
             )}
-            {type === 'warmup' && onSwap && (
+            {onSwap && (type === 'warmup' || type === 'main') && (
               <button
                 type="button"
                 onClick={onSwap}
                 disabled={isSwapping}
                 className="p-2 rounded-full hover:bg-zinc-800/80 transition-colors disabled:opacity-50"
-                aria-label="Cambiar ejercicio de calentamiento"
+                aria-label={type === 'warmup' ? 'Cambiar ejercicio de calentamiento' : 'Cambiar ejercicio'}
               >
                 <RefreshCw className={`w-4 h-4 text-zinc-500 ${isSwapping ? 'animate-spin' : ''}`} />
               </button>
@@ -1384,6 +1387,7 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
                   min="0"
                   value={localWeight}
                   onFocus={() => {
+                    weightFocusedRef.current = true;
                     const defaultValue = defaultWeightRef.current;
                     if (
                       localWeight === defaultValue
@@ -1398,14 +1402,9 @@ const ExerciseScreen: React.FC<ExerciseScreenProps> = ({
                   }}
                   onChange={(e) => {
                     setLocalWeight(e.target.value);
-                    const n = parseFloat(e.target.value);
-                    onPrescribedWeightChange?.(
-                      Number.isNaN(n)
-                        ? null
-                        : fromDisplayWeight(n, activeUnit, loadConvention),
-                    );
                   }}
                   onBlur={() => {
+                    weightFocusedRef.current = false;
                     if (!localWeight && defaultWeightRef.current) {
                       setLocalWeight(defaultWeightRef.current);
                       const n = parseFloat(defaultWeightRef.current);
@@ -2776,6 +2775,19 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
     });
   }, [currentExercise]);
 
+  const handleMainSwapRequest = useCallback(() => {
+    if (currentExercise?.type !== 'main') return;
+    const ex = currentExercise.exercise;
+    setSwapTarget({
+      exerciseId: ex.id ?? (ex as any).exerciseId ?? '',
+      name: getExerciseName(ex),
+      equipment: Array.isArray(ex.equipo) ? ex.equipo : [],
+      scope: 'main',
+      stationIndex: currentExercise.stationIndex,
+      exerciseIndex: currentExercise.exerciseIndex ?? mainExerciseIndex,
+    });
+  }, [currentExercise, mainExerciseIndex]);
+
   const handlePlanSwapExercise = useCallback((
     exerciseId: string,
     name: string,
@@ -3130,7 +3142,13 @@ const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({
               handleWeightOverride(currentExercise.exercise.id, kg);
             }
           }}
-          onSwap={currentExercise.type === 'warmup' ? handleWarmupSwapRequest : undefined}
+          onSwap={
+            currentExercise.type === 'warmup'
+              ? handleWarmupSwapRequest
+              : currentExercise.type === 'main'
+                ? handleMainSwapRequest
+                : undefined
+          }
           isSwapping={swappingExerciseId === currentExercise.exercise.id}
           onOpenPlan={() => setShowSessionPlan(true)}
           deloadCue={deloadCue}
